@@ -1,0 +1,47 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - ./_data/redis:/data
+    command: ["redis-server", "--appendonly", "yes"]
+
+  api:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - redis
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      RUNS_DIR: /srv/apps/stem-practice-studio/runs
+      API_PORT: "8090"
+      CORS_ORIGINS: "http://localhost:4323,http://evox2:4323,http://evo:4323"
+    volumes:
+      - ../:/app:ro
+      - /srv/apps/stem-practice-studio/runs:/srv/apps/stem-practice-studio/runs
+    ports:
+      - "0.0.0.0:8090:8090"
+    command: ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8090"]
+
+  worker:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - redis
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      RUNS_DIR: /srv/apps/stem-practice-studio/runs
+    # docker-out-of-docker: pipeline modules shell out to `docker run` on the host
+    # (htdemucs_6s, gigaam, parakeet, yt-dlp). Mount the socket so sibling
+    # containers can be created. RUNS_DIR must be the SAME absolute path on
+    # host and inside this container, otherwise sibling-container -v flags
+    # would point at non-existent host paths.
+    volumes:
+      - ../:/app
+      - /srv/apps/stem-practice-studio/runs:/srv/apps/stem-practice-studio/runs
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["arq", "backend.app.jobs.WorkerSettings"]

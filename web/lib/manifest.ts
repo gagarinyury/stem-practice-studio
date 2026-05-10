@@ -36,6 +36,8 @@ export interface AlignedLyrics {
   words: AlignedWord[];
 }
 
+import { API_BASE } from "./config";
+
 export function stemUrl(id: string, relPath: string): string {
-  return `/runs/${id}/${relPath}`;
+  return `${API_BASE}/runs/${id}/${relPath}`;
 }

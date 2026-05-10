@@ -1,20 +1,22 @@
 import "server-only";
-import { promises as fs } from "node:fs";
-import path from "node:path";
+import { API_BASE } from "./config";
 import type { AlignedLyrics, Manifest } from "./manifest";
 
-const RUNS_ROOT = path.join(process.cwd(), "public", "runs");
-
+/**
+ * Server-component loader. Fetches from the backend (CORS not required for
+ * server-to-server). `cache: "no-store"` so processing-state changes are
+ * always fresh during a render.
+ */
 export async function loadManifest(id: string): Promise<Manifest> {
-  const file = path.join(RUNS_ROOT, id, "manifest.json");
-  const raw = await fs.readFile(file, "utf-8");
-  const parsed = JSON.parse(raw) as Manifest;
+  const r = await fetch(`${API_BASE}/tracks/${id}`, { cache: "no-store" });
+  if (!r.ok) throw new Error(`loadManifest ${id}: ${r.status}`);
+  const parsed = (await r.json()) as Manifest;
   parsed.id = id;
   return parsed;
 }
 
 export async function loadAligned(id: string, relPath: string): Promise<AlignedLyrics> {
-  const file = path.join(RUNS_ROOT, id, relPath);
-  const raw = await fs.readFile(file, "utf-8");
-  return JSON.parse(raw) as AlignedLyrics;
+  const r = await fetch(`${API_BASE}/runs/${id}/${relPath}`, { cache: "no-store" });
+  if (!r.ok) throw new Error(`loadAligned ${id}/${relPath}: ${r.status}`);
+  return (await r.json()) as AlignedLyrics;
 }
