@@ -193,22 +193,36 @@ export interface Note {
 
 /**
  * Quantize a raw pitch curve into "note blobs" — the visual unit for
- * piano-roll rendering. Steps:
- *  1. Median filter over 5 frames to kill single-frame glitches
+ * piano-roll rendering. The goal is the look of a piano transcription:
+ * a few clean rectangles per phrase rather than every wiggle of a
+ * sliding human voice.
+ *
+ * Pipeline:
+ *  1. Median filter (window 7) — kills single-frame glitches and
+ *     vibrato wobble
  *  2. Snap each finite frame to the nearest MIDI semitone
- *  3. Merge consecutive frames at the same MIDI into one note
- *  4. Drop notes shorter than `minDurSec` (default 80ms — gets rid of
- *     consonants and breath transients)
+ *  3. Merge consecutive equal-MIDI frames into raw note runs
+ *  4. Drop transients shorter than `minDurSec` (150ms by default)
+ *  5. Sandwich pass — if a short note is wedged between two longer
+ *     notes of the same MIDI within `bridgeSec`, remove the wedge
+ *     and merge its neighbors. Catches passing tones / scoops
+ *  6. Bridge same-MIDI notes separated by gaps under `bridgeSec`
  */
-export function quantizeToNotes(curve: PitchCurve, minDurSec = 0.08): Note[] {
+export function quantizeToNotes(
+  curve: PitchCurve,
+  minDurSec = 0.15,
+  bridgeSec = 0.18,
+): Note[] {
   if (curve.hz.length === 0) return [];
-  const smoothed = medianFilter(curve.hz, 5);
+  const smoothed = medianFilter(curve.hz, 7);
   const midiSeq = new Array<number | null>(smoothed.length);
   for (let i = 0; i < smoothed.length; i++) {
     const v = smoothed[i];
     midiSeq[i] = Number.isFinite(v) ? Math.round(hzToMidi(v)) : null;
   }
-  const notes: Note[] = [];
+
+  // Build raw runs (no length filter yet — we need shorts for the sandwich pass)
+  const raw: Note[] = [];
   let runStart = -1;
   let runMidi: number | null = null;
   for (let i = 0; i <= midiSeq.length; i++) {
@@ -218,15 +232,53 @@ export function quantizeToNotes(curve: PitchCurve, minDurSec = 0.08): Note[] {
         const fromSec = curve.times[runStart];
         const lastIdx = Math.min(i - 1, curve.times.length - 1);
         const toSec = curve.times[lastIdx] + curve.hopSec;
-        if (toSec - fromSec >= minDurSec) {
-          notes.push({ midi: runMidi, fromSec, toSec });
-        }
+        raw.push({ midi: runMidi, fromSec, toSec });
       }
       runMidi = cur;
       runStart = i;
     }
   }
-  return notes;
+
+  // Sandwich pass: short note between two longer same-MIDI neighbors → drop & merge.
+  let pass: Note[] = raw;
+  for (let iter = 0; iter < 2; iter++) {
+    const next: Note[] = [];
+    for (let i = 0; i < pass.length; i++) {
+      const cur = pass[i];
+      const prev = next[next.length - 1];
+      const after = pass[i + 1];
+      const dur = cur.toSec - cur.fromSec;
+      if (
+        prev &&
+        after &&
+        dur < minDurSec &&
+        prev.midi === after.midi &&
+        cur.midi !== prev.midi &&
+        after.fromSec - prev.toSec <= bridgeSec * 2
+      ) {
+        // Drop cur, extend prev to cover after
+        prev.toSec = after.toSec;
+        i++; // skip after, it's now folded into prev
+        continue;
+      }
+      next.push({ ...cur });
+    }
+    pass = next;
+  }
+
+  // Bridge same-MIDI notes separated by short gaps.
+  const bridged: Note[] = [];
+  for (const n of pass) {
+    const prev = bridged[bridged.length - 1];
+    if (prev && prev.midi === n.midi && n.fromSec - prev.toSec <= bridgeSec) {
+      prev.toSec = n.toSec;
+    } else {
+      bridged.push({ ...n });
+    }
+  }
+
+  // Final length filter.
+  return bridged.filter((n) => n.toSec - n.fromSec >= minDurSec);
 }
 
 function medianFilter(arr: Float32Array, window = 5): Float32Array {
