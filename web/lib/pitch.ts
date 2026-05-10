@@ -181,3 +181,74 @@ export function pitchAt(curve: PitchCurve, t: number): number {
   const frac = (t - curve.times[lo]) / (curve.times[hi] - curve.times[lo]);
   return a + (b - a) * frac;
 }
+
+export interface Note {
+  /** MIDI note (integer). */
+  midi: number;
+  /** Track-time start. */
+  fromSec: number;
+  /** Track-time end (exclusive). */
+  toSec: number;
+}
+
+/**
+ * Quantize a raw pitch curve into "note blobs" — the visual unit for
+ * piano-roll rendering. Steps:
+ *  1. Median filter over 5 frames to kill single-frame glitches
+ *  2. Snap each finite frame to the nearest MIDI semitone
+ *  3. Merge consecutive frames at the same MIDI into one note
+ *  4. Drop notes shorter than `minDurSec` (default 80ms — gets rid of
+ *     consonants and breath transients)
+ */
+export function quantizeToNotes(curve: PitchCurve, minDurSec = 0.08): Note[] {
+  if (curve.hz.length === 0) return [];
+  const smoothed = medianFilter(curve.hz, 5);
+  const midiSeq = new Array<number | null>(smoothed.length);
+  for (let i = 0; i < smoothed.length; i++) {
+    const v = smoothed[i];
+    midiSeq[i] = Number.isFinite(v) ? Math.round(hzToMidi(v)) : null;
+  }
+  const notes: Note[] = [];
+  let runStart = -1;
+  let runMidi: number | null = null;
+  for (let i = 0; i <= midiSeq.length; i++) {
+    const cur = i < midiSeq.length ? midiSeq[i] : null;
+    if (cur !== runMidi) {
+      if (runMidi !== null && runStart >= 0) {
+        const fromSec = curve.times[runStart];
+        const lastIdx = Math.min(i - 1, curve.times.length - 1);
+        const toSec = curve.times[lastIdx] + curve.hopSec;
+        if (toSec - fromSec >= minDurSec) {
+          notes.push({ midi: runMidi, fromSec, toSec });
+        }
+      }
+      runMidi = cur;
+      runStart = i;
+    }
+  }
+  return notes;
+}
+
+function medianFilter(arr: Float32Array, window = 5): Float32Array {
+  const out = new Float32Array(arr.length);
+  const half = Math.floor(window / 2);
+  // Require at least majority-of-window valid samples — otherwise output
+  // NaN. This prevents a single-frame value from being smeared across an
+  // otherwise-silent neighborhood.
+  const minValid = Math.ceil((window + 1) / 2);
+  const tmp: number[] = [];
+  for (let i = 0; i < arr.length; i++) {
+    tmp.length = 0;
+    for (let j = -half; j <= half; j++) {
+      const k = i + j;
+      if (k >= 0 && k < arr.length && Number.isFinite(arr[k])) tmp.push(arr[k]);
+    }
+    if (tmp.length < minValid) {
+      out[i] = NaN;
+    } else {
+      tmp.sort((a, b) => a - b);
+      out[i] = tmp[Math.floor(tmp.length / 2)];
+    }
+  }
+  return out;
+}

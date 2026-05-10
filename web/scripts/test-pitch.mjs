@@ -122,6 +122,115 @@ console.log("\n[E] pitchAt linear interp");
   check("gap at hi → NaN", Number.isNaN(pitchAt(curve, 10.025)));
 }
 
+// ─── quantizeToNotes ────────────────────────────────────────────────
+function medianFilter(arr, window = 5) {
+  const out = new Float32Array(arr.length);
+  const half = Math.floor(window / 2);
+  const minValid = Math.ceil((window + 1) / 2);
+  const tmp = [];
+  for (let i = 0; i < arr.length; i++) {
+    tmp.length = 0;
+    for (let j = -half; j <= half; j++) {
+      const k = i + j;
+      if (k >= 0 && k < arr.length && Number.isFinite(arr[k])) tmp.push(arr[k]);
+    }
+    if (tmp.length < minValid) out[i] = NaN;
+    else { tmp.sort((a, b) => a - b); out[i] = tmp[Math.floor(tmp.length / 2)]; }
+  }
+  return out;
+}
+
+function quantizeToNotes(curve, minDurSec = 0.08) {
+  if (curve.hz.length === 0) return [];
+  const smoothed = medianFilter(curve.hz, 5);
+  const midiSeq = smoothed.length ? new Array(smoothed.length) : [];
+  for (let i = 0; i < smoothed.length; i++) {
+    const v = smoothed[i];
+    midiSeq[i] = Number.isFinite(v) ? Math.round(hzToMidi(v)) : null;
+  }
+  const notes = [];
+  let runStart = -1;
+  let runMidi = null;
+  for (let i = 0; i <= midiSeq.length; i++) {
+    const cur = i < midiSeq.length ? midiSeq[i] : null;
+    if (cur !== runMidi) {
+      if (runMidi !== null && runStart >= 0) {
+        const fromSec = curve.times[runStart];
+        const lastIdx = Math.min(i - 1, curve.times.length - 1);
+        const toSec = curve.times[lastIdx] + curve.hopSec;
+        if (toSec - fromSec >= minDurSec) notes.push({ midi: runMidi, fromSec, toSec });
+      }
+      runMidi = cur;
+      runStart = i;
+    }
+  }
+  return notes;
+}
+
+console.log("\n[F] quantizeToNotes — single A4 note");
+{
+  // 10 frames of 440Hz — should yield one MIDI 69 note ~500ms long
+  const curve = {
+    times: new Float32Array(Array.from({ length: 10 }, (_, i) => i * 0.05)),
+    hz: new Float32Array(10).fill(440),
+    clarity: new Float32Array(10).fill(1),
+    hopSec: 0.05,
+    fromSec: 0,
+  };
+  const notes = quantizeToNotes(curve, 0.08);
+  check("1 note produced", notes.length === 1);
+  check("midi=69 (A4)", notes[0].midi === 69);
+  check("duration ~500ms", Math.abs(notes[0].toSec - notes[0].fromSec - 0.5) < 1e-2);
+}
+
+console.log("\n[G] quantizeToNotes — single-frame glitch suppressed");
+{
+  // 9 frames @ 440 with one frame at 880 in middle — median filter should reject the glitch
+  const hz = new Float32Array([440, 440, 440, 440, 880, 440, 440, 440, 440]);
+  const curve = {
+    times: new Float32Array(Array.from({ length: 9 }, (_, i) => i * 0.05)),
+    hz,
+    clarity: new Float32Array(9).fill(1),
+    hopSec: 0.05,
+    fromSec: 0,
+  };
+  const notes = quantizeToNotes(curve, 0.08);
+  check("glitch absorbed → 1 note", notes.length === 1);
+  check("note is A4", notes[0].midi === 69);
+}
+
+console.log("\n[H] quantizeToNotes — two distinct notes");
+{
+  // 5 frames A4, 5 frames A5
+  const hz = new Float32Array([440, 440, 440, 440, 440, 880, 880, 880, 880, 880]);
+  const curve = {
+    times: new Float32Array(Array.from({ length: 10 }, (_, i) => i * 0.05)),
+    hz,
+    clarity: new Float32Array(10).fill(1),
+    hopSec: 0.05,
+    fromSec: 0,
+  };
+  const notes = quantizeToNotes(curve, 0.08);
+  check("2 notes", notes.length === 2);
+  check("first is A4", notes[0].midi === 69);
+  check("second is A5", notes[1].midi === 81);
+}
+
+console.log("\n[I] quantizeToNotes — short note dropped");
+{
+  // 1-frame note (50ms < 80ms threshold)
+  const hz = new Float32Array([NaN, NaN, 440, NaN, NaN]);
+  const curve = {
+    times: new Float32Array(Array.from({ length: 5 }, (_, i) => i * 0.05)),
+    hz,
+    clarity: new Float32Array(5).fill(1),
+    hopSec: 0.05,
+    fromSec: 0,
+  };
+  const notes = quantizeToNotes(curve, 0.08);
+  check("transient dropped", notes.length === 0);
+}
+
 if (failures > 0) {
   console.log(`\n${failures} check(s) failed`);
   process.exit(1);
