@@ -160,10 +160,13 @@ def run(opts: RunOpts, on_progress: Optional[ProgressCb] = None) -> dict:
 
     lrc_entry = None
     lrc_words: list[dict] = []
-    if artist and title:
+    if title:
         t = time.perf_counter()
         try:
-            lrc_entry = lrc_mod.fetch(artist, title, duration)
+            lrc_entry = lrc_mod.fetch(
+                artist, title, duration,
+                asr_words=asr_data.get("words") or None,
+            )
         except Exception as e:
             print(f"[pipeline] lrclib error: {e}", file=sys.stderr)
         timings["lrclib"] = round(time.perf_counter() - t, 2)
