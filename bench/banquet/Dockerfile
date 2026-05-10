@@ -27,7 +27,11 @@ RUN pip install --no-cache-dir \
         "torch-audiomentations>=0.11" \
         "hear21passt" \
         "librosa>=0.10" \
-        "torchcodec"
+        "soundfile>=0.12"
+
+# Shim: replaces broken torchaudio.load (which now requires torchcodec, whose
+# ABI doesn't match this image's PyTorch 2.11 nightly) with a soundfile reader.
+COPY wrap_train.py /opt/wrap_train.py
 
 WORKDIR /opt/query-bandit
 ENV CONFIG_ROOT=/opt/query-bandit/config

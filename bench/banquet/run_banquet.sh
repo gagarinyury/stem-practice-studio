@@ -84,7 +84,7 @@ cmd_run() {
       "$IMAGE" \
       bash -c "
         set -e
-        /usr/bin/time -v python train.py inference_byoq \
+        /usr/bin/time -v python /opt/wrap_train.py inference_byoq \
           --ckpt_path=/weights/${CKPT_FILE} \
           --input_path=/in/${track}.wav \
           --output_path=/out/guitar.wav \
