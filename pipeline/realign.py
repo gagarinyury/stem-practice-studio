@@ -33,6 +33,8 @@ def main() -> int:
     ap.add_argument("run_dir", type=Path)
     ap.add_argument("--artist", default=None, help="override artist (defaults to manifest.artist)")
     ap.add_argument("--title", default=None, help="override title (defaults to manifest.lrc.title or manifest.title)")
+    ap.add_argument("--identify", action="store_true",
+                    help="run AcoustID on source audio first to backfill artist/title")
     args = ap.parse_args()
 
     run_dir = args.run_dir
@@ -48,6 +50,34 @@ def main() -> int:
 
     manifest = json.loads(manifest_path.read_text())
     asr_data = json.loads(lyrics_path.read_text())
+
+    # Optional AcoustID identify step — backfills artist/title for tracks
+    # uploaded as files without tags or pulled from junk-named YT clips.
+    if args.identify:
+        # Try several known source audio locations.
+        candidates = [run_dir / "source.wav", run_dir / "source.flac", run_dir / "source.mp3"]
+        audio_path = next((p for p in candidates if p.exists()), None)
+        if audio_path:
+            try:
+                from . import identify as identify_mod
+                ident = identify_mod.identify(audio_path)
+            except Exception as e:
+                print(f"[realign] identify failed: {e}", file=sys.stderr)
+                ident = None
+            if ident:
+                print(
+                    f"[realign] acoustid: {ident.get('artist')!r} / {ident.get('title')!r} "
+                    f"(score={ident.get('score')})",
+                    file=sys.stderr,
+                )
+                if not args.artist and ident.get("artist"):
+                    args.artist = ident["artist"]
+                if not args.title and ident.get("title"):
+                    args.title = ident["title"]
+                # Stash full identify result on manifest for posterity.
+                manifest["acoustid"] = ident
+        else:
+            print("[realign] no source audio found for fingerprint", file=sys.stderr)
 
     artist = args.artist or manifest.get("artist") or ""
     title = args.title or (manifest.get("lrc") or {}).get("title") or manifest.get("title") or ""
@@ -137,6 +167,12 @@ def main() -> int:
         "artist": lrc_entry.get("artistName"),
         "title": lrc_entry.get("trackName"),
     }
+    # Backfill top-level artist/title when the manifest had nothing or
+    # only a junk filename. Caller-provided overrides win.
+    if args.artist:
+        manifest["artist"] = args.artist
+    if args.title:
+        manifest["title"] = args.title
     manifest["aligned"] = {
         "path": str(aligned_path.relative_to(run_dir)),
         "match_rate": stats["match_rate"],

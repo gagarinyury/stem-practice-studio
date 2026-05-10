@@ -59,7 +59,8 @@ class RunOpts:
 # Stage → cumulative percentage emitted *after* the stage completes.
 # Tuned so the slow `separate` stage (~60s out of ~100s) dominates the bar.
 STAGE_PCT = {
-    "resolve_input": 5.0,
+    "resolve_input": 4.0,
+    "identify": 8.0,
     "separate": 70.0,
     "asr": 85.0,
     "lrclib": 90.0,
@@ -122,6 +123,32 @@ def run(opts: RunOpts, on_progress: Optional[ProgressCb] = None) -> dict:
     print(f"[pipeline] source: {audio_path.name}  meta.title={meta.get('title')!r}",
           file=sys.stderr)
     _emit(on_progress, "resolve_input")
+
+    # 1.5 Audio fingerprint identification (AcoustID + MusicBrainz).
+    # Tags meta with a higher-quality artist/title when the source is
+    # missing them or has junk (channel name, filename). Best-effort —
+    # silently skips if no API key or fpcalc binary.
+    t = time.perf_counter()
+    try:
+        from . import identify as identify_mod
+        ident = identify_mod.identify(audio_path)
+    except Exception as e:
+        print(f"[pipeline] identify error: {e}", file=sys.stderr)
+        ident = None
+    timings["identify"] = round(time.perf_counter() - t, 2)
+    if ident:
+        print(
+            f"[pipeline] acoustid: {ident.get('artist')!r} / {ident.get('title')!r} "
+            f"(score={ident.get('score')}, mbid={ident.get('mbid')})",
+            file=sys.stderr,
+        )
+        meta["acoustid"] = ident
+        # Fill in missing fields; never overwrite caller-provided values.
+        if not meta.get("uploader") and not meta.get("channel") and ident.get("artist"):
+            meta["uploader"] = ident["artist"]
+        if (not meta.get("title") or meta.get("title") == "source") and ident.get("title"):
+            meta["title"] = ident["title"]
+    _emit(on_progress, "identify")
 
     # 2. Stems
     if opts.skip_separation and (out_dir / "stems").exists():

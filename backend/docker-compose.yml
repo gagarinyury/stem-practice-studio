@@ -37,10 +37,17 @@ services:
     restart: unless-stopped
     depends_on:
       - redis
+    # Reads optional secrets from backend/.env (gitignored). Currently
+    # only ACOUSTID_API_KEY is expected — sign up at
+    # https://acoustid.org/new-application to get one.
+    env_file:
+      - path: .env
+        required: false
     environment:
       REDIS_URL: redis://redis:6379/0
       RUNS_DIR: /srv/apps/stem-practice-studio/runs
       PYTHONPATH: /srv/apps/stem-practice-studio
+      ACOUSTID_API_KEY: ${ACOUSTID_API_KEY:-}
     # docker-out-of-docker: pipeline modules shell out to `docker run` on the
     # host (htdemucs_6s, gigaam, parakeet, yt-dlp). Mount the socket so
     # sibling containers can be created. Repo and runs are mounted RW at the

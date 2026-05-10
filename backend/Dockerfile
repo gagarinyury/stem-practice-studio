@@ -1,11 +1,12 @@
 FROM python:3.12-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl ffmpeg \
+        ca-certificates curl ffmpeg libchromaprint-tools \
     && rm -rf /var/lib/apt/lists/* \
     && curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-27.3.1.tgz \
         | tar -xz -C /usr/local/bin --strip-components=1 docker/docker \
-    && docker --version
+    && docker --version \
+    && fpcalc -version
 
 WORKDIR /app
 
