@@ -36,8 +36,13 @@ docker run --rm \
     python -c "import torch, nemo; print('torch', torch.__version__, 'cuda?', torch.cuda.is_available(), 'device', torch.cuda.get_device_name(0) if torch.cuda.is_available() else '-'); print('nemo', nemo.__version__)" \
     | tee "${RUN_DIR}/smoke.txt"
 
-# 1. Transcribe each track's vocal stem.
+# 1. Transcribe each track. Track 1 (8LL0TgWmvaE) is Russian → GigaAM,
+#    track 2 (MwpMEbgC7DA) is English → Parakeet. Both write lyrics.json
+#    in the same shape so downstream tooling is engine-agnostic.
+declare -A ENGINES=( [8LL0TgWmvaE]=gigaam [MwpMEbgC7DA]=parakeet )
+
 for track in 8LL0TgWmvaE MwpMEbgC7DA; do
+    engine="${ENGINES[$track]}"
     src="${LATEST_GPU_RUN}/htdemucs_6s/${track}/${track}_(Vocals)_htdemucs_6s.flac"
     if [[ ! -f "${src}" ]]; then
         echo "[asr] missing vocal stem for ${track}: ${src}" >&2
@@ -46,7 +51,13 @@ for track in 8LL0TgWmvaE MwpMEbgC7DA; do
     out_dir="${RUN_DIR}/${track}"
     mkdir -p "${out_dir}"
 
-    echo "[asr] === ${track} ==="
+    case "${engine}" in
+        gigaam)   script=transcribe_gigaam.py ;;
+        parakeet) script=transcribe.py ;;
+        *)        echo "unknown engine: ${engine}" >&2; exit 1 ;;
+    esac
+
+    echo "[asr] === ${track} via ${engine} ==="
     /usr/bin/time -v -o "${out_dir}/time.txt" \
     docker run --rm \
         --device /dev/kfd --device /dev/dri \
@@ -56,7 +67,7 @@ for track in 8LL0TgWmvaE MwpMEbgC7DA; do
         -v "${out_dir}:/out" \
         -v "$(pwd):/code:ro" \
         "${IMAGE}" \
-        python /code/transcribe.py \
+        python "/code/${script}" \
             "/stems/htdemucs_6s/${track}/${track}_(Vocals)_htdemucs_6s.flac" \
             --out "/out/lyrics.json" \
         2>&1 | tee "${out_dir}/log.txt"
