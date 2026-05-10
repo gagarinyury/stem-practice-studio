@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>basic-pitch playback — Калинов Мост 30–90s</title>
+<style>
+  :root {
+    --paper: #FAF7F2;
+    --ink: #2C2C2A;
+    --ink-muted: #6B6862;
+    --border: #E5E1D5;
+    --vocal: #993C1D;
+    --highlight: #FAEEDA;
+    --success: #4A7C39;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Cormorant Garamond", "Georgia", serif;
+    background: var(--paper); color: var(--ink); margin: 0;
+    padding: 24px 16px; display: flex; justify-content: center;
+  }
+  .wrap { width: 100%; max-width: 920px; }
+  h1 { font-weight: 400; font-style: italic; margin: 0 0 6px; font-size: 22px; }
+  .sub {
+    font-family: "DM Mono", monospace; font-size: 11px; color: var(--ink-muted);
+    letter-spacing: 0.05em; margin-bottom: 18px;
+  }
+  .card {
+    background: white; border: 1px solid var(--border); border-radius: 16px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .controls {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    font-family: "DM Mono", monospace; font-size: 12px;
+  }
+  button {
+    font-family: "DM Mono", monospace; font-size: 11px;
+    border: 1px solid var(--ink); background: white; color: var(--ink);
+    padding: 8px 14px; border-radius: 999px; cursor: pointer;
+    letter-spacing: 0.05em;
+  }
+  button.primary { background: var(--ink); color: var(--paper); }
+  button[disabled] { opacity: 0.4; cursor: not-allowed; }
+  label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .time {
+    font-family: "DM Mono", monospace; font-size: 12px; color: var(--ink-muted);
+    margin-left: auto; tabular-nums;
+  }
+  svg { display: block; width: 100%; }
+  .lane-stripe { fill: #FAF7F2; }
+  .lane-center { fill: var(--highlight); opacity: 0.55; }
+  .lane-line { stroke: var(--border); stroke-width: 0.4; stroke-dasharray: 1,3; }
+  .note-rect { fill: #7C7770; opacity: 0.85; }
+  .note-rect.active { fill: var(--vocal); opacity: 1; }
+  .axis-label { font-family: "DM Mono", monospace; font-size: 8px; fill: var(--ink-muted); }
+  .legend {
+    font-family: "DM Mono", monospace; font-size: 10px; color: var(--ink-muted);
+    margin-top: 10px;
+  }
+  .meter {
+    height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;
+    margin-top: 12px;
+  }
+  .meter-fill { height: 100%; background: var(--vocal); width: 0; transition: width 0.05s linear; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>basic-pitch playback — Калинов Мост 30–90s</h1>
+  <div class="sub">— 119 нот, синтезированы через Web Audio + наложены на оригинал —</div>
+
+  <div class="card">
+    <div class="controls">
+      <button id="playBtn" class="primary">▶ play</button>
+      <label><input type="checkbox" id="songOn" checked> song</label>
+      <label><input type="checkbox" id="pianoOn" checked> piano</label>
+      <label>piano gain
+        <input type="range" id="pianoGain" min="0" max="1" step="0.05" value="0.35">
+      </label>
+      <span class="time" id="timeLabel">0:00 / 1:00</span>
+    </div>
+    <div class="meter"><div class="meter-fill" id="meter"></div></div>
+  </div>
+
+  <div class="card">
+    <svg id="roll" viewBox="0 0 920 240"></svg>
+    <div class="legend">серый = ноты-плашки (basic-pitch), оранжевый = играющая прямо сейчас</div>
+  </div>
+</div>
+
+<script>
+const FROM = 30, TO = 90;       // basic-pitch slice in track time
+const DURATION = TO - FROM;
+const W = 920, H = 240;
+const RANGE = 12;
+const PAD = 12;
+
+let ctx = null;
+let songSrc = null;             // AudioBufferSourceNode for the original
+let songBuffer = null;          // decoded source.wav
+let pianoGain = null;           // master piano gain node
+let songGain = null;            // song gain node
+let scheduledOscs = [];         // active piano oscillators
+let playStartCtxTime = 0;       // ctx.currentTime when play began
+let playStartOffset = 0;        // seconds into [FROM, TO] where we started
+let isPlaying = false;
+let notes = [];
+let medianMidi = 60;
+let raf = 0;
+
+const $ = (id) => document.getElementById(id);
+
+async function init() {
+  // Fetch notes JSON
+  const r = await fetch("/pitch-playback-data.json");
+  const data = await r.json();
+  notes = data.notes.slice().sort((a, b) => a.fromSec - b.fromSec);
+  const ms = notes.map(n => n.midi).sort((a, b) => a - b);
+  medianMidi = Math.round(ms[Math.floor(ms.length / 2)]);
+
+  drawRoll();
+  // Pre-fetch + decode source audio so play is responsive
+  await prefetchAudio();
+  $("playBtn").disabled = false;
+  $("playBtn").textContent = "▶ play";
+}
+
+async function prefetchAudio() {
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  ctx = audioCtx;
+  $("playBtn").textContent = "loading…";
+  // Backend serves audio at evox2:8090 (CORS allowed for localhost:4323)
+  const r = await fetch("http://evox2:8090/runs/kalinov-most/source.wav");
+  const buf = await r.arrayBuffer();
+  songBuffer = await audioCtx.decodeAudioData(buf);
+}
+
+function startPlay(offsetSec = 0) {
+  if (!ctx || !songBuffer) return;
+  if (isPlaying) return;
+
+  songGain = ctx.createGain();
+  songGain.gain.value = $("songOn").checked ? 1 : 0;
+  songGain.connect(ctx.destination);
+
+  pianoGain = ctx.createGain();
+  pianoGain.gain.value = $("pianoOn").checked ? +$("pianoGain").value : 0;
+  pianoGain.connect(ctx.destination);
+
+  // Play song from FROM + offsetSec
+  songSrc = ctx.createBufferSource();
+  songSrc.buffer = songBuffer;
+  songSrc.connect(songGain);
+  songSrc.start(0, FROM + offsetSec, DURATION - offsetSec);
+
+  playStartCtxTime = ctx.currentTime;
+  playStartOffset = offsetSec;
+
+  // Schedule all piano notes
+  for (const n of notes) {
+    const startInSlice = n.fromSec - FROM;
+    if (startInSlice < offsetSec - 0.05) continue;
+    const dur = Math.min(n.toSec, TO) - Math.max(n.fromSec, FROM + offsetSec);
+    if (dur <= 0.02) continue;
+    const startCtx = playStartCtxTime + (startInSlice - offsetSec);
+    schedulePianoNote(n.midi, startCtx, dur, n.amplitude || 0.5);
+  }
+
+  isPlaying = true;
+  $("playBtn").textContent = "■ stop";
+  raf = requestAnimationFrame(tick);
+
+  // When the song source ends, auto-stop
+  songSrc.onended = () => {
+    if (isPlaying) stopPlay();
+  };
+}
+
+function stopPlay() {
+  if (!isPlaying) return;
+  try { songSrc?.stop(); } catch {}
+  for (const o of scheduledOscs) {
+    try { o.stop(); } catch {}
+  }
+  scheduledOscs = [];
+  cancelAnimationFrame(raf);
+  isPlaying = false;
+  $("playBtn").textContent = "▶ play";
+}
+
+/** Triangle-wave "piano-ish" synth with a simple AD envelope. */
+function schedulePianoNote(midi, startCtx, durSec, amp) {
+  const freq = 440 * Math.pow(2, (midi - 69) / 12);
+  const osc = ctx.createOscillator();
+  osc.type = "triangle";
+  osc.frequency.value = freq;
+
+  // Per-note envelope: snappy attack, smooth decay, 0 sustain, fast release.
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0, startCtx);
+  env.gain.linearRampToValueAtTime(amp * 0.7, startCtx + 0.01);
+  env.gain.exponentialRampToValueAtTime(Math.max(0.001, amp * 0.25), startCtx + Math.min(0.4, durSec * 0.6));
+  env.gain.exponentialRampToValueAtTime(0.0005, startCtx + durSec + 0.08);
+
+  osc.connect(env);
+  env.connect(pianoGain);
+  osc.start(startCtx);
+  osc.stop(startCtx + durSec + 0.12);
+  scheduledOscs.push(osc);
+}
+
+function tick() {
+  if (!isPlaying) return;
+  const elapsed = ctx.currentTime - playStartCtxTime + playStartOffset;
+  const trackT = FROM + elapsed;
+  $("timeLabel").textContent = `${fmt(trackT)} / ${fmt(TO)}`;
+  $("meter").style.width = `${(elapsed / DURATION) * 100}%`;
+  drawRoll(trackT);
+  raf = requestAnimationFrame(tick);
+}
+
+function fmt(s) {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60).toString().padStart(2, "0");
+  return `${m}:${sec}`;
+}
+
+function drawRoll(trackT) {
+  const svg = $("roll");
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  const usable = H - PAD * 2;
+  const laneH = usable / (RANGE * 2 + 1);
+  const midiToY = (m) => H / 2 - (m - medianMidi) * laneH;
+  const timeToX = (t) => ((t - FROM) / DURATION) * W;
+
+  // Lane stripes
+  for (let s = -RANGE; s <= RANGE; s++) {
+    if (s === 0 || Math.abs(s) % 2 === 0) {
+      const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      r.setAttribute("x", 0);
+      r.setAttribute("y", midiToY(medianMidi + s) - laneH / 2);
+      r.setAttribute("width", W);
+      r.setAttribute("height", laneH);
+      r.setAttribute("class", s === 0 ? "lane-center" : "lane-stripe");
+      svg.appendChild(r);
+    }
+  }
+
+  // ±5 ±7 reference lines
+  for (const off of [5, 7]) {
+    for (const dir of [-1, 1]) {
+      const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      l.setAttribute("x1", 0); l.setAttribute("x2", W);
+      l.setAttribute("y1", midiToY(medianMidi + off * dir));
+      l.setAttribute("y2", midiToY(medianMidi + off * dir));
+      l.setAttribute("class", "lane-line");
+      svg.appendChild(l);
+    }
+  }
+
+  // Notes
+  for (const n of notes) {
+    if (Math.abs(n.midi - medianMidi) > RANGE) continue;
+    const x = timeToX(Math.max(FROM, n.fromSec));
+    const x2 = timeToX(Math.min(TO, n.toSec));
+    const w = Math.max(2, x2 - x);
+    const y = midiToY(n.midi) - laneH / 2 + 1;
+    const h = Math.max(3, laneH - 2);
+    const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    rect.setAttribute("x", x);
+    rect.setAttribute("y", y);
+    rect.setAttribute("width", w);
+    rect.setAttribute("height", h);
+    rect.setAttribute("rx", 2.5);
+    const active = trackT !== undefined && trackT >= n.fromSec && trackT < n.toSec;
+    rect.setAttribute("class", active ? "note-rect active" : "note-rect");
+    svg.appendChild(rect);
+  }
+
+  // Time markers every 5s
+  for (let t = Math.ceil(FROM / 5) * 5; t <= TO; t += 5) {
+    const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    txt.setAttribute("x", timeToX(t) + 2);
+    txt.setAttribute("y", H - 2);
+    txt.setAttribute("class", "axis-label");
+    txt.textContent = fmt(t);
+    svg.appendChild(txt);
+  }
+
+  // Playhead
+  if (trackT !== undefined) {
+    const ph = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    const x = timeToX(Math.max(FROM, Math.min(TO, trackT)));
+    ph.setAttribute("x1", x); ph.setAttribute("x2", x);
+    ph.setAttribute("y1", 0); ph.setAttribute("y2", H);
+    ph.setAttribute("stroke", "#2C2C2A");
+    ph.setAttribute("stroke-width", "1");
+    ph.setAttribute("opacity", "0.6");
+    svg.appendChild(ph);
+  }
+}
+
+$("playBtn").disabled = true;
+$("playBtn").textContent = "loading…";
+
+$("playBtn").addEventListener("click", () => {
+  if (isPlaying) stopPlay();
+  else {
+    if (ctx && ctx.state === "suspended") ctx.resume();
+    startPlay(0);
+  }
+});
+
+$("songOn").addEventListener("change", () => {
+  if (songGain) songGain.gain.setTargetAtTime($("songOn").checked ? 1 : 0, ctx.currentTime, 0.01);
+});
+$("pianoOn").addEventListener("change", () => {
+  if (pianoGain) pianoGain.gain.setTargetAtTime($("pianoOn").checked ? +$("pianoGain").value : 0, ctx.currentTime, 0.01);
+});
+$("pianoGain").addEventListener("input", () => {
+  if (pianoGain && $("pianoOn").checked) pianoGain.gain.setTargetAtTime(+$("pianoGain").value, ctx.currentTime, 0.01);
+});
+
+init();
+</script>
+</body>
+</html>

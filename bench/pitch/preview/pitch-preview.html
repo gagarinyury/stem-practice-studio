@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>basic-pitch preview — Калинов Мост 32–37s</title>
+<style>
+  :root {
+    --paper: #FAF7F2;
+    --ink: #2C2C2A;
+    --ink-muted: #6B6862;
+    --border: #E5E1D5;
+    --vocal: #993C1D;
+    --success: #4A7C39;
+    --warn: #B5392A;
+    --highlight: #FAEEDA;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Cormorant Garamond", "Georgia", serif;
+    background: var(--paper);
+    color: var(--ink);
+    margin: 0;
+    padding: 32px 16px;
+    display: flex;
+    justify-content: center;
+  }
+  .wrap { width: 100%; max-width: 720px; }
+  h1 { font-weight: 400; font-style: italic; margin: 0 0 8px; font-size: 22px; }
+  .sub { font-family: "DM Mono", monospace; font-size: 11px; color: var(--ink-muted); letter-spacing: 0.05em; margin-bottom: 24px; }
+  .card {
+    background: white; border: 1px solid var(--border); border-radius: 16px;
+    padding: 14px; margin-bottom: 24px;
+  }
+  .card h2 {
+    font-family: "DM Mono", monospace; font-weight: 500; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.15em;
+    color: var(--vocal); margin: 0 0 10px;
+  }
+  .legend {
+    font-family: "DM Mono", monospace; font-size: 10px; color: var(--ink-muted);
+    margin-top: 8px;
+  }
+  svg { display: block; width: 100%; }
+  .note { fill: #7C7770; opacity: 0.88; }
+  .note.outlier { fill: #B5392A; opacity: 0.55; stroke: #B5392A; stroke-width: 0.5; stroke-dasharray: 2,2; }
+  .lane-stripe { fill: #FAF7F2; }
+  .lane-center { fill: var(--highlight); opacity: 0.55; }
+  .lane-line { stroke: var(--border); stroke-width: 0.4; stroke-dasharray: 1,3; }
+  .axis-label { font-family: "DM Mono", monospace; font-size: 8px; fill: var(--ink-muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>basic-pitch на Калинов Мост — фраза 32–37s</h1>
+  <div class="sub">— "ох, долго шли дорогами…" · 9 нот, склеенные в фразовые блоки —</div>
+
+  <div class="card">
+    <h2>raw output (9 notes from neural model)</h2>
+    <svg id="raw" viewBox="0 0 700 200"></svg>
+    <div class="legend">красные пунктиром — выбросы (вероятно гармоники / мусор)</div>
+  </div>
+
+  <div class="card">
+    <h2>cleaned (octave outliers removed + same-pitch merged)</h2>
+    <svg id="clean" viewBox="0 0 700 200"></svg>
+    <div class="legend">это бы ушло во frontend как `pitch.json` для drill</div>
+  </div>
+
+  <div class="card">
+    <h2>как будет выглядеть в drill ribbon (компонент)</h2>
+    <svg id="ribbon" viewBox="0 0 320 100" style="max-width: 360px;"></svg>
+    <div class="legend">точная пропорция и стиль того что увидишь под waveform в drill</div>
+  </div>
+</div>
+
+<script>
+const FROM = 32, TO = 37;
+
+async function run() {
+  const r = await fetch("/pitch-preview-data.json");
+  const data = await r.json();
+  const notes = data.notes.slice().sort((a,b) => a.fromSec - b.fromSec);
+
+  // Determine median MIDI for centering
+  const midis = notes.map(n => n.midi).sort((a,b)=>a-b);
+  const median = midis[Math.floor(midis.length/2)];
+
+  // Detect outlier (note that's > 6 semitones from median)
+  const outlierIds = new Set();
+  notes.forEach((n,i) => { if (Math.abs(n.midi - median) > 6) outlierIds.add(i); });
+
+  // Cleaned: drop outliers + merge consecutive same-MIDI within gap
+  const cleaned = [];
+  for (let i = 0; i < notes.length; i++) {
+    if (outlierIds.has(i)) continue;
+    const n = { ...notes[i] };
+    const prev = cleaned[cleaned.length - 1];
+    if (prev && prev.midi === n.midi && n.fromSec - prev.toSec <= 0.18) {
+      prev.toSec = n.toSec;
+    } else {
+      cleaned.push(n);
+    }
+  }
+
+  drawPianoRoll(document.getElementById("raw"), notes, median, 700, 200, outlierIds, false);
+  drawPianoRoll(document.getElementById("clean"), cleaned, median, 700, 200, new Set(), true);
+  drawPianoRoll(document.getElementById("ribbon"), cleaned, median, 320, 100, new Set(), false);
+}
+
+function drawPianoRoll(svg, notes, median, W, H, outlierSet, withLabels) {
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  const RANGE = 8;
+  const PAD_Y = 8;
+  const usable = H - PAD_Y * 2;
+  const laneH = usable / (RANGE * 2 + 1);
+
+  function midiToY(midi) {
+    return H/2 - (midi - median) * laneH;
+  }
+  function timeToX(t) { return ((t - FROM) / (TO - FROM)) * W; }
+
+  // Lane stripes
+  for (let s = -RANGE; s <= RANGE; s++) {
+    const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    r.setAttribute("x", 0);
+    r.setAttribute("y", midiToY(median + s) - laneH/2);
+    r.setAttribute("width", W);
+    r.setAttribute("height", laneH);
+    r.setAttribute("class", s === 0 ? "lane-center" : (Math.abs(s)%2===0 ? "lane-stripe" : ""));
+    if (s === 0 || Math.abs(s)%2 === 0) svg.appendChild(r);
+  }
+
+  // ±5 ±7 reference lines (octave/fifth)
+  for (const off of [5,7]) {
+    for (const dir of [-1,1]) {
+      const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      l.setAttribute("x1", 0);
+      l.setAttribute("x2", W);
+      l.setAttribute("y1", midiToY(median + off*dir));
+      l.setAttribute("y2", midiToY(median + off*dir));
+      l.setAttribute("class", "lane-line");
+      svg.appendChild(l);
+    }
+  }
+
+  // Notes
+  notes.forEach((n, i) => {
+    if (Math.abs(n.midi - median) > RANGE) return;
+    const x = timeToX(Math.max(FROM, n.fromSec));
+    const x2 = timeToX(Math.min(TO, n.toSec));
+    const w = Math.max(2, x2 - x);
+    const y = midiToY(n.midi) - laneH/2 + 1;
+    const h = Math.max(3, laneH - 2);
+    const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    rect.setAttribute("x", x);
+    rect.setAttribute("y", y);
+    rect.setAttribute("width", w);
+    rect.setAttribute("height", h);
+    rect.setAttribute("rx", 2.5);
+    rect.setAttribute("class", outlierSet.has(i) ? "note outlier" : "note");
+    svg.appendChild(rect);
+
+    if (withLabels) {
+      const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      label.setAttribute("x", x + w/2);
+      label.setAttribute("y", y + h/2 + 2);
+      label.setAttribute("text-anchor", "middle");
+      label.setAttribute("class", "axis-label");
+      label.setAttribute("fill", "#FAF7F2");
+      label.textContent = midiToName(n.midi);
+      svg.appendChild(label);
+    }
+  });
+
+  // X axis time markers
+  for (let t = FROM; t <= TO; t += 1) {
+    const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    txt.setAttribute("x", timeToX(t) + 2);
+    txt.setAttribute("y", H - 1);
+    txt.setAttribute("class", "axis-label");
+    txt.textContent = t + "s";
+    svg.appendChild(txt);
+  }
+}
+
+function midiToName(m) {
+  const names = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  const oct = Math.floor(m/12) - 1;
+  return names[m % 12] + oct;
+}
+
+run();
+</script>
+</body>
+</html>

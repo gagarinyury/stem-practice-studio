@@ -1,0 +1,58 @@
+{
+  "notes": [
+    {
+      "midi": 56,
+      "fromSec": 35.6468,
+      "toSec": 35.821,
+      "amplitude": 0.454
+    },
+    {
+      "midi": 55,
+      "fromSec": 35.4494,
+      "toSec": 35.6236,
+      "amplitude": 0.395
+    },
+    {
+      "midi": 55,
+      "fromSec": 34.9618,
+      "toSec": 35.4494,
+      "amplitude": 0.723
+    },
+    {
+      "midi": 55,
+      "fromSec": 34.8225,
+      "toSec": 34.9618,
+      "amplitude": 0.725
+    },
+    {
+      "midi": 55,
+      "fromSec": 34.6484,
+      "toSec": 34.8225,
+      "amplitude": 0.592
+    },
+    {
+      "midi": 66,
+      "fromSec": 33.4512,
+      "toSec": 33.5906,
+      "amplitude": 0.471
+    },
+    {
+      "midi": 54,
+      "fromSec": 33.4512,
+      "toSec": 33.904,
+      "amplitude": 0.554
+    },
+    {
+      "midi": 54,
+      "fromSec": 33.2887,
+      "toSec": 33.4512,
+      "amplitude": 0.5
+    },
+    {
+      "midi": 54,
+      "fromSec": 32.8011,
+      "toSec": 33.2887,
+      "amplitude": 0.437
+    }
+  ]
+}
