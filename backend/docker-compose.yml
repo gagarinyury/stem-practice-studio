@@ -24,7 +24,7 @@ services:
     # made by the worker reference real host paths (sibling-container `-v`
     # flags are interpreted by the host docker daemon, not the container).
     volumes:
-      - /srv/apps/stem-practice-studio:/srv/apps/stem-practice-studio:ro
+      - /srv/apps/stem-practice-studio:/srv/apps/stem-practice-studio
     working_dir: /srv/apps/stem-practice-studio
     ports:
       - "0.0.0.0:8090:8090"
