@@ -14,8 +14,11 @@ RUN dnf install -y time libsndfile && dnf clean all
 RUN pip install --no-cache-dir "nemo_toolkit[asr]>=2.0"
 
 # GigaAM (Sber) — Russian ASR with native word_timestamps (added 2026-04, only
-# on git main; PyPI v0.1.0 is stale).
-RUN pip install --no-cache-dir "gigaam @ git+https://github.com/salute-developers/GigaAM.git"
+# on git main; PyPI v0.1.0 is stale). transcribe_longform needs pyannote.audio
+# for VAD chunking but doesn't declare it as a hard dep.
+RUN pip install --no-cache-dir \
+        "gigaam @ git+https://github.com/salute-developers/GigaAM.git" \
+        "pyannote.audio>=3.3"
 
 # HF cache → mounted volume so weights survive container rebuilds
 ENV HF_HOME=/asr-models/hf
