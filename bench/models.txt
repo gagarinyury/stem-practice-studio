@@ -1,0 +1,11 @@
+# Models to benchmark in Phase 0. Format: <short_name>|<audio-separator -m filename>|<note>
+# Filenames are what `audio-separator --list_models` exposes.
+# We start with a small set; refine after first round of results.
+
+# ---- 4-stem baselines ----
+htdemucs_ft|htdemucs_ft.yaml|Demucs v4 4-stem (vocals/drums/bass/other) — baseline
+htdemucs_6s|htdemucs_6s.yaml|Demucs v4 6-stem (+ guitar + piano)
+
+# ---- Vocal-focused (high SDR) ----
+bs_roformer_viperx|model_bs_roformer_ep_317_sdr_12.9755.ckpt|BS-RoFormer vocals/inst (viperx)
+mel_band_roformer_kim|MelBandRoformer.ckpt|Mel-Band RoFormer (Kim) vocals

@@ -1,0 +1,4 @@
+# YouTube URLs for Phase 0 benchmark tracks.
+# Lines starting with # are ignored. One URL per line.
+https://www.youtube.com/watch?v=8LL0TgWmvaE
+https://www.youtube.com/watch?v=MwpMEbgC7DA
