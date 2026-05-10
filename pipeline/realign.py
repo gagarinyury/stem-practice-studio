@@ -52,22 +52,45 @@ def main() -> int:
     artist = args.artist or manifest.get("artist") or ""
     title = args.title or (manifest.get("lrc") or {}).get("title") or manifest.get("title") or ""
     duration = manifest.get("duration") or asr_data.get("duration") or 0.0
+    asr_words = asr_data.get("words") or []
 
-    if not artist or not title:
-        print(f"missing artist/title — pass via --artist/--title", file=sys.stderr)
-        return 1
-
-    print(f"[realign] {run_dir.name} · {artist} / {title} · {duration:.1f}s", file=sys.stderr)
-    print(f"[realign] ASR words: {len(asr_data.get('words', []))}", file=sys.stderr)
+    print(f"[realign] {run_dir.name} · {artist!r} / {title!r} · {duration:.1f}s · {len(asr_words)} ASR words", file=sys.stderr)
 
     t = time.perf_counter()
-    lrc_entry = lrc_mod.fetch(
-        artist, title, duration,
-        asr_words=asr_data.get("words") or None,
-    )
+    lrc_entry = None
+    if title:
+        lrc_entry = lrc_mod.fetch(
+            artist, title, duration,
+            asr_words=asr_words or None,
+        )
     if not lrc_entry:
-        print(f"[realign] no LRC found", file=sys.stderr)
-        return 1
+        if not asr_words:
+            print(f"[realign] no LRC found and no ASR — nothing to do", file=sys.stderr)
+            return 1
+        print(f"[realign] no LRC found — falling back to ASR-only", file=sys.stderr)
+        aligned_words, lines = align_mod.asr_to_aligned(asr_words)
+        aligned_path = run_dir / "lyrics_aligned.json"
+        aligned_path.write_text(json.dumps({
+            "model": "asr-only",
+            "engine": asr_data.get("engine", "asr"),
+            "device": asr_data.get("device"),
+            "audio": asr_data.get("audio"),
+            "duration": asr_data.get("duration"),
+            "lrc_source": None,
+            "alignment": None,
+            "lines": lines,
+            "text": " ".join(w["word"] for w in aligned_words),
+            "words": aligned_words,
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
+        manifest["lrc"] = {"found": False, "artist": None, "title": None}
+        manifest["aligned"] = {
+            "path": str(aligned_path.relative_to(run_dir)),
+            "match_rate": None, "matched": None,
+            "lrc_words": None, "interpolated": None, "asr_only": True,
+        }
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"[realign] ASR-only: {len(aligned_words)} words, {len(lines)} lines → {manifest_path}", file=sys.stderr)
+        return 0
     print(
         f"[realign] picked LRC id={lrc_entry.get('id')} "
         f"dur={lrc_entry.get('duration')}s synced={bool(lrc_entry.get('syncedLyrics'))} "

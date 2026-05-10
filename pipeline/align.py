@@ -139,3 +139,50 @@ def align(asr_words: list[dict], lrc_words: list[dict], duration: float) -> tupl
         "interpolated": interp,
     }
     return out, stats
+
+
+# ─── Fallback: ASR-only aligned output ─────────────────────────────────────
+# Emits the same shape `lyrics_aligned.json` but using the raw ASR words as
+# the source of truth. Used when LRClib has nothing for the track — the
+# frontend (drill, select) can still group words into lines and let the user
+# loop on phrases, just with the ASR's spelling errors.
+
+def asr_to_aligned(
+    asr_words: list[dict],
+    line_gap_sec: float = 1.0,
+    max_words_per_line: int = 12,
+) -> tuple[list[dict], list[str]]:
+    """Group raw ASR words into "lines" by silence gaps.
+
+    Returns (aligned_words, lines). Each word matches the schema used by
+    LRC alignment: {word, line, start, end, match: "asr", asr_word}.
+    """
+    if not asr_words:
+        return [], []
+    aligned: list[dict] = []
+    lines: list[str] = []
+    cur_line: list[str] = []
+    cur_idx = 0
+    prev_end = float(asr_words[0]["start"])
+    for w in asr_words:
+        start = float(w["start"])
+        end = float(w["end"])
+        text = w["word"]
+        gap = start - prev_end
+        if cur_line and (gap > line_gap_sec or len(cur_line) >= max_words_per_line):
+            lines.append(" ".join(cur_line))
+            cur_idx += 1
+            cur_line = []
+        aligned.append({
+            "word": text,
+            "line": cur_idx,
+            "start": start,
+            "end": end,
+            "match": "asr",
+            "asr_word": text,
+        })
+        cur_line.append(text)
+        prev_end = end
+    if cur_line:
+        lines.append(" ".join(cur_line))
+    return aligned, lines

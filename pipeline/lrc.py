@@ -88,13 +88,20 @@ def fetch(
     if not hits:
         return None
 
-    # Compute ASR-vs-LRC alignment score per candidate (higher = better
-    # match to the actual recording). Only do it when we have ASR words —
-    # for fresh-track flows without ASR yet, fall back to duration only.
-    asr_match: dict[int, float] = {}
+    # Score each candidate by how well it matches the actual recording.
+    # Two axes:
+    #   match_rate    = matched_words / lrc_words   (penalises LRC entries
+    #                                                with extra unsung words)
+    #   asr_coverage  = matched_words / asr_words   (penalises LRC entries
+    #                                                that are far too short
+    #                                                — e.g. our "source"
+    #                                                track matched a 20-word
+    #                                                song while the recording
+    #                                                has 264 ASR words)
+    # Use min(match_rate, asr_coverage) — both must be high for a real hit.
+    asr_combined: dict[int, float] = {}
     if asr_words:
         from . import align as align_mod
-        asr_strings = [w["word"] for w in asr_words]
         for idx, h in enumerate(hits):
             try:
                 lrc_lines = parse(h.get("syncedLyrics") or h.get("plainLyrics") or "")
@@ -102,9 +109,9 @@ def fetch(
                 if not lrc_words:
                     continue
                 _, stats = align_mod.align(asr_words, lrc_words, duration or 0)
-                # match_rate = matched_words / lrc_words. Variants whose
-                # extra words are absent in ASR get a lower score.
-                asr_match[idx] = stats["match_rate"]
+                match_rate = stats["match_rate"]
+                asr_coverage = stats["matched"] / max(len(asr_words), 1)
+                asr_combined[idx] = min(match_rate, asr_coverage)
             except Exception:
                 continue
 
@@ -113,19 +120,22 @@ def fetch(
         synced = bool(h.get("syncedLyrics"))
         d = h.get("duration") or 0.0
         delta = abs(d - duration) if duration else 0.0
-        # Primary key: ASR alignment match-rate (higher is better, so
-        # negate for ascending sort). Secondary: prefer synced. Tertiary:
-        # closer duration. Without ASR we fall through to the original
-        # (synced, duration) ordering.
         return (
-            -asr_match.get(idx, 0.0),
+            -asr_combined.get(idx, 0.0),
             -int(synced),
             delta,
         )
 
     indexed = list(enumerate(hits))
     indexed.sort(key=score)
-    return indexed[0][1]
+    best_idx, best_hit = indexed[0]
+    # Reject low-quality matches when we have ASR — a "best" candidate
+    # whose lyrics line up under 30% with the recording is almost
+    # certainly the wrong song (e.g. happens when title is a junk
+    # filename like "source"). Caller falls back to ASR-only.
+    if asr_combined and asr_combined.get(best_idx, 0.0) < 0.30:
+        return None
+    return best_hit
 
 
 def parse(lrc_text: str) -> list[str]:

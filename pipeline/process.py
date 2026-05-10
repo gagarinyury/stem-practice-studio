@@ -198,10 +198,11 @@ def run(opts: RunOpts, on_progress: Optional[ProgressCb] = None) -> dict:
     # 5. Alignment
     aligned_path = None
     align_stats = None
-    if lrc_words and asr_data.get("words"):
+    asr_words = asr_data.get("words") or []
+    if lrc_words and asr_words:
         t = time.perf_counter()
         aligned_words, align_stats = align_mod.align(
-            asr_data["words"], lrc_words, asr_data.get("duration", 0.0))
+            asr_words, lrc_words, asr_data.get("duration", 0.0))
         timings["align"] = round(time.perf_counter() - t, 2)
         aligned_path = out_dir / "lyrics_aligned.json"
         aligned_path.write_text(json.dumps({
@@ -223,8 +224,33 @@ def run(opts: RunOpts, on_progress: Optional[ProgressCb] = None) -> dict:
         print(f"[pipeline] align: {align_stats['matched']}/{align_stats['lrc_words']} matched "
               f"({align_stats['match_rate']*100:.1f}%), "
               f"{align_stats['interpolated']} interpolated", file=sys.stderr)
+    elif asr_words:
+        # ASR-only fallback — no LRC found, but Parakeet/GigaAM still
+        # gave us word-level timing. Group by silence into pseudo-lines
+        # so /select and /drill still work, just with raw ASR text.
+        t = time.perf_counter()
+        aligned_words, lines = align_mod.asr_to_aligned(asr_words)
+        timings["align"] = round(time.perf_counter() - t, 2)
+        aligned_path = out_dir / "lyrics_aligned.json"
+        aligned_path.write_text(json.dumps({
+            "model": "asr-only",
+            "engine": asr_data.get("engine", "asr"),
+            "device": asr_data.get("device"),
+            "audio": asr_data.get("audio"),
+            "duration": asr_data.get("duration"),
+            "lrc_source": None,
+            "alignment": None,
+            "lines": lines,
+            "text": " ".join(w["word"] for w in aligned_words),
+            "words": aligned_words,
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
+        align_stats = {"asr_words": len(asr_words), "lrc_words": 0,
+                       "matched": 0, "match_rate": None, "interpolated": 0,
+                       "asr_only": True}
+        print(f"[pipeline] align: ASR-only fallback ({len(aligned_words)} words, {len(lines)} lines)",
+              file=sys.stderr)
     else:
-        print("[pipeline] align: skipped (no LRC text)", file=sys.stderr)
+        print("[pipeline] align: skipped (no ASR words)", file=sys.stderr)
     _emit(on_progress, "align")
 
     # 6. Manifest
