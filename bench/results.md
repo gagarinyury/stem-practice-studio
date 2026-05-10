@@ -30,7 +30,45 @@
 
 ⚠️ ONNXRuntime CUDA-EP не подключён (только CPU-EP). Для PyTorch-моделей это не блокер. Если в pipeline понадобится ONNX-инференс (Parakeet через onnx-asr) — добавить `onnxruntime-rocm` в Dockerfile.
 
+---
+
+# Phase 1.1 — Parakeet-TDT-0.6B-v3 ASR (NeMo)
+
+Дата: 2026-05-10
+Образ: `stem-practice-asr:rocm` (kyuz0 base + nemo_toolkit 2.7.3)
+Модель: `nvidia/parakeet-tdt-0.6b-v3` (Apache 2.0, multilingual, native word timestamps)
+
+## Запуск на htdemucs_6s vocal-стемах
+
+| Трек | Lang | Duration | Inference | RTF | Words | Качество |
+|---|---|---|---|---|---|---|
+| 8LL0TgWmvaE | RU | 313.7s | 17.1s | **0.055** | — | мусор (Parakeet RU слабый) |
+| MwpMEbgC7DA | EN | 247.6s | 13.3s | **0.054** | 265 | хорошее, связный текст |
+
+ROCm gfx1151 даёт **~18× быстрее реального времени**. Загрузка весов (~1.2GB) — 7.5 сек.
+
+## Решения
+
+1. **EN/FR/ES/DE/IT/PT → Parakeet через NeMo на ROCm.** Подтверждено что работает, качество удовлетворительное.
+2. **RU → GigaAM (:8082, уже стоит).** Parakeet формально многоязычный, но качество русского мусорное — подтверждает выбор из ресёрча.
+3. **Стемы перед ASR**: stereo 44.1k → mono 16k через soundfile + torchaudio (NeMo dataloader stereo не глотает).
+
+## ROCm-совместимость NeMo — нюансы
+
+NeMo 2.7.3 из коробки делает 2 вещи, ломающие ROCm:
+1. `ASRModel.from_pretrained()` диспатчер инстанцирует абстрактный класс → надо явно `EncDecRNNTBPEModel.from_pretrained()`
+2. TDT-декодер вызывает `maybe_enable_cuda_graphs()`, которая через `cuda-python` пытается dlopen `libcuda.so.1` (NVIDIA-only) → надо monkey-patch'нуть метод в no-op на классах в `tdt_label_looping` и `rnnt_label_looping`
+
+Оба воркэраунда в `bench/asr/transcribe.py`.
+
+## ONNX-путь
+
+Не пошли — `onnxruntime-rocm` wheel для ROCm 7.0 не опубликован в AMD-репо на 2026-05. NeMo на ROCm PyTorch (известно-рабочий после Phase 0) надёжнее.
+
+---
+
 ## Что дальше
 
-- Скачать стемы на Mac, послушать в Audacity на bleed между дорожками (особенно guitar/other и bass/drums).
-- Phase 1: написать pipeline/process.py поверх htdemucs_6s + MelBand + Parakeet ONNX.
+- Phase 1.2: SongFormer для verse/chorus меток (новый чип — отдельный smoke на ROCm)
+- Phase 1.3: chord recognition + N2N drum transcription
+- Phase 1.4: единый `pipeline/process.py` поверх всего стека
