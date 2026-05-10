@@ -26,15 +26,15 @@ if [[ -z "${LATEST_GPU_RUN}" ]]; then
 fi
 echo "[asr] using stems from: ${LATEST_GPU_RUN}"
 
-# 0. Smoke test: which ORT providers does this image actually expose?
-echo "[asr] === smoke: ORT providers ==="
+# 0. Smoke test: NeMo loads and torch sees the ROCm device.
+echo "[asr] === smoke: torch + nemo ==="
 docker run --rm \
     --device /dev/kfd --device /dev/dri \
     --group-add 991 --group-add 44 \
     -v "${MODELS_HOST}:/asr-models" \
     "${IMAGE}" \
-    python -c "import onnxruntime as ort; print(ort.__version__); print(ort.get_available_providers())" \
-    | tee "${RUN_DIR}/providers.txt"
+    python -c "import torch, nemo; print('torch', torch.__version__, 'cuda?', torch.cuda.is_available(), 'device', torch.cuda.get_device_name(0) if torch.cuda.is_available() else '-'); print('nemo', nemo.__version__)" \
+    | tee "${RUN_DIR}/smoke.txt"
 
 # 1. Transcribe each track's vocal stem.
 for track in 8LL0TgWmvaE MwpMEbgC7DA; do
