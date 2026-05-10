@@ -213,6 +213,15 @@ export function SelectView({ manifest, aligned }: Props) {
         <div className="w-[22px]" />
       </div>
 
+      {/* Hint about drag selection — fades after first use */}
+      {!sel.active && chunks.length === 0 && (
+        <div className="px-6 pt-4 pb-1 font-mono text-[10px] text-[var(--color-accent-vocal)] tracking-[0.05em] flex items-center gap-2">
+          <span className="inline-block w-4 h-px bg-[var(--color-accent-vocal)]" />
+          tap & drag across words to pick a phrase to drill
+          <span className="inline-block flex-1 h-px bg-[var(--color-accent-vocal)] opacity-30" />
+        </div>
+      )}
+
       {/* Lyrics with drag selection */}
       <div
         ref={containerRef}
@@ -339,7 +348,7 @@ export function SelectView({ manifest, aligned }: Props) {
                     </div>
                   </div>
                   <Link
-                    href={`/drill/${manifest.id}?from=${c.from.toFixed(2)}&to=${c.to.toFixed(2)}`}
+                    href={`/drill/${manifest.id}?chunk=${c.id}&from=${c.from.toFixed(2)}&to=${c.to.toFixed(2)}`}
                     className="font-mono text-[11px] text-[var(--color-accent-vocal)] px-2 py-1"
                   >
                     drill →

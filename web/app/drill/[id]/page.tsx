@@ -4,7 +4,14 @@ import { loadAligned, loadManifest } from "@/lib/manifest.server";
 
 interface Props {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ line?: string; from?: string; to?: string; pre?: string; post?: string }>;
+  searchParams: Promise<{
+    line?: string;
+    from?: string;
+    to?: string;
+    pre?: string;
+    post?: string;
+    chunk?: string;
+  }>;
 }
 
 export default async function DrillPage({ params, searchParams }: Props) {
@@ -15,6 +22,7 @@ export default async function DrillPage({ params, searchParams }: Props) {
   const toSec = sp.to ? Number.parseFloat(sp.to) : undefined;
   const initialPre = sp.pre ? Number.parseFloat(sp.pre) : 0;
   const initialPost = sp.post ? Number.parseFloat(sp.post) : 0;
+  const initialChunkId = sp.chunk ?? undefined;
 
   let manifest, aligned;
   try {
@@ -35,6 +43,7 @@ export default async function DrillPage({ params, searchParams }: Props) {
         initialToSec={toSec}
         initialPre={initialPre}
         initialPost={initialPost}
+        initialChunkId={initialChunkId}
       />
     </main>
   );
