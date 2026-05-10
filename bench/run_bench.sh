@@ -113,14 +113,17 @@ cmd_run() {
             $separator_flag 2> /out/timing.txt || echo 'audio-separator FAILED' > /out/FAILED
         " || true
 
-      # Extract metrics
+      # Extract metrics — defensive: never let glob misses or empty awk kill the script
       local wall_s peak_mb outputs
       if [[ -f "$out_dir/FAILED" ]]; then
         wall_s="FAIL"; peak_mb="FAIL"; outputs="FAIL"
       else
-        wall_s=$(awk '/Elapsed \(wall clock\)/ {print $NF}' "$timing_log" || echo "?")
-        peak_mb=$(awk '/Maximum resident set size/ {printf "%.0f", $NF/1024}' "$timing_log" || echo "?")
-        outputs=$(ls "$out_dir"/*.{wav,flac,mp3} 2>/dev/null | wc -l | tr -d ' ')
+        wall_s=$(awk '/Elapsed \(wall clock\)/ {print $NF; exit}' "$timing_log" 2>/dev/null)
+        wall_s="${wall_s:-?}"
+        peak_mb=$(awk '/Maximum resident set size/ {printf "%.0f", $NF/1024; exit}' "$timing_log" 2>/dev/null)
+        peak_mb="${peak_mb:-?}"
+        # Count produced stems by extension via find (no glob expansion to fail on)
+        outputs=$(find "$out_dir" -maxdepth 1 -type f \( -iname '*.wav' -o -iname '*.flac' -o -iname '*.mp3' \) 2>/dev/null | wc -l | tr -d ' ')
       fi
       printf "%s\t%s\t%s\t%s\t%s\t%s\n" "$short" "$track" "$device" "$wall_s" "$peak_mb" "$outputs" >> "$summary"
     done
