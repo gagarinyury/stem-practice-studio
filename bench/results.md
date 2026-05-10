@@ -67,8 +67,79 @@ NeMo 2.7.3 из коробки делает 2 вещи, ломающие ROCm:
 
 ---
 
+---
+
+# Phase 1.2 — LRCLib + ASR↔LRC alignment
+
+Дата: 2026-05-10
+Скрипты: `bench/asr/preview/{fetch_lrc,align_to_lrc,build_preview}.py`
+Артефакты: `bench/asr/preview/<track>/{lrc.txt, lrc_words.json, lyrics_aligned.json, karaoke.html}`
+
+## Зачем
+
+ASR сам по себе ошибается на редких словах, поэтической лирике и склейках предлогов. На «Время колокольчиков» (кавер Калинов Моста на Башлачёва) GigaAM v3 RNN-T выдал:
+
+> «...шали снег **скашаю березовай** и росли с колокольнями...» вместо «Жрали снег **с кашею березовой**...»
+
+Текст из LRCLib даёт чистую лирику. ASR используется только для таймингов (где петь). Forced alignment связывает: каждое слово LRC получает позицию ближайшего совпавшего слова из ASR-вывода.
+
+## Pipeline
+
+```
+yt-dlp metadata (artist, title, duration)
+  └─ fetch_lrc.py  → LRCLib API (/api/get с duration filter, fallback /api/search)
+                    → strip [mm:ss.xx] метки → lrc.txt + lrc_words.json (с line-индексами)
+
+ASR на vocal-стеме (GigaAM для RU / Parakeet для EN из Phase 1.1)
+  └─ lyrics.json (грязный текст + точные тайминги по словам)
+
+align_to_lrc.py
+  ├─ Needleman-Wunsch: cost = нормализованный Левенштейн между норм-словами
+  │  (lower + drop punct + ё→е); skip penalty 0.55
+  ├─ Каждый LRC-слову: если matched → копируем тайминги ASR-слова
+  ├─ Если не matched (insertion в LRC) → линейная интерполяция между ближайшими anchor'ами
+  └─ → lyrics_aligned.json (LRC текст + ASR тайминги + флаг match=asr/interp)
+
+build_preview.py → karaoke.html (offline, lyrics inlined, без CORS)
+  ├─ Текст разбит построчно как в LRC (line.active подсвечивается)
+  ├─ Подсветка текущего слова (var(--accent))
+  ├─ Слова с match=interp подчёркнуты пунктиром (var(--warn))
+  └─ Click-to-seek
+```
+
+## LRCLib coverage observations
+
+- **Кавер-артиста часто нет**: «Калинов Мост — Время колокольчиков» — 0 hits. «Александр Башлачёв» (оригинальный автор) — 6 hits, synced. Решение: для каверов искать оригинального автора.
+- **Нормализация ё/е хромает**: «Башлачёв» → 6 hits synced; «Башлачев» (без ё) → 3 hits, ни одного synced. Поиск надо делать с ё.
+- **Multiple versions**: для Tom Odell 20 records разной длины (244, 247, 251с). `--duration` параметр в fetch_lrc отбирает ближайшую.
+- **LRC-тайминги для каверов бесполезны**: Башлачёв 226с, Калинов Мост 314с. Ignore их полностью; используем только текст и line-структуру.
+
+## Результаты
+
+| Track | LRC words | Matched ASR | Match rate | Interpolated |
+|---|---|---|---|---|
+| Башлачёв "Время колокольчиков" (Калинов Мост cover) | 261 | 215 | **82.4%** | 46 |
+| Tom Odell "Another Love" | 297 | 261 | **87.9%** | 36 |
+
+82% на каверном RU-треке с архаизмами + 88% на студийном EN-треке. Глазом и слухом тайминги попадают в слова правильно. Слова которые ASR пропустил (длинные ноты, повторы у вокалиста кавера) интерполируются между соседями — заметны в UI, но не ломают восприятие.
+
+## Решения
+
+1. **Текст всегда из LRCLib** когда есть match (≥80% LRC words matched к ASR). Для каверов искать оригинального автора.
+2. **Тайминги всегда от ASR** на нашем vocal-стеме. LRC-тайминги игнорируются (могут быть от другой версии).
+3. **Forced alignment через NW + Levenshtein** — Phase 1.2 baseline. Match-rate 82-88% хватает для karaoke-подсветки.
+4. **CTC forced alignment** (через `gigaam v3_ctc` + `torchaudio.functional.forced_align`) — апгрейд для Phase 1.3 если interpolated регионы будут смотреться плохо в плеере. Даст 100% слов LRC с точными CTC-эмиссиями вместо интерполяции.
+
+## Verification
+
+`open bench/asr/preview/8LL0TgWmvaE/karaoke.html` — Калинов Мост, чистый текст Башлачёва на тайминги кавера.
+`open bench/asr/preview/MwpMEbgC7DA/karaoke.html` — Tom Odell.
+
+---
+
 ## Что дальше
 
-- Phase 1.2: SongFormer для verse/chorus меток (новый чип — отдельный smoke на ROCm)
-- Phase 1.3: chord recognition + N2N drum transcription
-- Phase 1.4: единый `pipeline/process.py` поверх всего стека
+- Phase 1.3 (опц.): CTC forced alignment через GigaAM-CTC + torchaudio для замены NW-baseline
+- Phase 1.4: SongFormer для verse/chorus меток (новый чип — отдельный smoke на ROCm)
+- Phase 1.5: chord recognition + N2N drum transcription
+- Phase 1.6: единый `pipeline/process.py` поверх всего стека
