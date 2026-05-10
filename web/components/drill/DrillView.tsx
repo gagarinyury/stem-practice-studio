@@ -511,9 +511,9 @@ function DrillInner({
         </div>
       </div>
 
-      {/* Winamp-style FFT equalizer — bottom-anchored bars with peak hold */}
-      <div className="px-4">
-        <EqualizerBars getEngine={() => engineRef.current} bars={28} height={70} />
+      {/* Lyrics reel — 3 lines, smoothly sliding */}
+      <div className="px-4 pt-2 pb-1">
+        <LyricsReel aligned={aligned} currentTime={currentTime} />
       </div>
 
       {/* Pre / Post inline row */}
@@ -536,11 +536,6 @@ function DrillInner({
             plusDisabled={post >= PAD_MAX - 1e-6}
           />
         </div>
-      </div>
-
-      {/* Lyrics reel — 3 lines, smoothly sliding */}
-      <div className="px-4 pt-2 pb-1">
-        <LyricsReel aligned={aligned} currentTime={currentTime} />
       </div>
 
       {/* Tempo / Pitch */}
@@ -588,6 +583,11 @@ function DrillInner({
             );
           })}
         </div>
+      </div>
+
+      {/* Winamp-style FFT equalizer — bottom-anchored bars with peak hold */}
+      <div className="px-4 pt-2">
+        <EqualizerBars getEngine={() => engineRef.current} bars={28} height={70} />
       </div>
 
       {/* Bottom row: restart / repeats / play / got it
