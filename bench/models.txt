@@ -6,6 +6,6 @@
 htdemucs_ft|htdemucs_ft.yaml|Demucs v4 4-stem (vocals/drums/bass/other) — baseline
 htdemucs_6s|htdemucs_6s.yaml|Demucs v4 6-stem (+ guitar + piano)
 
-# ---- Vocal-focused (high SDR) ----
-bs_roformer_viperx|model_bs_roformer_ep_317_sdr_12.9755.ckpt|BS-RoFormer vocals/inst (viperx)
-mel_band_roformer_kim|MelBandRoformer.ckpt|Mel-Band RoFormer (Kim) vocals
+# ---- Vocal-focused (high SDR) — for ASR pipeline ----
+bs_roformer_v368|model_bs_roformer_ep_368_sdr_12.9628.ckpt|BS-RoFormer vocal (viperx ep_368), SDR 12.1
+mel_band_kim_ft|mel_band_roformer_kim_ft_unwa.ckpt|MelBand RoFormer Kim FT — vocals SDR 12.4 (highest)
