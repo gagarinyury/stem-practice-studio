@@ -14,6 +14,8 @@ declare module "@echogarden/rubberband-wasm" {
     _rubberband_delete(stretcher: number): void;
     _rubberband_set_time_ratio(stretcher: number, ratio: number): void;
     _rubberband_set_pitch_scale(stretcher: number, scale: number): void;
+    _rubberband_set_expected_input_duration(stretcher: number, samples: number): void;
+    _rubberband_study(stretcher: number, planesPtr: number, samples: number, isFinal: number): void;
     _rubberband_process(stretcher: number, planesPtr: number, samples: number, isFinal: number): void;
     _rubberband_available(stretcher: number): number;
     _rubberband_retrieve(stretcher: number, planesPtr: number, samples: number): number;

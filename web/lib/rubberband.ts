@@ -8,10 +8,10 @@
  * to avoid running the stretcher on every keystroke.
  */
 
-// rubberband C-API options (bit flags). Documented in rubberband sources.
-const OPT_PROCESS_OFFLINE = 0;
-const OPT_TRANSIENTS_MIXED = 256;
-const OPT_THREADING_NEVER = 32;
+// rubberband C-API options (from rubberband-c.h).
+const OPT_PROCESS_OFFLINE = 0x00000000;
+const OPT_TRANSIENTS_MIXED = 0x00000100;
+const OPT_THREADING_NEVER = 0x00010000;
 const OPT_FORMANT_PRESERVED = 0x01000000;
 const OPT_PITCH_HIGH_QUALITY = 0x02000000;
 const OPT_CHANNELS_TOGETHER = 0x10000000;
@@ -39,6 +39,8 @@ interface RBModule {
   _rubberband_delete(stretcher: number): void;
   _rubberband_set_time_ratio(stretcher: number, ratio: number): void;
   _rubberband_set_pitch_scale(stretcher: number, scale: number): void;
+  _rubberband_set_expected_input_duration(stretcher: number, samples: number): void;
+  _rubberband_study(stretcher: number, planesPtr: number, samples: number, isFinal: number): void;
   _rubberband_process(stretcher: number, planesPtr: number, samples: number, isFinal: number): void;
   _rubberband_available(stretcher: number): number;
   _rubberband_retrieve(stretcher: number, planesPtr: number, samples: number): number;
@@ -98,10 +100,13 @@ export async function stretchAudioBuffer(
   const F32 = 4;
   const PTR = 4;
 
-  const stretcher = M._rubberband_new(sr, channels, VOCAL_OPTS, timeRatio, pitchScale);
+  // Build with identity ratios; apply real values via setters. Construction-
+  // time arguments behave inconsistently in this wasm binding.
+  const stretcher = M._rubberband_new(sr, channels, VOCAL_OPTS, 1.0, 1.0);
+  M._rubberband_set_time_ratio(stretcher, timeRatio);
+  M._rubberband_set_pitch_scale(stretcher, pitchScale);
 
-  // One pass of input. We allocate the whole input region in wasm heap and
-  // hand a single (planes ptr) call to rubberband_process(..., final=1).
+  // One pass: allocate the whole input region in wasm heap.
   const inputBufPtr = M._malloc(channels * inputLen * F32);
   const inputPlanesPtr = M._malloc(channels * PTR);
   for (let c = 0; c < channels; c++) {
@@ -110,6 +115,9 @@ export async function stretchAudioBuffer(
     M.HEAPF32.set(data, planePtr / F32);
     M.HEAPU32[(inputPlanesPtr / PTR) + c] = planePtr;
   }
+  // Offline mode requires study(all-input) before process(all-input).
+  M._rubberband_set_expected_input_duration(stretcher, inputLen);
+  M._rubberband_study(stretcher, inputPlanesPtr, inputLen, 1);
   M._rubberband_process(stretcher, inputPlanesPtr, inputLen, 1);
 
   // Drain output in chunks of `tmpLen` samples.
