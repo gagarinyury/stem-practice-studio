@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Waveform Demo</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #FAF7F2; color: #2C2C2A; padding: 24px; max-width: 720px; margin: 0 auto; }
+  h1 { font-weight: 400; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin: 16px 0; font-family: ui-monospace, monospace; font-size: 12px; }
+  .knobs { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px 18px; align-items: center; margin: 16px 0; font-family: ui-monospace, monospace; font-size: 12px; }
+  .knobs .knob { display: grid; grid-template-columns: 80px 1fr 44px; gap: 8px; align-items: center; }
+  .knobs .knob input { width: 100%; }
+  .knobs .knob > span:last-child { text-align: right; }
+  button { padding: 6px 14px; background: #2C2C2A; color: #FAF7F2; border: 0; border-radius: 999px; font-family: inherit; font-size: 11px; cursor: pointer; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .knob { display: flex; align-items: center; gap: 6px; }
+  .knob input { width: 80px; }
+  .stage { background: #FFF; border: 0.5px solid rgba(0,0,0,0.1); border-radius: 12px; padding: 12px 16px; margin-top: 16px; }
+  .row { display: flex; align-items: center; gap: 8px; font-family: ui-monospace, monospace; font-size: 10px; color: #888780; margin-top: 8px; }
+  svg { display: block; width: 100%; cursor: pointer; }
+  .legend { display: grid; grid-template-columns: repeat(2,1fr); gap: 4px 16px; font-family: ui-monospace, monospace; font-size: 11px; color: #888780; margin-top: 12px; }
+  code { background: #F1EFE8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<h1>Spectrum sandbox</h1>
+<p style="font-size: 13px; color: #888780;">
+  Live FFT spectrum analyzer (Winamp-style). L канал вверх, R вниз. Bars пересчитываются каждый кадр от текущего звука.
+</p>
+
+<div class="controls">
+  <button id="play" disabled>load…</button>
+  <span id="status" style="color: #888780;">idle</span>
+</div>
+
+<div class="knobs">
+  <div class="knob"><span>buckets</span><input id="buckets" type="range" min="40" max="200" value="100"><span id="bucketsVal">100</span></div>
+  <div class="knob"><span>gamma</span><input id="gamma" type="range" min="20" max="100" value="60"><span id="gammaVal">0.60</span></div>
+  <div class="knob"><span>percentile</span><input id="pct" type="range" min="50" max="99" value="95"><span id="pctVal">0.95</span></div>
+  <div class="knob"><span>amp boost</span><input id="amp" type="range" min="30" max="200" value="100"><span id="ampVal">1.00</span></div>
+  <div class="knob"><span>live pulse</span><input id="pulse" type="range" min="0" max="300" value="120"><span id="pulseVal">1.20</span></div>
+  <div class="knob"><span>pink (highs↑)</span><input id="pink" type="range" min="0" max="100" value="50"><span id="pinkVal">0.50</span></div>
+  <div class="knob"><span>bass cut</span><input id="basscut" type="range" min="0" max="100" value="0"><span id="basscutVal">0.00</span></div>
+  <div class="knob" style="opacity:0.7"><span>level (live)</span><span></span><span id="levelVal">0.00</span></div>
+</div>
+
+<div class="stage">
+  <div style="font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; color: #888780;">— TIMELINE</div>
+  <svg id="timeline" viewBox="0 0 312 56" preserveAspectRatio="none" style="height: 80px;"></svg>
+  <div class="row" id="times"><span>0:00</span><span style="flex:1"></span><span>0:00</span></div>
+</div>
+
+<div class="legend">
+  <div><span style="display:inline-block;width:8px;height:8px;background:#534AB7"></span> played · live FFT</div>
+  <div><span style="display:inline-block;width:8px;height:8px;background:#B4B2A9"></span> not yet played</div>
+  <div>upper half = L spectrum (low → high freq)</div>
+  <div>lower half = R spectrum · thin caps = peak hold</div>
+</div>
+
+<script>
+const STEMS = [
+  '/runs/kalinov-most/stems/source_(Vocals)_htdemucs_6s.flac',
+  '/runs/kalinov-most/stems/source_(Drums)_htdemucs_6s.flac',
+  '/runs/kalinov-most/stems/source_(Bass)_htdemucs_6s.flac',
+  '/runs/kalinov-most/stems/source_(Guitar)_htdemucs_6s.flac',
+  '/runs/kalinov-most/stems/source_(Piano)_htdemucs_6s.flac',
+  '/runs/kalinov-most/stems/source_(Other)_htdemucs_6s.flac',
+];
+
+const VIEW_W = 312, VIEW_H = 56, CENTER_Y = 28; // progress line in the middle
+const BAR_W = 2;
+
+const ctx = new AudioContext();
+let buffers = [];
+let sources = [];
+let started = false;
+let startCtxTime = 0;
+let startOffset = 0;
+let duration = 0;
+const mix = ctx.createGain();
+const splitter = ctx.createChannelSplitter(2);
+const analyserL = ctx.createAnalyser();
+const analyserR = ctx.createAnalyser();
+analyserL.fftSize = 2048;
+analyserR.fftSize = 2048;
+analyserL.smoothingTimeConstant = 0.35;
+analyserR.smoothingTimeConstant = 0.35;
+const fftL = new Uint8Array(analyserL.frequencyBinCount);
+const fftR = new Uint8Array(analyserR.frequencyBinCount);
+mix.connect(splitter);
+splitter.connect(analyserL, 0);
+splitter.connect(analyserR, 1);
+mix.connect(ctx.destination);
+
+let smoothLevel = 0;
+function getLevel() {
+  if (!started) { smoothLevel *= 0.92; return smoothLevel; }
+  let s = 0;
+  for (let i=0;i<fftL.length;i++) s += fftL[i];
+  const avg = s / (fftL.length * 255);
+  const target = Math.min(1, avg * 2);
+  const a = target > smoothLevel ? 0.45 : 0.08;
+  smoothLevel = smoothLevel + (target - smoothLevel) * a;
+  return smoothLevel;
+}
+
+// Per-bar peak hold for Winamp feel
+let barLvlL = null, barLvlR = null, peakL = null, peakR = null;
+function updateBars(buckets) {
+  if (!barLvlL || barLvlL.length !== buckets) {
+    barLvlL = new Float32Array(buckets);
+    barLvlR = new Float32Array(buckets);
+    peakL = new Float32Array(buckets);
+    peakR = new Float32Array(buckets);
+  }
+  if (started) {
+    analyserL.getByteFrequencyData(fftL);
+    analyserR.getByteFrequencyData(fftR);
+  }
+  // Logarithmic mapping: low freq → first bars, high freq → last bars
+  const N = fftL.length;
+  const logMin = Math.log(2);
+  const logMax = Math.log(N - 1);
+  for (let b = 0; b < buckets; b++) {
+    const t0 = b / buckets;
+    const t1 = (b + 1) / buckets;
+    const i0 = Math.max(1, Math.floor(Math.exp(logMin + (logMax - logMin) * t0)));
+    const i1 = Math.min(N, Math.max(i0 + 1, Math.floor(Math.exp(logMin + (logMax - logMin) * t1))));
+    let sumL = 0, sumR = 0, weightSum = 0;
+    // Pink-noise compensation: weight bins by (i/N)^pink to lift highs
+    const pinkExp = params.pink * 1.2; // 0..1.2
+    for (let i = i0; i < i1; i++) {
+      const w = Math.pow((i + 1) / N, pinkExp);
+      sumL += fftL[i] * w;
+      sumR += fftR[i] * w;
+      weightSum += w;
+    }
+    const tL = started ? (sumL / Math.max(0.0001, weightSum * 255)) : 0;
+    const tR = started ? (sumR / Math.max(0.0001, weightSum * 255)) : 0;
+    // Attack/release per bar
+    const aL = tL > barLvlL[b] ? 0.55 : 0.10;
+    const aR = tR > barLvlR[b] ? 0.55 : 0.10;
+    barLvlL[b] += (tL - barLvlL[b]) * aL;
+    barLvlR[b] += (tR - barLvlR[b]) * aR;
+    // Peak hold (slow drop)
+    if (barLvlL[b] > peakL[b]) peakL[b] = barLvlL[b]; else peakL[b] *= 0.985;
+    if (barLvlR[b] > peakR[b]) peakR[b] = barLvlR[b]; else peakR[b] *= 0.985;
+  }
+}
+
+const $play = document.getElementById('play');
+const $status = document.getElementById('status');
+const $svg = document.getElementById('timeline');
+const $times = document.getElementById('times').children;
+
+const params = { buckets: 100, gamma: 0.6, pct: 0.95, amp: 1.0 };
+const wireKnob = (id, key, fmt, scale=1) => {
+  const $i = document.getElementById(id);
+  const $v = document.getElementById(id+'Val');
+  const upd = () => {
+    params[key] = parseFloat($i.value) / scale;
+    $v.textContent = fmt(params[key]);
+    render();
+  };
+  $i.addEventListener('input', upd); upd();
+};
+wireKnob('buckets', 'buckets', v => v|0);
+wireKnob('gamma', 'gamma', v => v.toFixed(2), 100);
+wireKnob('pct', 'pct', v => v.toFixed(2), 100);
+wireKnob('amp', 'amp', v => v.toFixed(2), 100);
+wireKnob('pulse', 'pulse', v => v.toFixed(2), 100);
+wireKnob('pink', 'pink', v => v.toFixed(2), 100);
+wireKnob('basscut', 'basscut', v => v.toFixed(2), 100);
+
+function fmtTime(t) {
+  const m = Math.floor(t/60), s = Math.floor(t%60);
+  return `${m}:${s.toString().padStart(2,'0')}`;
+}
+
+async function load() {
+  $status.textContent = 'loading…';
+  const arrs = await Promise.all(STEMS.map(u => fetch(u).then(r => r.arrayBuffer())));
+  buffers = await Promise.all(arrs.map(a => ctx.decodeAudioData(a)));
+  duration = Math.max(...buffers.map(b => b.duration));
+  $times[2].textContent = fmtTime(duration);
+  $status.textContent = `${buffers.length} stems · ${duration.toFixed(1)}s`;
+  $play.disabled = false;
+  $play.textContent = 'play';
+  render();
+}
+load();
+
+function rmsBuckets(channels, buckets, total) {
+  const out = new Float32Array(buckets);
+  const per = Math.max(1, Math.floor(total / buckets));
+  for (let b=0; b<buckets; b++) {
+    const s = b*per, e = Math.min(s+per, total);
+    let sum = 0;
+    for (let i=s; i<e; i++) {
+      let m = 0;
+      for (const c of channels) if (i<c.length) m += c[i];
+      sum += m*m;
+    }
+    out[b] = Math.sqrt(sum / Math.max(1, e-s));
+  }
+  return out;
+}
+
+function normalize(arr, percentile, gamma) {
+  const sorted = Array.from(arr).filter(v=>v>0).sort((a,b)=>a-b);
+  if (!sorted.length) return arr;
+  const ref = sorted[Math.min(sorted.length-1, Math.floor(sorted.length*percentile))] || 1;
+  for (let i=0;i<arr.length;i++) arr[i] = Math.pow(Math.min(1, arr[i]/ref), gamma);
+  return arr;
+}
+
+function getPeaks(buckets) {
+  const sr = buffers[0].sampleRate;
+  const total = Math.floor(duration * sr);
+  const L = [], R = [];
+  for (const b of buffers) {
+    L.push(b.getChannelData(0));
+    R.push(b.numberOfChannels>1 ? b.getChannelData(1) : b.getChannelData(0));
+  }
+  const left = rmsBuckets(L, buckets, total);
+  const right = rmsBuckets(R, buckets, total);
+  const joint = new Float32Array(buckets*2);
+  joint.set(left,0); joint.set(right,buckets);
+  normalize(joint, params.pct, params.gamma);
+  left.set(joint.subarray(0,buckets));
+  right.set(joint.subarray(buckets));
+  return { left, right };
+}
+
+function currentTime() {
+  if (!started) return startOffset;
+  return startOffset + (ctx.currentTime - startCtxTime);
+}
+
+let lastPeaks = null;
+let lastBuckets = -1;
+
+function render() {
+  if (!buffers.length) return;
+  if (lastBuckets !== params.buckets) {
+    lastPeaks = getPeaks(params.buckets);
+    lastBuckets = params.buckets;
+  }
+  const { left, right } = lastPeaks;
+  const t = currentTime();
+  const progress = Math.max(0, Math.min(1, t / duration));
+  const playX = progress * VIEW_W;
+  const halfMax = (VIEW_H - 4) / 2;
+  const step = VIEW_W / params.buckets;
+  const level = getLevel();
+  document.getElementById('levelVal').textContent = level.toFixed(2);
+
+  updateBars(params.buckets);
+
+  let bars = '';
+  const cutoff = Math.floor(params.basscut * params.buckets);
+  for (let i=0; i<params.buckets; i++) {
+    const x = i*step;
+    const isPlayed = x < playX;
+    const fill = isPlayed ? '#534AB7' : '#B4B2A9';
+    const cutGain = cutoff > 0 ? Math.min(1, i / Math.max(1, cutoff)) : 1;
+    const lLive = Math.pow(barLvlL[i] * cutGain, params.gamma);
+    const rLive = Math.pow(barLvlR[i] * cutGain, params.gamma);
+    const upH = Math.min(halfMax, Math.max(0.5, lLive * halfMax * params.amp * (1 + params.pulse)));
+    const dnH = Math.min(halfMax, Math.max(0.5, rLive * halfMax * params.amp * (1 + params.pulse)));
+    bars += `<rect x="${x.toFixed(2)}" y="${(CENTER_Y - upH).toFixed(2)}" width="${BAR_W}" height="${upH.toFixed(2)}" fill="${fill}"/>`;
+    bars += `<rect x="${x.toFixed(2)}" y="${CENTER_Y}" width="${BAR_W}" height="${dnH.toFixed(2)}" fill="${fill}"/>`;
+    const pL = Math.min(halfMax, Math.pow(peakL[i] * cutGain, params.gamma) * halfMax * params.amp * (1 + params.pulse));
+    const pR = Math.min(halfMax, Math.pow(peakR[i] * cutGain, params.gamma) * halfMax * params.amp * (1 + params.pulse));
+    if (pL > 1) bars += `<rect x="${x.toFixed(2)}" y="${(CENTER_Y - pL - 1).toFixed(2)}" width="${BAR_W}" height="0.8" fill="${isPlayed ? '#3C3489' : '#888780'}"/>`;
+    if (pR > 1) bars += `<rect x="${x.toFixed(2)}" y="${(CENTER_Y + pR + 0.2).toFixed(2)}" width="${BAR_W}" height="0.8" fill="${isPlayed ? '#3C3489' : '#888780'}"/>`;
+  }
+
+  $svg.innerHTML = `
+    ${bars}
+    <line x1="0" y1="${CENTER_Y}" x2="${VIEW_W}" y2="${CENTER_Y}" stroke="#D3D1C7" stroke-width="0.5"/>
+    <line x1="0" y1="${CENTER_Y}" x2="${playX.toFixed(2)}" y2="${CENTER_Y}" stroke="#534AB7" stroke-width="1"/>
+    <circle cx="${playX.toFixed(2)}" cy="${CENTER_Y}" r="3.5" fill="#2C2C2A"/>
+  `;
+  $times[0].textContent = fmtTime(t);
+}
+
+function play() {
+  if (started) {
+    // pause
+    startOffset = currentTime();
+    sources.forEach(s => { try { s.stop(); } catch{} });
+    sources = [];
+    started = false;
+    $play.textContent = 'play';
+    return;
+  }
+  startCtxTime = ctx.currentTime;
+  sources = buffers.map(b => {
+    const s = ctx.createBufferSource();
+    s.buffer = b;
+    s.connect(mix);
+    s.start(0, startOffset);
+    return s;
+  });
+  started = true;
+  $play.textContent = 'pause';
+}
+
+$play.addEventListener('click', play);
+$svg.addEventListener('click', (e) => {
+  const rect = $svg.getBoundingClientRect();
+  const ratio = (e.clientX - rect.left) / rect.width;
+  const t = ratio * duration;
+  startOffset = t;
+  if (started) {
+    sources.forEach(s => { try { s.stop(); } catch{} });
+    startCtxTime = ctx.currentTime;
+    sources = buffers.map(b => {
+      const s = ctx.createBufferSource();
+      s.buffer = b;
+      s.connect(mix);
+      s.start(0, startOffset);
+      return s;
+    });
+  }
+  render();
+});
+
+(function loop() { render(); requestAnimationFrame(loop); })();
+</script>
+</body>
+</html>

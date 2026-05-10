@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #FAF7F2;
+  --color-surface: #FFFFFF;
+  --color-surface-muted: #F1EFE8;
+  --color-ink: #2C2C2A;
+  --color-ink-muted: #888780;
+  --color-ink-faint: #B4B2A9;
+  --color-border-soft: rgba(0, 0, 0, 0.08);
+  --color-accent-vocal: #534AB7;
+  --color-accent-drill: #C66857;
+  --color-accent-plan: #BA7517;
+  --color-accent-success: #1D9E75;
+  --color-accent-warn: #993C1D;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+
+  --font-serif: var(--font-cormorant), Georgia, serif;
+  --font-mono: var(--font-dm-mono), ui-monospace, monospace;
+}
+
+html, body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-serif);
+}
+
+/* Thin range slider for stem volume */
+.thin-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 14px;
+  background: transparent;
+  cursor: pointer;
+}
+.thin-range::-webkit-slider-runnable-track {
+  height: 2px;
+  background: var(--color-ink-faint);
+  border-radius: 1px;
+}
+.thin-range::-moz-range-track {
+  height: 2px;
+  background: var(--color-ink-faint);
+  border-radius: 1px;
+  border: 0;
+}
+.thin-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-ink);
+  margin-top: -3px;
+  border: 0;
+}
+.thin-range::-moz-range-thumb {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-ink);
+  border: 0;
+}

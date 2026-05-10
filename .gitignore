@@ -52,6 +52,15 @@ Thumbs.db
 *.opus
 *.aiff
 
+# --- Video assets ---
+*.mp4
+*.mkv
+*.webm
+
+# --- Runtime data dirs (synced via rsync, not committed) ---
+runs/
+bench/listen/
+
 # --- ML weights (do not commit) ---
 *.pt
 *.pth

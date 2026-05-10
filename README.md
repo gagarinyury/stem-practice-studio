@@ -39,6 +39,9 @@
 **Phase 1.4** ✅ End-to-end CLI `python -m pipeline.process`. На YT-ссылке Калинов Мост: 103.6s total.
 **Phase 1.5** ✅ A/B full-mix vs vocal-stem: sep обязателен для RU (silero-vad не работает на музыке), для EN +9pp WER от sep.
 **Phase 1.6** ✅ Separation speed matrix: htdemucs_6s остаётся sweet spot. mel_kim даёт −6pp WER но только 2 стема.
+**Phase 3.0** ✅ Next.js 15/16 + Tailwind v4 + design system. Tokens в `web/lib/design/tokens.ts`, primitives в `web/components/ui/`, каталог `/design`.
+**Phase 3.1** ✅ Compact player `/play/[id]` — 6 стемов синхронно, mute/solo/volume, lyric karaoke, FFT live timeline (Winamp-style L/R + peak-hold).
+**Phase 3.2** ✅ Karaoke video view `/karaoke/[id]` — fullscreen, YT-iframe фон с drift-correction, sliding lyric reel в нижней трети с blur-backdrop, live FFT spectrum, sidebar (vocals + music + split на 5 sub-стемов).
 
 Подробности: `bench/results.md`.
 
@@ -54,6 +57,17 @@ open bench/asr/preview/8LL0TgWmvaE/karaoke.html
 
 # A/B WER scoring
 bash bench/asr/run_ab.sh && python3 bench/asr/score_wer.py <ab_dir>
+
+# web (Phase 3) — на Mac
+cd web && npm run dev               # → http://localhost:4323
+# /design     — каталог токенов и примитивов
+# /play/<id>  — компактный плеер (мокап-фрейм 360px)
+# /karaoke/<id> — fullscreen видео-караоке для записи
+# /waveform-demo.html — sandbox для итерации визуалов спектра
+
+# sync run-данных для веба (на Mac)
+rsync -avz --exclude='source.wav' evo:/srv/apps/stem-practice-studio/runs/<slug> ~/code/stem-practice-studio/runs/
+ln -sfn ../../runs ~/code/stem-practice-studio/web/public/runs
 ```
 
 ### Critical gotchas (для будущей разработки)
@@ -66,6 +80,20 @@ bash bench/asr/run_ab.sh && python3 bench/asr/score_wer.py <ab_dir>
 - **Vulkan-бэкенд PyTorch не существует** для ML инференса — всё ML только на ROCm или CPU.
 - **На single GPU параллелить 2 ML-задачи бессмысленно** (queue к hardware).
 
+#### Web (Phase 3)
+
+- **Tailwind v4 `@theme`**: токены в `globals.css` автоматически генерируют утилиты (`bg-paper`, `text-ink-muted`, `font-serif`). Не нужен `tailwind.config.ts`.
+- **`node:fs` в client component ломает Turbopack**. Серверные fs-loaders выделять в `lib/*.server.ts` с маркером `import "server-only"`.
+- **Hydration mismatch при `Math.random()`/`Date.now()` в `useRef` инициализаторе** → использовать React `useId()` для стабильных id между server/client.
+- **WebAudio L/R FFT нужен `ChannelSplitter`** перед двумя `AnalyserNode`-ами; иначе оба видят моно-сумму.
+- **YouTube IFrame API + React**: внутри `onReady` колбэка читать `playing`/`currentTime` через refs, не через closure (stale). Drift-correction делать **только** во время play — иначе seekTo на паузе вызывает loop start/stop.
+- **Аудио peaks**: `gamma 0.59`, `percentile 0.78` для нормализации; `pink (i/N)^0.42` для FFT-компенсации bassy-пирамиды; `bass cut 0.07` для срезки sub-bass; `amp 0.66`, `pulse 0.39`, 100 buckets для timeline (settings подобраны итеративно через `web/public/waveform-demo.html`).
+- **Manifest display fields**: `manifest.artist` для UI = реальный исполнитель в видео, `manifest.lrc.artist` = автор песни (для LRC-поиска). Для каверов это разные люди (Калинов мост vs Башлачёв).
+
 ### Дальше
 
-См. план `~/.claude/plans/concurrent-honking-pumpkin.md`. Следующий шаг на выбор: D (Next.js плеер первый UI) / A (FastAPI Phase 2) / B (CTC alignment Phase 1.7).
+См. план `~/.claude/plans/concurrent-honking-pumpkin.md`. Phase 3 покрывает web-MVP. Следующее на выбор:
+- **A** — Phase 2: FastAPI + arq + SSE (бэкенд для UI-импорта вместо локального manifest)
+- **B** — Phase 1.7: CTC forced alignment (улучшить точность word-таймингов)
+- **C** — Phase 4: drill A-B loop + rubberband-wasm (tempo/pitch стали активными — pills в plyer уже есть, нужен AudioWorklet)
+- **D** — Phase 1.8: SongFormer для verse/chorus (вернуть section-overlay в timeline)
