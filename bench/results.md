@@ -236,9 +236,54 @@ GigaAM выдал 1 слово на 313 секунд. Текст: `'шли'` (п
 
 ---
 
+---
+
+# Phase 1.6 — Separation speed/quality matrix
+
+Дата: 2026-05-10
+Скрипт: `bench/asr/run_sep_speed.sh`
+Данные: `bench/results/sepspeed_20260510-101902/`
+
+## Гипотеза
+
+Если нужны не все 6 стемов (например только vocal+instrumental для karaoke), 2-стемовые модели должны быть быстрее. Проверяем total time (sep + ASR) и WER.
+
+## Метод
+
+5 separation моделей × тот же source (Калинов Мост 313s) → GigaAM на vocals → WER к LRC. Все на ROCm gfx1151.
+
+## Результаты
+
+| Model | sep_s | asr_s | total_s | WER | Stems | Note |
+|---|---|---|---|---|---|---|
+| **mel_band_roformer_kim_ft_unwa** | 125.5 | 28.4 | **153.9** | **36.8%** ⭐ | 2 | best WER |
+| **htdemucs_ft** (4-stem ensemble) | 163.7 | 28.7 | 192.4 | 40.3% | 4 | избегать — самый медленный |
+| **htdemucs_6s** (нынешний baseline) | 64.2 | 26.9 | **91.1** | 43.0% | **6** ⭐ | best для full app |
+| **UVR-MDX-NET-Inst_HQ_5** | 62.9 | 33.4 | 96.3 | 45.3% | 2 | без выгоды |
+| **UVR_MDXNET_KARA_2** | **59.1** ⭐ | 28.2 | **87.3** | 46.9% | 2 | fastest, но WER хуже |
+
+## Анализ
+
+1. **htdemucs_ft медленнее htdemucs_6s в 2.5×** не из-за shifts/TTA, а из-за **ensemble** — `_ft` усредняет 4 разных weight-файла (4× compute). `_6s` — single model. Это объясняет Phase 0 timings.
+2. **mel_kim — победитель по качеству**: −6.2pp WER к htdemucs_6s. Тяжёлая модель (Mel-Band RoFormer), 125s sep, но даёт **значимо** более чистый вокал.
+3. **MDX-Net — не оправдывают**: на ~5 секунд быстрее htdemucs_6s, но WER на 2-4pp хуже. Качество вокального стема явно ниже.
+4. **htdemucs_6s остаётся sweet spot**: 91s total, 6 стемов одной командой. Для full-app (drum/bass/guitar drill) — единственный вариант не пересепарировать.
+
+## Решения
+
+1. **Primary остаётся `htdemucs_6s`** — единственная модель которая даёт 6 стемов нужных для drill всех инструментов.
+2. **Опциональный "premium quality" path** — `mel_band_roformer_kim_ft_unwa` для пользователей которым нужен только karaoke (без drum/guitar/bass drill). Даёт −6.2pp WER, но стоит 60 дополнительных секунд и не даёт остальные стемы.
+3. **MDX-Net и htdemucs_ft исключаем** из дальнейших рассмотрений.
+
+## Двухуровневая (parallel) обработка — не сейчас
+
+Можно было бы запускать `mel_kim` параллельно с `htdemucs_6s` (mel — для karaoke ASR, htdemucs — для drill стемов). На single-GPU это не выигрыш (queue), на split-host (CPU sep + GPU ASR) — мог бы быть. Откладываем до Phase 2 когда станет ясно нужно ли.
+
+---
+
 ## Что дальше
 
-- Phase 1.6 (опц.): CTC forced alignment через GigaAM-CTC + torchaudio для замены NW-baseline (заменит интерполяцию точными CTC-таймингами)
-- Phase 1.7: SongFormer (verse/chorus) — новая ML-нагрузка, отдельный smoke на ROCm
-- Phase 1.8: chord recognition + N2N drum transcription для не-вокалистов
+- Phase 1.7 (опц.): CTC forced alignment через GigaAM-CTC + torchaudio для замены NW-baseline
+- Phase 1.8: SongFormer (verse/chorus) — новая ML-нагрузка, отдельный smoke на ROCm
+- Phase 1.9: chord recognition + N2N drum transcription для не-вокалистов
 - Phase 2: FastAPI + arq + SSE — обернуть pipeline.process в job-сервис
