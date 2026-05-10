@@ -15,9 +15,10 @@ def download(url: str, out_dir: Path) -> tuple[Path, dict]:
     metadata keys: id, title, uploader, channel, duration, language (if present)
     """
     out_dir.mkdir(parents=True, exist_ok=True)
+    out_abs = out_dir.resolve()
     cmd = [
         "docker", "run", "--rm",
-        "-v", f"{out_dir}:/out",
+        "-v", f"{out_abs}:/out",
         BENCH_IMAGE,
         "yt-dlp",
         "-f", "bestaudio",

@@ -18,16 +18,18 @@ def separate(audio_path: Path, out_dir: Path) -> dict[str, Path]:
     """
     stems_dir = out_dir / "stems"
     stems_dir.mkdir(parents=True, exist_ok=True)
+    audio_abs = audio_path.resolve()
+    stems_abs = stems_dir.resolve()
 
     cmd = [
         "docker", "run", "--rm",
         "--device", "/dev/kfd", "--device", "/dev/dri",
         "--group-add", RENDER_GID, "--group-add", VIDEO_GID,
-        "-v", f"{audio_path.parent}:/in:ro",
-        "-v", f"{stems_dir}:/out",
+        "-v", f"{audio_abs.parent}:/in:ro",
+        "-v", f"{stems_abs}:/out",
         "-v", f"{MODELS_HOST}:/models",
         BENCH_IMAGE,
-        "audio-separator", f"/in/{audio_path.name}",
+        "audio-separator", f"/in/{audio_abs.name}",
         "-m", "htdemucs_6s.yaml",
         "--model_file_dir", "/models",
         "--output_dir", "/out",
