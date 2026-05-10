@@ -35,14 +35,19 @@ def main() -> int:
     import torch
     import soundfile as sf
 
-    # NeMo's TDT decoder probes for CUDA graphs via cuda-python, which dlopens
-    # libcuda.so.1 — present only on NVIDIA hosts. On ROCm the probe blows up
-    # before we even start. Stub it before importing the ASR model so the
-    # check returns "unsupported" and the decoder falls back to vanilla mode.
-    import nemo.core.utils.cuda_python_utils as _cpu
-    _cpu.check_cuda_python_cuda_graphs_conditional_nodes_supported = (
-        lambda: (_ for _ in ()).throw(RuntimeError("cuda graphs disabled (ROCm)"))
+    # NeMo's TDT decoder calls maybe_enable_cuda_graphs() unconditionally during
+    # construction — and that method's call to cuda-python dlopens libcuda.so.1,
+    # which doesn't exist on ROCm. The wrapper in this NeMo version doesn't
+    # try/except, so we replace the method itself with a no-op on every transducer
+    # decoding computer class before instantiating the model.
+    from nemo.collections.asr.parts.submodules.transducer_decoding import (
+        tdt_label_looping, rnnt_label_looping,
     )
+    for _mod in (tdt_label_looping, rnnt_label_looping):
+        for _name in dir(_mod):
+            _cls = getattr(_mod, _name)
+            if isinstance(_cls, type) and hasattr(_cls, "maybe_enable_cuda_graphs"):
+                _cls.maybe_enable_cuda_graphs = lambda self: None
 
     # Parakeet-TDT-v3 = RNN-T-style joint with BPE tokenizer. In NeMo 2.x the
     # generic ASRModel.from_pretrained dispatcher is unreliable (instantiates
