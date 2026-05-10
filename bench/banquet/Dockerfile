@@ -24,7 +24,8 @@ RUN pip install --no-cache-dir \
         "fire>=0.6" \
         "pandas>=2.2" \
         "tqdm>=4.66" \
-        "torch-audiomentations>=0.11"
+        "torch-audiomentations>=0.11" \
+        "hear21passt"
 
 WORKDIR /opt/query-bandit
 ENV CONFIG_ROOT=/opt/query-bandit/config
