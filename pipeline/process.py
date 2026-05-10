@@ -87,7 +87,10 @@ def _resolve_input(opts: RunOpts, out_dir: Path) -> tuple[Path, dict]:
         raise FileNotFoundError(f"input not found: {src}")
     dst = out_dir / f"source{src.suffix}"
     out_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(src, dst)
+    # If caller already placed the file at the destination (e.g. backend
+    # streamed an upload directly into out_dir), skip the redundant copy.
+    if src.resolve() != dst.resolve():
+        shutil.copy2(src, dst)
     meta = {
         "id": src.stem,
         "title": opts.title or src.stem,
