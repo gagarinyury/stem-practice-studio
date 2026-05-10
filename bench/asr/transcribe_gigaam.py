@@ -50,33 +50,45 @@ def main() -> int:
         model = model.to(device)
     print(f"[gigaam] model ready in {time.perf_counter() - t0:.1f}s", file=sys.stderr)
 
-    # GigaAM's transcribe takes a path; long-audio (>30 s) auto-VADs internally
-    # per the README's "long-form audio transcribation" section.
-    t0 = time.perf_counter()
-    result = model.transcribe(str(args.audio), word_timestamps=True)
-    elapsed = time.perf_counter() - t0
-
-    # Try to read total duration via soundfile for RTF reporting (gigaam result
-    # may or may not expose it depending on version).
     import soundfile as sf
     info = sf.info(str(args.audio))
     duration = info.frames / info.samplerate
-    rtf = elapsed / duration if duration else 0.0
-    print(f"[gigaam] inference: {elapsed:.1f}s  RTF={rtf:.3f}", file=sys.stderr)
+    print(f"[gigaam] audio: {duration:.1f}s @ {info.samplerate}Hz", file=sys.stderr)
 
-    text = getattr(result, "text", "") or ""
-    raw_words = getattr(result, "words", []) or []
+    # transcribe() raises ValueError for >30 s clips. Use transcribe_longform —
+    # GigaAM's VAD-chunked pipeline that returns a list of segments, each with
+    # text + word_timestamps.
+    t0 = time.perf_counter()
+    if duration > 30.0:
+        segments = model.transcribe_longform(str(args.audio), word_timestamps=True)
+    else:
+        segments = [model.transcribe(str(args.audio), word_timestamps=True)]
+    elapsed = time.perf_counter() - t0
+    rtf = elapsed / duration if duration else 0.0
+    print(f"[gigaam] inference: {elapsed:.1f}s  RTF={rtf:.3f}  segments={len(segments)}",
+          file=sys.stderr)
+
+    # Flatten segments into a single text + words list. GigaAM segments may be
+    # objects (.text, .words) or dicts; word entries likewise. The README example
+    # iterates `for word in result.words: word.text/.start/.end`.
+    def _g(obj, key, default=None):
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        return getattr(obj, key, default)
 
     words = []
-    for w in raw_words:
-        # Each word is an object/dict with .text/.start/.end (or "word"/"start"/"end").
-        get = (lambda k, d=None: w[k] if k in w else d) if isinstance(w, dict) else (
-            lambda k, d=None: getattr(w, k, d))
-        words.append({
-            "word": get("text") or get("word") or "",
-            "start": float(get("start") or 0.0),
-            "end": float(get("end") or 0.0),
-        })
+    text_parts = []
+    for seg in segments:
+        seg_text = _g(seg, "text") or ""
+        if seg_text:
+            text_parts.append(seg_text)
+        for w in (_g(seg, "words") or []):
+            words.append({
+                "word": _g(w, "text") or _g(w, "word") or "",
+                "start": float(_g(w, "start") or 0.0),
+                "end": float(_g(w, "end") or 0.0),
+            })
+    text = " ".join(text_parts)
 
     out = {
         "model": f"gigaam-{args.model}",
