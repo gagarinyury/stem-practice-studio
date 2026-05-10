@@ -14,8 +14,9 @@ USER root
 RUN git clone --depth 1 https://github.com/kwatcharasupat/query-bandit.git /opt/query-bandit
 
 # Runtime deps inferred from train.py imports — the repo ships no requirements.txt.
-# torch_audiomentations is pulled in transitively via core/data/moisesdb at import
-# time, so it's required even for inference.
+# torch_audiomentations is pulled in by core/data/moisesdb/dataset.py at module
+# load, so it's required even for inference. The "moisesdb" subpath is a local
+# package inside the repo, not the PyPI library — don't try to pip-install it.
 RUN pip install --no-cache-dir \
         "pytorch-lightning>=2.4,<2.6" \
         "torchmetrics>=1.4,<2" \
@@ -23,8 +24,7 @@ RUN pip install --no-cache-dir \
         "fire>=0.6" \
         "pandas>=2.2" \
         "tqdm>=4.66" \
-        "torch-audiomentations>=0.11" \
-        "moisesdb"
+        "torch-audiomentations>=0.11"
 
 WORKDIR /opt/query-bandit
 ENV CONFIG_ROOT=/opt/query-bandit/config
