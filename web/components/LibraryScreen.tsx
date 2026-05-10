@@ -1,10 +1,11 @@
 "use client";
 
-import { IconCheck, IconLoader2, IconPlayerPlay, IconPlus } from "@tabler/icons-react";
+import { useEffect, useState } from "react";
+import { IconCheck, IconLoader2, IconMicrophone2, IconPlayerPlay, IconPlus } from "@tabler/icons-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PhoneFrame } from "./ui/PhoneFrame";
-import type { TrackSummary } from "@/lib/api";
+import { getStreak, type TrackSummary } from "@/lib/api";
 
 const PALETTE = [
   { bg: "#EEEDFE", fg: "#3C3489" },
@@ -30,12 +31,42 @@ function fmtMeta(t: TrackSummary): string {
 
 export function LibraryScreen({ tracks }: { tracks: TrackSummary[] }) {
   const router = useRouter();
+  const [streak, setStreak] = useState<number | null>(null);
+  const [hasSession, setHasSession] = useState(false);
+
+  useEffect(() => {
+    getStreak()
+      .then((s) => {
+        setStreak(s.streak_count);
+        setHasSession(!!s.last_session_at);
+      })
+      .catch(() => { /* not authenticated yet — fine */ });
+  }, []);
 
   const inProgress = tracks.filter((t) => t.status === "processing" || t.status === "queued");
   const done = tracks.filter((t) => t.status === "done");
 
   return (
     <PhoneFrame>
+      {streak !== null && (
+        <button
+          type="button"
+          onClick={() => router.push("/warmup")}
+          className="mx-6 mt-4 flex items-center gap-3 bg-[var(--color-surface-muted)] rounded-[12px] px-3 py-2 text-left"
+        >
+          <IconMicrophone2 size={18} className="text-[var(--color-accent-vocal)]" />
+          <div className="flex-1 min-w-0">
+            {hasSession ? (
+              <div className="font-mono text-[11px] text-[var(--color-ink)]">
+                warm-up streak · <span className="tabular-nums">{streak}</span> {streak === 1 ? "day" : "days"}
+              </div>
+            ) : (
+              <div className="font-mono text-[11px] text-[var(--color-ink)]">warm up your voice first — 8 min</div>
+            )}
+          </div>
+          <span className="font-mono text-[10px] text-[var(--color-ink-muted)]">›</span>
+        </button>
+      )}
       <div className="px-6 pt-6 flex items-end justify-between">
         <div>
           <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-[var(--color-ink-muted)]">

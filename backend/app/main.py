@@ -5,9 +5,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from .api.auth import router as auth_router
 from .api.events import router as events_router
+from .api.profile import router as profile_router
 from .api.tracks import router as tracks_router
+from .api.warmup import router as warmup_router
 from .config import CORS_ORIGINS, RUNS_DIR
+from .db import init_db
 from .storage import ensure_runs_dir
 
 
@@ -26,6 +30,7 @@ app.add_middleware(
 @app.on_event("startup")
 def _startup() -> None:
     ensure_runs_dir()
+    init_db()
 
 
 @app.get("/healthz")
@@ -33,6 +38,9 @@ def healthz() -> dict:
     return {"ok": True}
 
 
+app.include_router(auth_router)
+app.include_router(profile_router)
+app.include_router(warmup_router)
 app.include_router(tracks_router)
 app.include_router(events_router)
 

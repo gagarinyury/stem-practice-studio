@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>warm-up · piano + voice</title>
+<script src="https://cdn.jsdelivr.net/npm/tone@15.0.4/build/Tone.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 20px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    background: #FAF7F2; color: #2C2C2A;
+  }
+  h1 { font-size: 13px; margin: 0 0 14px; font-weight: 500; color: #888780; letter-spacing: 0.05em; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+  .tabs button {
+    padding: 8px 14px; border: 1px solid #D3D1C7; background: #fff;
+    border-radius: 999px; font-family: inherit; font-size: 12px; cursor: pointer; color: #2C2C2A;
+  }
+  .tabs button.active { background: #534AB7; color: #fff; border-color: #534AB7; }
+  .stage { background: #fff; border: 1px solid #D3D1C7; border-radius: 14px; padding: 18px; }
+
+  /* big phase banner */
+  .banner {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px; border-radius: 10px; margin-bottom: 14px;
+    background: #F1EFE8; min-height: 64px;
+  }
+  .banner .phase {
+    font-family: inherit; font-size: 22px; color: #2C2C2A; font-weight: 500;
+  }
+  .banner .sub { font-size: 12px; color: #888780; margin-top: 4px; }
+  .banner.listen { background: #EEEDFE; }
+  .banner.listen .phase { color: #3C3489; }
+  .banner.countdown { background: #FAEEDA; }
+  .banner.countdown .phase { color: #854F0B; font-size: 32px; }
+  .banner.sing { background: #E1F5EE; }
+  .banner.sing .phase { color: #085041; }
+  .banner.done { background: #F1EFE8; }
+  .banner .cta {
+    background: #993C1D; color: #fff; border: none; border-radius: 8px;
+    padding: 10px 18px; font-size: 13px; cursor: pointer; font-family: inherit;
+  }
+  .banner .cta.dim { background: #B4B2A9; cursor: default; }
+
+  canvas { display: block; width: 100%; height: 200px; }
+
+  .info {
+    display: flex; justify-content: center; gap: 36px; margin-top: 12px;
+    font-size: 12px; color: #888780;
+  }
+  .info b { color: #2C2C2A; font-weight: 600; font-size: 16px; }
+  .info b.ok { color: #1D9E75; }
+  .info b.off { color: #B4B2A9; }
+
+  .controls {
+    display: flex; gap: 10px; align-items: center; margin-top: 16px;
+    border-top: 1px solid #F1EFE8; padding-top: 14px;
+    font-size: 11px; color: #888780;
+  }
+  .controls button {
+    padding: 7px 12px; border: 1px solid #D3D1C7; background: #fff;
+    border-radius: 8px; font-family: inherit; font-size: 12px; cursor: pointer; color: #2C2C2A;
+  }
+  .controls button.muted { background: #F1EFE8; color: #888780; }
+  .controls input[type=range] { width: 90px; accent-color: #534AB7; }
+  .controls .spacer { flex: 1; }
+</style>
+</head>
+<body>
+
+<h1>— warm-up · piano + voice prototype —</h1>
+
+<div class="tabs">
+  <button data-mode="siren" class="active">sirens · slide voice up &amp; down</button>
+  <button data-mode="scales">scales · climb 5 notes</button>
+  <button data-mode="swell">messa di voce · soft → loud → soft</button>
+</div>
+
+<div class="stage">
+  <div class="banner" id="banner">
+    <div>
+      <div class="phase" id="phaseText">click "enable mic" to begin</div>
+      <div class="sub" id="phaseSub">piano will play what to repeat — then it's your turn</div>
+    </div>
+    <button class="cta" id="cta">enable mic</button>
+  </div>
+
+  <canvas id="cv" width="1200" height="200"></canvas>
+
+  <div class="info">
+    <div>target · <b id="targetNote">—</b></div>
+    <div>you · <b id="yourNote">—</b></div>
+    <div><b id="centsHint" class="off">—</b></div>
+  </div>
+
+  <div class="controls">
+    <span>vol</span>
+    <input id="vol" type="range" min="-30" max="0" value="-14" step="1">
+    <span id="volLabel">−14 dB</span>
+    <button id="muteBtn">🔈 mute piano</button>
+    <div class="spacer"></div>
+    <span id="status">mic off</span>
+  </div>
+</div>
+
+<script>
+// ============================================================================
+// PITCH DETECTION (autocorrelation + parabolic interpolation)
+// ============================================================================
+function autoCorrelate(buf, sampleRate) {
+  let SIZE = buf.length;
+  let rms = 0;
+  for (let i = 0; i < SIZE; i++) rms += buf[i] * buf[i];
+  rms = Math.sqrt(rms / SIZE);
+  if (rms < 0.012) return { f0: -1, rms };
+  let r1 = 0, r2 = SIZE - 1, thres = 0.2;
+  for (let i = 0; i < SIZE / 2; i++) if (Math.abs(buf[i]) < thres) { r1 = i; break; }
+  for (let i = 1; i < SIZE / 2; i++) if (Math.abs(buf[SIZE - i]) < thres) { r2 = SIZE - i; break; }
+  const trimmed = buf.slice(r1, r2);
+  SIZE = trimmed.length;
+  if (SIZE < 64) return { f0: -1, rms };
+  const c = new Array(SIZE).fill(0);
+  for (let i = 0; i < SIZE; i++)
+    for (let j = 0; j < SIZE - i; j++)
+      c[i] += trimmed[j] * trimmed[j + i];
+  let d = 0; while (d < SIZE - 1 && c[d] > c[d + 1]) d++;
+  let maxval = -1, maxpos = -1;
+  for (let i = d; i < SIZE; i++) if (c[i] > maxval) { maxval = c[i]; maxpos = i; }
+  if (maxpos <= 0 || maxpos >= SIZE - 1) return { f0: -1, rms };
+  const x1 = c[maxpos - 1], x2 = c[maxpos], x3 = c[maxpos + 1];
+  const a = (x1 + x3 - 2 * x2) / 2, b = (x3 - x1) / 2;
+  let T0 = maxpos; if (a) T0 = T0 - b / (2 * a);
+  return { f0: sampleRate / T0, rms };
+}
+
+// ============================================================================
+// NOTE HELPERS
+// ============================================================================
+const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const hzToMidi = hz => 69 + 12 * Math.log2(hz / 440);
+const midiToHz = m => 440 * Math.pow(2, (m - 69) / 12);
+const midiToName = m => { const r = Math.round(m); return NOTE_NAMES[((r % 12) + 12) % 12] + (Math.floor(r / 12) - 1); };
+const centsOff = (hz, t) => 1200 * Math.log2(hz / t);
+const rmsToDb = rms => rms > 1e-6 ? 20 * Math.log10(rms) : -120;
+const isBlackKey = m => [1, 3, 6, 8, 10].includes(((m % 12) + 12) % 12);
+
+// ============================================================================
+// PIANO LAYOUT (C3 → C6)
+// ============================================================================
+const KEY_LOW = 48, KEY_HIGH = 84;
+const WHITE_KEYS = [];
+for (let m = KEY_LOW; m <= KEY_HIGH; m++) if (!isBlackKey(m)) WHITE_KEYS.push(m);
+
+function pianoLayout(canvasW) {
+  const padL = 10, padR = 10;
+  const wKeyW = (canvasW - padL - padR) / WHITE_KEYS.length;
+  const map = {};
+  WHITE_KEYS.forEach((m, i) => {
+    map[m] = { x: padL + i * wKeyW, w: wKeyW, white: true, cx: padL + (i + 0.5) * wKeyW };
+  });
+  for (let m = KEY_LOW; m <= KEY_HIGH; m++) {
+    if (!isBlackKey(m)) continue;
+    const leftWhite = m - 1;
+    if (!map[leftWhite]) continue;
+    const bw = wKeyW * 0.6;
+    const bx = map[leftWhite].x + wKeyW - bw / 2;
+    map[m] = { x: bx, w: bw, white: false, cx: bx + bw / 2 };
+  }
+  return { map, wKeyW, padL, padR };
+}
+
+// ============================================================================
+// AUDIO PLUMBING
+// ============================================================================
+let audioCtx = null, analyser = null, buf = null, micActive = false;
+let sampler = null, sampleVol = null, samplesReady = false, muted = false;
+
+const $ = id => document.getElementById(id);
+const banner = $("banner"), cta = $("cta"), phaseText = $("phaseText"), phaseSub = $("phaseSub");
+const statusEl = $("status"), targetNoteEl = $("targetNote"), yourNoteEl = $("yourNote"), centsHintEl = $("centsHint");
+const volEl = $("vol"), volLabelEl = $("volLabel");
+
+async function loadSampler() {
+  if (sampler) return;
+  setBanner("idle", "Loading piano…", "first time only, ~3 seconds");
+  sampleVol = new Tone.Volume(parseInt(volEl.value, 10)).toDestination();
+  sampler = new Tone.Sampler({
+    urls: {
+      A1: "A1.mp3", A2: "A2.mp3", A3: "A3.mp3", A4: "A4.mp3", A5: "A5.mp3", A6: "A6.mp3",
+      C2: "C2.mp3", C3: "C3.mp3", C4: "C4.mp3", C5: "C5.mp3", C6: "C6.mp3",
+      "D#2": "Ds2.mp3", "D#3": "Ds3.mp3", "D#4": "Ds4.mp3", "D#5": "Ds5.mp3",
+      "F#2": "Fs2.mp3", "F#3": "Fs3.mp3", "F#4": "Fs4.mp3", "F#5": "Fs5.mp3",
+    },
+    release: 1.4,
+    baseUrl: "https://tonejs.github.io/audio/salamander/",
+  }).connect(sampleVol);
+  await Tone.loaded();
+  samplesReady = true;
+}
+
+function playNote(midi, durSec = 0.7) {
+  if (!samplesReady || muted) return;
+  sampler.triggerAttackRelease(midiToName(midi), durSec);
+}
+function playChromaticGlissando(from, to, totalMs) {
+  if (!samplesReady || muted) return;
+  const dir = from <= to ? 1 : -1;
+  const notes = [];
+  for (let m = from; dir > 0 ? m <= to : m >= to; m += dir) notes.push(m);
+  const step = totalMs / notes.length;
+  notes.forEach((m, i) => setTimeout(() => sampler.triggerAttackRelease(midiToName(m), 0.18), i * step));
+}
+function playSequence(notes, gapMs) {
+  if (!samplesReady || muted) return;
+  notes.forEach((m, i) => setTimeout(() => sampler.triggerAttackRelease(midiToName(m), 0.45), i * gapMs));
+}
+
+// ============================================================================
+// CONTROLS
+// ============================================================================
+$("muteBtn").onclick = () => {
+  muted = !muted;
+  $("muteBtn").textContent = muted ? "🔇 muted" : "🔈 mute piano";
+  $("muteBtn").classList.toggle("muted", muted);
+  if (sampleVol) sampleVol.mute = muted;
+};
+volEl.oninput = () => {
+  const v = parseInt(volEl.value, 10);
+  volLabelEl.textContent = (v >= 0 ? "" : "−") + Math.abs(v) + " dB";
+  if (sampleVol) sampleVol.volume.value = v;
+};
+
+cta.onclick = async () => {
+  if (!micActive) await enableMic();
+  else startExercise();
+};
+
+async function enableMic() {
+  try {
+    await Tone.start();
+    audioCtx = Tone.getContext().rawContext;
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    });
+    const src = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    src.connect(analyser);
+    buf = new Float32Array(analyser.fftSize);
+    micActive = true;
+    statusEl.textContent = "mic on";
+    await loadSampler();
+    statusEl.textContent = "ready";
+    setIdle();
+    requestAnimationFrame(loop);
+  } catch (e) {
+    setBanner("idle", "Mic error", e.message);
+  }
+}
+
+document.querySelectorAll(".tabs button").forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll(".tabs button").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    mode = b.dataset.mode;
+    if (micActive) setIdle();
+  };
+});
+
+// ============================================================================
+// PHASE STATE MACHINE
+// ============================================================================
+let mode = "siren";
+let phase = "idle"; // idle → listen → countdown → sing → done
+let phaseT0 = 0;
+let scaleState = null, swellState = null;
+
+function setBanner(cls, text, sub, ctaText, ctaDim) {
+  banner.className = "banner " + cls;
+  phaseText.textContent = text;
+  phaseSub.textContent = sub || "";
+  cta.textContent = ctaText || "";
+  cta.style.display = ctaText ? "" : "none";
+  cta.classList.toggle("dim", !!ctaDim);
+}
+
+function setIdle() {
+  phase = "idle";
+  const map = {
+    siren: ["Sirens", "the piano will slide a note up and down — repeat on \"ng\""],
+    scales: ["Scales", "the piano will play 9 notes — repeat each on \"ee\""],
+    swell: ["Messa di voce", "the piano holds one note — repeat on \"ah\", then make it soft → loud → soft"],
+  };
+  const [t, s] = map[mode];
+  setBanner("idle", t, s, "▶ play");
+}
+
+function startExercise() {
+  if (mode === "scales") {
+    scaleState = {
+      pattern: [60, 62, 64, 65, 67, 65, 64, 62, 60],
+      idx: 0, hits: 0, noteOnPitch: false,
+    };
+  }
+  if (mode === "swell") {
+    swellState = { centerMidi: 64, peakDb: -60, valleyDb: -60 };
+  }
+  goPhase("listen");
+}
+
+function goPhase(p) {
+  phase = p;
+  phaseT0 = performance.now();
+  if (p === "listen") {
+    runSequence(buildSequence(mode, false));
+  } else if (p === "countdown") {
+    let n = 3;
+    setBanner("countdown", n + "", "", "", true);
+    const tick = () => {
+      n--;
+      if (n > 0) { setBanner("countdown", n + "", "", "", true); setTimeout(tick, 800); }
+      else { goPhase("sing"); }
+    };
+    setTimeout(tick, 800);
+  } else if (p === "sing") {
+    runSequence(buildSequence(mode, true));
+  } else if (p === "done") {
+    let summary = "";
+    if (mode === "scales") summary = `${scaleState.hits} of ${scaleState.pattern.length} notes`;
+    if (mode === "swell") {
+      const r = swellState.peakDb - swellState.valleyDb;
+      summary = `range ${r > 0 ? r.toFixed(0) : 0} dB${r >= 12 ? " ✓" : ""}`;
+    }
+    setBanner("done", "done", summary, "▶ play again");
+    cta.classList.remove("dim");
+  }
+}
+
+// ============================================================================
+// MAIN LOOP
+// ============================================================================
+const cv = $("cv"), ctx = cv.getContext("2d");
+const SIREN_LOW = 50, SIREN_HIGH = 67, SIREN_PERIOD = 6;
+
+function loop() {
+  if (!micActive) return;
+  analyser.getFloatTimeDomainData(buf);
+  const { f0, rms } = autoCorrelate(buf, audioCtx.sampleRate);
+  const voiced = f0 > 60 && f0 < 1500 && rms > 0.012;
+  const t = (performance.now() - phaseT0) / 1000;
+
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const layout = pianoLayout(w);
+
+  // compute target depending on phase + mode
+  let targetMidi = null, targetGlow = null, swellTarget = null, swellLevel = null;
+  const isActiveStep = currentStep && currentStep.kind === "sing";
+  const showAnimatedTarget = (phase === "listen" || phase === "sing") && isActiveStep;
+  const measure = phase === "sing" && isActiveStep;
+
+  if (showAnimatedTarget) {
+    if (mode === "siren") {
+      const cycleS = (currentStep.sirenMs || 4000) / 1000;
+      const phaseT = (t / cycleS) * Math.PI * 2;
+      targetGlow = SIREN_LOW + (SIREN_HIGH - SIREN_LOW) * 0.5 * (1 - Math.cos(phaseT));
+      targetMidi = targetGlow;
+    } else if (mode === "scales") {
+      targetMidi = scaleState.pattern[scaleState.idx];
+      if (measure) updateScales(voiced ? f0 : null);
+    } else if (mode === "swell") {
+      targetMidi = swellState.centerMidi;
+      const cycleS = (currentStep.swellMs || 7000) / 1000;
+      const phaseT = (t / cycleS) * Math.PI * 2;
+      swellTarget = -25 + 15 * (-Math.cos(phaseT));
+      if (measure && voiced && Math.abs(centsOff(f0, midiToHz(targetMidi))) < 60) {
+        swellLevel = rmsToDb(rms);
+        swellState.peakDb = Math.max(swellState.peakDb, swellLevel);
+        swellState.valleyDb = swellState.valleyDb < -55 ? swellLevel : Math.min(swellState.valleyDb, swellLevel);
+      }
+    }
+  } else if (phase === "sing" || phase === "listen") {
+    // breathe sub-step — show static next target so user knows what's coming
+    if (mode === "siren") targetGlow = SIREN_LOW;
+    else if (mode === "scales") targetMidi = scaleState.pattern[0];
+    else if (mode === "swell") targetMidi = swellState.centerMidi;
+  } else if (phase === "idle" || phase === "done") {
+    // show static hint where the action will be
+    if (mode === "siren") targetGlow = (SIREN_LOW + SIREN_HIGH) / 2;
+    else if (mode === "scales" && scaleState) targetMidi = scaleState.pattern[0];
+    else if (mode === "swell" && swellState) targetMidi = swellState.centerMidi;
+    else if (mode === "swell") targetMidi = 64;
+    else if (mode === "scales") targetMidi = 60;
+  }
+
+  drawPiano(w, h, layout, {
+    userMidi: voiced && measure ? hzToMidi(f0) : null,
+    userOnPitch: voiced && measure && targetMidi != null && Math.abs(centsOff(f0, midiToHz(targetMidi))) < 50,
+    targetMidi, targetGlow,
+    scaleHits: mode === "scales" && scaleState ? scaleState.pattern.slice(0, scaleState.idx) : [],
+    swellLevel, swellTarget,
+    isSwell: mode === "swell",
+  });
+
+  // info row
+  if (targetMidi != null) targetNoteEl.textContent = midiToName(targetMidi);
+  else targetNoteEl.textContent = "—";
+
+  if (measure && voiced) {
+    yourNoteEl.textContent = midiToName(hzToMidi(f0));
+    yourNoteEl.classList.remove("off");
+    if (targetMidi != null) {
+      const c = centsOff(f0, midiToHz(targetMidi));
+      const onPitch = Math.abs(c) < 50;
+      centsHintEl.textContent = (onPitch ? "✓ " : "") + (c >= 0 ? "+" : "") + c.toFixed(0) + "¢";
+      centsHintEl.classList.toggle("ok", onPitch);
+      centsHintEl.classList.toggle("off", !onPitch);
+    }
+  } else {
+    yourNoteEl.textContent = measure ? "(sing!)" : "—";
+    yourNoteEl.classList.add("off");
+    centsHintEl.textContent = "—";
+    centsHintEl.classList.add("off");
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// ============================================================================
+// PHRASE SEQUENCER — breathe / sing alternation
+// ============================================================================
+// A "step" is { kind: "breathe"|"sing"|"hold", ms, label, sub, action? }
+// "sing" is the active phrase, "breathe" is a gap between phrases.
+
+function buildSequence(modeName, withMeasure) {
+  const steps = [];
+  if (modeName === "siren") {
+    // 3 reps · each = breathe 1.5s + glide up-down 4s
+    const glideMs = 4000;
+    for (let r = 0; r < 3; r++) {
+      steps.push({
+        kind: "breathe", ms: 1500,
+        label: r === 0 ? "🫁 breathe in" : "🫁 breathe",
+        sub: "",
+      });
+      steps.push({
+        kind: "sing", ms: glideMs,
+        label: withMeasure ? "🎤 slide up · down" : "👂 listen",
+        sub: `rep ${r + 1} of 3`,
+        action: () => {
+          playChromaticGlissando(SIREN_LOW, SIREN_HIGH, glideMs / 2);
+          setTimeout(() => playChromaticGlissando(SIREN_HIGH, SIREN_LOW, glideMs / 2), glideMs / 2);
+        },
+        siren: true, sirenMs: glideMs,
+      });
+    }
+  } else if (modeName === "scales") {
+    // 2 passes · each = breathe 1.2s + 9 notes × 500ms
+    const noteMs = 500;
+    const phraseMs = scaleState.pattern.length * noteMs;
+    for (let r = 0; r < 2; r++) {
+      steps.push({
+        kind: "breathe", ms: 1200,
+        label: r === 0 ? "🫁 breathe in" : "🫁 breathe",
+        sub: "",
+      });
+      steps.push({
+        kind: "sing", ms: phraseMs,
+        label: withMeasure ? "🎤 sing along" : "👂 listen",
+        sub: `pass ${r + 1} of 2`,
+        action: () => {
+          playSequence(scaleState.pattern, noteMs);
+          scaleState.pattern.forEach((_, i) => {
+            setTimeout(() => { scaleState.idx = i; scaleState.noteOnPitch = false; }, i * noteMs);
+          });
+        },
+      });
+    }
+  } else if (modeName === "swell") {
+    // 2 swells · each = breathe 1.8s + 7s sustain (soft→loud→soft)
+    const sustainMs = 7000;
+    for (let r = 0; r < 2; r++) {
+      steps.push({
+        kind: "breathe", ms: 1800,
+        label: r === 0 ? "🫁 breathe deep" : "🫁 breathe",
+        sub: "",
+      });
+      steps.push({
+        kind: "sing", ms: sustainMs,
+        label: withMeasure ? "🎤 soft → loud → soft" : "👂 listen",
+        sub: `swell ${r + 1} of 2`,
+        action: () => playNote(swellState.centerMidi, sustainMs / 1000),
+        swell: true, swellMs: sustainMs,
+      });
+    }
+  }
+  return steps;
+}
+
+function runSequence(steps) {
+  let i = 0;
+  const next = () => {
+    if (i >= steps.length) { goPhase("done"); return; }
+    const s = steps[i++];
+    const cls = s.kind === "breathe" ? "listen" : "sing";
+    setBanner(cls, s.label, s.sub, "", true);
+    if (s.action) s.action();
+    // give the current step its own clock for visual targets that need a t0
+    phaseT0 = performance.now();
+    currentStep = s;
+    setTimeout(next, s.ms);
+  };
+  next();
+}
+
+let currentStep = null;
+
+function updateScales(f0) {
+  const s = scaleState;
+  const targetHz = midiToHz(s.pattern[s.idx]);
+  const onTarget = f0 && Math.abs(centsOff(f0, targetHz)) < 50;
+  // count once per note: first time user lands on it during its window
+  if (onTarget && !s.noteOnPitch) {
+    s.noteOnPitch = true;
+    s.hits++;
+  }
+}
+
+// ============================================================================
+// PIANO RENDERING
+// ============================================================================
+function drawPiano(w, h, layout, opts) {
+  const keyTop = 24, keyBot = h - 12;
+  const whiteH = keyBot - keyTop;
+  const blackH = whiteH * 0.62;
+
+  // 1. white keys
+  for (const m of WHITE_KEYS) {
+    const k = layout.map[m];
+    const isHit = opts.scaleHits.includes(m);
+    ctx.fillStyle = isHit ? "#E1F5EE" : "#FFFFFF";
+    ctx.strokeStyle = "#D3D1C7"; ctx.lineWidth = 0.5;
+    ctx.fillRect(k.x + 0.5, keyTop, k.w - 1, whiteH);
+    ctx.strokeRect(k.x + 0.5, keyTop, k.w - 1, whiteH);
+  }
+
+  // 2. swell amplitude bar
+  if (opts.isSwell && opts.targetMidi != null && opts.swellLevel != null) {
+    const k = layout.map[opts.targetMidi];
+    if (k && k.white) {
+      const lo = -50, hi = -5;
+      const norm = Math.max(0, Math.min(1, (opts.swellLevel - lo) / (hi - lo)));
+      const fillH = norm * whiteH;
+      ctx.fillStyle = "rgba(29,158,117,0.45)";
+      ctx.fillRect(k.x + 0.5, keyBot - fillH, k.w - 1, fillH);
+    }
+  }
+
+  // 3. siren glow
+  if (opts.targetGlow != null) {
+    const m = opts.targetGlow;
+    const lowK = Math.floor(m), highK = Math.ceil(m);
+    const a = layout.map[lowK] || layout.map[lowK - 1];
+    const b = layout.map[highK] || layout.map[highK + 1];
+    if (a && b) {
+      const cx = a.cx + (b.cx - a.cx) * (m - lowK);
+      const grad = ctx.createRadialGradient(cx, keyTop + whiteH / 2, 6, cx, keyTop + whiteH / 2, 50);
+      grad.addColorStop(0, "rgba(83,74,183,0.7)");
+      grad.addColorStop(1, "rgba(83,74,183,0)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(cx - 55, keyTop, 110, whiteH);
+    }
+  }
+
+  // 4. black keys
+  for (let m = KEY_LOW; m <= KEY_HIGH; m++) {
+    if (!isBlackKey(m)) continue;
+    const k = layout.map[m]; if (!k) continue;
+    ctx.fillStyle = "#2C2C2A";
+    ctx.fillRect(k.x, keyTop, k.w, blackH);
+  }
+
+  // 5. discrete target outline (scales / swell)
+  if (opts.targetMidi != null && (mode === "scales" || mode === "swell")) {
+    const tm = Math.round(opts.targetMidi);
+    const k = layout.map[tm];
+    if (k) {
+      ctx.strokeStyle = "#534AB7"; ctx.lineWidth = 3;
+      const tH = k.white ? whiteH : blackH;
+      ctx.strokeRect(k.x + 1.5, keyTop + 1.5, k.w - 3, tH - 3);
+      // label above
+      ctx.fillStyle = "#534AB7"; ctx.font = "bold 11px ui-monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("◆ " + midiToName(tm), k.cx, keyTop - 6);
+      ctx.textAlign = "start";
+    }
+  }
+
+  // 6. user pitch indicator
+  if (opts.userMidi != null) {
+    const um = opts.userMidi;
+    if (um >= KEY_LOW - 1 && um <= KEY_HIGH + 1) {
+      const lowK = Math.floor(um), highK = Math.ceil(um);
+      const a = layout.map[lowK] || layout.map[lowK - 1];
+      const b = layout.map[highK] || layout.map[highK + 1];
+      if (a && b) {
+        const cx = a.cx + (b.cx - a.cx) * (um - lowK);
+        ctx.fillStyle = opts.userOnPitch ? "#1D9E75" : "#993C1D";
+        ctx.beginPath();
+        ctx.moveTo(cx, keyTop - 4);
+        ctx.lineTo(cx - 7, keyTop - 16);
+        ctx.lineTo(cx + 7, keyTop - 16);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = opts.userOnPitch ? "rgba(29,158,117,0.22)" : "rgba(153,60,29,0.15)";
+        ctx.fillRect(cx - 1.5, keyTop, 3, whiteH);
+      }
+    }
+  }
+
+  // 7. octave labels
+  ctx.font = "9px ui-monospace"; ctx.fillStyle = "#888780";
+  for (const m of WHITE_KEYS) {
+    if (m % 12 === 0) {
+      const k = layout.map[m];
+      ctx.fillText("C" + (m / 12 - 1), k.x + 3, keyBot + 10);
+    }
+  }
+
+  // 8. swell target dB line
+  if (opts.isSwell && opts.swellTarget != null) {
+    const lo = -50, hi = -5;
+    const norm = Math.max(0, Math.min(1, (opts.swellTarget - lo) / (hi - lo)));
+    const y = keyBot - norm * whiteH;
+    ctx.strokeStyle = "rgba(83,74,183,0.7)";
+    ctx.setLineDash([4, 4]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(layout.padL, y); ctx.lineTo(w - layout.padR, y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#534AB7"; ctx.font = "10px ui-monospace";
+    ctx.fillText("target loudness", w - 110, y - 3);
+  }
+}
+</script>
+</body>
+</html>

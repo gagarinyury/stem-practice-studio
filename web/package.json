@@ -17,7 +17,8 @@
     "pitchy": "^4.1.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "server-only": "^0.0.1"
+    "server-only": "^0.0.1",
+    "tone": "^14.9.17"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

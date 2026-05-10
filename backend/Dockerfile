@@ -14,8 +14,9 @@ WORKDIR /app
 COPY backend/pyproject.toml /app/backend/pyproject.toml
 RUN pip install --no-cache-dir \
         "fastapi>=0.115" "uvicorn[standard]>=0.32" "arq>=0.26" "redis>=5.0" \
-        "python-multipart>=0.0.12" "pydantic>=2.9" "python-slugify>=8.0" "nanoid>=2.0" \
-        "requests>=2.32"
+        "python-multipart>=0.0.12" "pydantic>=2.9" \
+        "python-slugify>=8.0" "nanoid>=2.0" "requests>=2.32" \
+        "sqlalchemy>=2.0" "bcrypt>=4.2" "pyjwt>=2.10"
 
 # pipeline + backend live side-by-side; both are mounted at runtime via compose.
 ENV PYTHONPATH=/app

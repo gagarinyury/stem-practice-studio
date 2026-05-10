@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Cormorant_Garamond, DM_Mono } from "next/font/google";
 import "./globals.css";
+import { AppShell } from "@/components/AppShell";
 
 const cormorant = Cormorant_Garamond({
   variable: "--font-cormorant",
@@ -24,7 +25,9 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${cormorant.variable} ${dmMono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-paper text-ink">{children}</body>
+      <body className="min-h-full flex flex-col bg-paper text-ink">
+        <AppShell>{children}</AppShell>
+      </body>
     </html>
   );
 }

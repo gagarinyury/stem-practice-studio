@@ -1,0 +1,1322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Daily 8 · warm-up prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.21.0/dist/tabler-icons.min.css" />
+<script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.min.js"></script>
+<style>
+  :root {
+    --paper: #FAF7F2;
+    --ink: #2C2C2A;
+    --ink-soft: #5F5E5A;
+    --ink-muted: #888780;
+    --line: #E8E5DC;
+    --line-strong: #D3D1C7;
+    --surface: #ffffff;
+    --surface-muted: #F1EFE8;
+    --accent: #534AB7;
+    --accent-deep: #3C3489;
+    --accent-soft: #EEEDFE;
+    --accent-soft2: #CECBF6;
+    --accent-soft3: #AFA9EC;
+    --success: #1D9E75;
+    --success-ink: #085041;
+    --success-soft: #E1F5EE;
+    --warm: #FAEEDA;
+    --warm-ink: #854F0B;
+    --warn: #993C1D;
+    --warn-soft: #FAECE7;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: #ECE9E2;
+    min-height: 100vh;
+    color: var(--ink);
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 24px 16px 48px;
+  }
+  .phone {
+    width: 100%;
+    max-width: 360px;
+    background: var(--paper);
+    border-radius: 28px;
+    border: 0.5px solid var(--line-strong);
+    overflow: hidden;
+    position: relative;
+    min-height: 720px;
+    display: flex;
+    flex-direction: column;
+  }
+  .mono { font-family: 'DM Mono', ui-monospace, monospace; }
+  .eyebrow {
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  /* ============ INTRO SCREEN ============ */
+  .intro { padding: 28px 24px 22px; flex: 1; display: flex; flex-direction: column; }
+  .intro-title {
+    font-size: 38px;
+    line-height: 1;
+    margin-top: 8px;
+  }
+  .intro-title em { color: var(--ink-soft); }
+  .intro-meta {
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--ink-muted);
+    margin-top: 12px;
+    line-height: 1.6;
+  }
+  .ladder {
+    display: flex;
+    gap: 4px;
+    margin-top: 22px;
+  }
+  .ladder > div {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+  }
+  .ladder-labels {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 9px;
+    color: var(--ink-muted);
+    margin-top: 8px;
+    letter-spacing: 0.05em;
+  }
+  .steps-list {
+    margin-top: 18px;
+    border-top: 0.5px solid var(--line-strong);
+  }
+  .steps-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 0.5px solid var(--line-strong);
+  }
+  .steps-row .num {
+    width: 22px;
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--ink-muted);
+  }
+  .steps-row .name {
+    flex: 1;
+    font-size: 16px;
+    font-style: italic;
+  }
+  .steps-row .dur {
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--ink-muted);
+  }
+  .start-btn {
+    margin-top: 22px;
+    background: var(--ink);
+    color: var(--paper);
+    border: 0;
+    padding: 16px;
+    border-radius: 999px;
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .start-btn:active { transform: scale(0.98); }
+  .science-note {
+    margin-top: 18px;
+    background: var(--surface-muted);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.45;
+    font-style: italic;
+    color: var(--ink);
+  }
+
+  .lang-row {
+    margin-top: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--ink-muted);
+    letter-spacing: 0.05em;
+    padding: 10px 14px;
+    border: 0.5px solid var(--line-strong);
+    border-radius: 10px;
+    background: var(--surface);
+  }
+  .lang-row select {
+    border: 0;
+    background: transparent;
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--ink);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+  }
+  .lang-row select:focus { outline: 1px solid var(--accent-soft3); }
+
+  .obs-loader {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--ink-muted);
+    margin-right: 6px;
+    animation: obsBlink 1.2s ease-in-out infinite;
+  }
+  @keyframes obsBlink {
+    0%, 100% { opacity: 0.2; }
+    50% { opacity: 1; }
+  }
+
+  /* ============ SESSION ============ */
+  .session { display: none; flex: 1; flex-direction: column; }
+  .topbar {
+    padding: 22px 20px 0;
+  }
+  .topbar-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .topbar-row .ti { font-size: 22px; color: var(--ink); cursor: pointer; }
+  .seg-progress { display: flex; gap: 4px; }
+  .seg-progress > div {
+    flex: 1; height: 3px; background: var(--line-strong); border-radius: 2px;
+  }
+  .seg-progress > div.done { background: var(--accent); }
+  .seg-progress > div.active { background: var(--accent); opacity: 0.55; }
+
+  .step-title {
+    padding: 22px 24px 0;
+    text-align: center;
+  }
+  .step-title h1 {
+    font-size: 30px;
+    line-height: 1.05;
+    color: var(--ink);
+    margin: 8px 0 0;
+    font-style: italic;
+    font-weight: 500;
+  }
+  .step-title h1 em { color: var(--ink-soft); }
+  .step-meta {
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--ink-muted);
+    margin-top: 8px;
+    line-height: 1.6;
+  }
+
+  .visual-card {
+    margin: 22px 16px 0;
+    background: var(--surface);
+    border: 0.5px solid var(--line-strong);
+    border-radius: 12px;
+    padding: 18px 14px;
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+  .visual-card svg { width: 100%; height: auto; display: block; }
+
+  .tip-card {
+    margin: 14px 20px 0;
+    background: var(--success-soft);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .tip-card.warm { background: var(--warm); }
+  .tip-card-row {
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .tip-card-row .ti { font-size: 14px; margin-top: 2px; color: var(--success-ink); }
+  .tip-card.warm .tip-card-row .ti { color: var(--warm-ink); }
+  .tip-card-row .text {
+    font-size: 13px;
+    line-height: 1.45;
+    font-style: italic;
+    color: var(--success-ink);
+  }
+  .tip-card.warm .tip-card-row .text { color: var(--warm-ink); }
+
+  .timer-row {
+    padding: 18px 24px 0;
+    display: flex; justify-content: center;
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 22px;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.05em;
+  }
+
+  .controls {
+    padding: 14px 24px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: auto;
+  }
+  .controls .side { text-align: center; cursor: pointer; }
+  .controls .side .ti { font-size: 22px; color: var(--ink); }
+  .controls .side .label {
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 9px; color: var(--ink-muted); margin-top: 2px;
+    letter-spacing: 0.05em;
+  }
+  .controls .main {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--paper);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .controls .main .ti { font-size: 26px; }
+
+  .session-footer {
+    padding: 14px 24px 24px;
+    text-align: center;
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--ink-muted);
+    letter-spacing: 0.05em;
+  }
+
+  /* ============ DONE ============ */
+  .done { display: none; padding: 32px 24px 24px; flex: 1; flex-direction: column; }
+  .done-eyebrow {
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--success);
+  }
+  .done-title {
+    font-size: 38px;
+    line-height: 1;
+    margin-top: 12px;
+  }
+  .done-title em { color: var(--ink-soft); }
+  .done-meta {
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin-top: 12px;
+  }
+  .done-metrics {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .done-metrics > div {
+    background: var(--surface);
+    border: 0.5px solid var(--line-strong);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .done-metrics .label {
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+  }
+  .done-metrics .val {
+    font-size: 26px;
+    color: var(--ink);
+    margin-top: 4px;
+  }
+  .done-observation {
+    margin-top: 18px;
+    border-top: 0.5px solid var(--line-strong);
+    padding-top: 14px;
+  }
+  .done-observation .eb {
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 9px; letter-spacing: 0.15em;
+    text-transform: uppercase; color: var(--ink-muted);
+  }
+  .done-observation p {
+    font-size: 17px;
+    font-style: italic;
+    line-height: 1.4;
+    margin: 6px 0 0;
+  }
+  .done-cta {
+    margin-top: 22px;
+    background: var(--ink);
+    border-radius: 12px;
+    padding: 14px 18px;
+    display: flex; align-items: center; gap: 14px;
+    color: var(--paper);
+    cursor: pointer;
+  }
+  .done-cta .icon {
+    width: 36px; height: 36px; border-radius: 6px;
+    background: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .done-cta .icon .ti { font-size: 18px; color: var(--paper); }
+  .done-cta .text { flex: 1; font-size: 17px; font-style: italic; line-height: 1.1; }
+  .done-cta .text .sub {
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 10px; color: #B4B2A9; font-style: normal; margin-top: 4px;
+  }
+  .done-secondary {
+    display: flex; gap: 10px; margin-top: 10px;
+  }
+  .done-secondary > div {
+    flex: 1;
+    background: var(--surface);
+    border: 0.5px solid var(--line-strong);
+    border-radius: 10px;
+    padding: 12px;
+    text-align: center;
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 11px;
+    cursor: pointer;
+  }
+
+  /* ===== Visual animations ===== */
+  @keyframes breath {
+    0%, 100% { transform: scale(0.78); opacity: 0.55; }
+    50% { transform: scale(1.0); opacity: 1; }
+  }
+  .breath-circle {
+    width: 140px; height: 140px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, var(--accent-soft), var(--accent-soft2));
+    border: 0.5px solid var(--accent-soft3);
+    transform-origin: center;
+    animation: breath 4.5s ease-in-out infinite;
+  }
+  .breath-text {
+    margin-top: 14px;
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--ink-muted);
+    letter-spacing: 0.1em;
+  }
+
+  .sovt-stage {
+    width: 100%; padding: 12px 8px; text-align: center;
+  }
+  .sovt-icon-row { display: flex; justify-content: center; gap: 22px; align-items: center; }
+  .sovt-icon-row .pick {
+    width: 64px; height: 64px;
+    border-radius: 12px;
+    background: var(--surface-muted);
+    border: 0.5px solid var(--line-strong);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ink);
+  }
+  .sovt-icon-row .pick.active {
+    background: var(--accent-soft);
+    border-color: var(--accent-soft3);
+    color: var(--accent-deep);
+  }
+  .sovt-icon-row .pick .ti { font-size: 28px; }
+  .sovt-icon-row .pick .lbl {
+    display: block;
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 9px;
+    margin-top: 4px;
+    letter-spacing: 0.05em;
+  }
+
+  @keyframes vowelRotate {
+    0%, 30% { content: "ah"; }
+    33%, 63% { content: "ee"; }
+    66%, 100% { content: "oo"; }
+  }
+
+  /* path-drawing for sirens */
+  .siren-path {
+    stroke: var(--success);
+    stroke-width: 3;
+    fill: none;
+    stroke-linecap: round;
+    stroke-dasharray: 600;
+    stroke-dashoffset: 600;
+    animation: drawSiren 6s linear infinite;
+  }
+  @keyframes drawSiren {
+    0% { stroke-dashoffset: 600; }
+    50% { stroke-dashoffset: 0; }
+    100% { stroke-dashoffset: -600; }
+  }
+  .target-path { stroke: var(--accent); stroke-width: 2.5; fill: none; stroke-dasharray: 4,4; opacity: 0.55; }
+
+  @keyframes swellPulse {
+    0%, 100% { transform: scaleY(0.25); opacity: 0.4; }
+    50% { transform: scaleY(1); opacity: 1; }
+  }
+  .swell-bar {
+    width: 56px; height: 140px;
+    background: linear-gradient(180deg, var(--accent), var(--accent-soft3));
+    border-radius: 28px;
+    transform-origin: bottom;
+    animation: swellPulse 6s ease-in-out infinite;
+  }
+
+  .staccato-row { display: flex; gap: 16px; }
+  .staccato-row .dot {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--accent-soft);
+    border: 0.5px solid var(--accent-soft3);
+    transition: all 0.12s;
+  }
+  .staccato-row .dot.hit {
+    background: var(--success);
+    transform: scale(1.25);
+    box-shadow: 0 0 0 6px var(--success-soft);
+  }
+  .staccato-labels {
+    display: flex; gap: 16px; margin-top: 10px;
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--ink-muted);
+  }
+  .staccato-labels span { width: 32px; text-align: center; }
+
+  .scale-ladder { display: flex; flex-direction: column; align-items: stretch; gap: 6px; width: 80%; }
+  .scale-ladder .rung-row { display: flex; align-items: center; gap: 10px; }
+  .scale-ladder .rung-row .lbl {
+    width: 28px;
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--ink-muted);
+    text-align: right;
+  }
+  .scale-ladder .rung {
+    flex: 1;
+    height: 14px; border-radius: 6px;
+    background: var(--accent-soft); opacity: 0.65;
+    transition: all 0.15s;
+  }
+  .scale-ladder .rung.hit {
+    background: var(--accent);
+    opacity: 1;
+    transform: scaleX(1.04);
+  }
+  .scale-ladder .rung-row.hit .lbl {
+    color: var(--accent-deep);
+  }
+  .scale-rest {
+    margin-top: 10px;
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--ink-muted);
+    letter-spacing: 0.1em;
+    height: 14px;
+  }
+  .scale-rest.active { color: var(--success); }
+
+  .note-tag {
+    margin-top: 12px;
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--accent-deep);
+    background: var(--accent-soft);
+    padding: 4px 12px;
+    border-radius: 999px;
+    letter-spacing: 0.08em;
+  }
+  .note-tag.success {
+    color: var(--success-ink);
+    background: var(--success-soft);
+  }
+  .scale-vowel {
+    margin-top: 14px;
+    font-size: 36px;
+    font-style: italic;
+    color: var(--ink);
+  }
+
+  .cool-wave {
+    width: 100%;
+  }
+  .cool-wave path {
+    stroke: var(--accent-soft3);
+    stroke-width: 2;
+    fill: none;
+    stroke-linecap: round;
+  }
+  .cool-text {
+    margin-top: 12px;
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--ink-muted);
+    letter-spacing: 0.1em;
+  }
+</style>
+</head>
+<body>
+<div class="phone">
+  <!-- ===== INTRO ===== -->
+  <div class="intro" id="intro">
+    <div class="eyebrow">— warm-up · daily 8 —</div>
+    <div class="intro-title">Wake the <em>voice.</em></div>
+    <div class="intro-meta">8 minutes · 7 steps · tuned to your range</div>
+
+    <div class="ladder">
+      <div style="background: #534AB7"></div>
+      <div style="background: #534AB7"></div>
+      <div style="background: #7F77DD"></div>
+      <div style="background: #AFA9EC"></div>
+      <div style="background: #CECBF6"></div>
+      <div style="background: #CECBF6"></div>
+      <div style="background: #EEEDFE"></div>
+    </div>
+    <div class="ladder-labels">
+      <span>release</span><span>sovt</span><span>siren</span><span>scale</span><span>swell</span><span>stacc</span><span>cool</span>
+    </div>
+
+    <div class="steps-list" id="stepsList"></div>
+
+    <div class="lang-row">
+      <span>reply in</span>
+      <select id="langSelect">
+        <option value="English">English</option>
+        <option value="Russian" selected>Русский</option>
+        <option value="Spanish">Español</option>
+        <option value="German">Deutsch</option>
+        <option value="French">Français</option>
+      </select>
+    </div>
+
+    <button class="start-btn" id="startBtn">▸ start · 8 min</button>
+
+    <div class="science-note">
+      5–8 minutes is enough. The act of warming up matters more than the perfect method.
+    </div>
+  </div>
+
+  <!-- ===== SESSION ===== -->
+  <div class="session" id="session">
+    <div class="topbar">
+      <div class="topbar-row">
+        <i class="ti ti-x" id="closeBtn" title="back to intro"></i>
+        <div class="mono" style="font-size: 10px; color: var(--ink-muted); letter-spacing: 0.1em;" id="stepCount">1 of 7</div>
+        <i class="ti ti-volume-2" title="reference audio"></i>
+      </div>
+      <div class="seg-progress" id="segProgress"></div>
+    </div>
+
+    <div class="step-title">
+      <div class="eyebrow" id="stepEyebrow">— body release —</div>
+      <h1 id="stepTitle">Open the <em>jaw.</em></h1>
+      <div class="step-meta" id="stepMeta">yawn-sigh · shake it loose</div>
+    </div>
+
+    <div class="visual-card" id="visualCard"></div>
+
+    <div class="tip-card" id="tipCard">
+      <div class="tip-card-row">
+        <i class="ti ti-bulb"></i>
+        <div class="text" id="tipText">Drop the jaw, let the sigh out. No singing yet.</div>
+      </div>
+    </div>
+
+    <div class="timer-row" id="timer">01:00</div>
+
+    <div class="controls">
+      <div class="side" id="prevBtn">
+        <i class="ti ti-player-skip-back"></i>
+        <div class="label">prev</div>
+      </div>
+      <div class="main" id="playPauseBtn">
+        <i class="ti ti-player-pause-filled" id="playPauseIcon"></i>
+      </div>
+      <div class="side" id="nextBtn">
+        <i class="ti ti-player-skip-forward"></i>
+        <div class="label">next</div>
+      </div>
+    </div>
+
+    <div class="session-footer" id="sessionFooter">— too much? tap "next" to skip</div>
+  </div>
+
+  <!-- ===== DONE ===== -->
+  <div class="done" id="done">
+    <div class="done-eyebrow">— done · 8 min —</div>
+    <div class="done-title">Voice is <em>ready.</em></div>
+    <div class="done-meta">streak day 12 · longest yet</div>
+
+    <div class="done-metrics">
+      <div>
+        <div class="label">range covered</div>
+        <div class="val">C3—F#4</div>
+      </div>
+      <div>
+        <div class="label">all steps</div>
+        <div class="val">7 / 7</div>
+      </div>
+    </div>
+
+    <div class="done-observation">
+      <div class="eb">— one thing</div>
+      <p id="observationText"><span class="obs-loader"></span>thinking...</p>
+    </div>
+
+    <div class="done-cta">
+      <div class="icon"><i class="ti ti-music"></i></div>
+      <div class="text">Continue Skinny Love<div class="sub">62% · chorus to-do</div></div>
+      <i class="ti ti-arrow-right"></i>
+    </div>
+    <div class="done-secondary">
+      <div>see stats</div>
+      <div id="restartBtn">do it again</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ===== Daily 8 protocol =====
+  const STEPS = [
+    {
+      key: "release",
+      eyebrow: "— body release —",
+      title: 'Open the <em>jaw.</em>',
+      meta: "yawn-sigh · shake it loose",
+      duration: 60,
+      tip: "Drop the jaw, let the sigh out. No singing yet.",
+      tipTone: "mint",
+      visual: "breath",
+    },
+    {
+      key: "sovt",
+      eyebrow: "— sovt primer —",
+      title: 'Lip trills <em>or</em> straw.',
+      meta: 'pick one · gentle "brrr" or sing through a straw',
+      duration: 90,
+      tip: "Half-closed tract = back-pressure. Safest way to wake the cords.",
+      tipTone: "mint",
+      visual: "sovt",
+    },
+    {
+      key: "siren",
+      eyebrow: "— sirens —",
+      title: 'Slide <em>low</em> to high.',
+      meta: 'on "ng" · low → high → low, smooth',
+      duration: 60,
+      tip: "Don't push at the top. If it strains, lower the target — comfort wins.",
+      tipTone: "mint",
+      visual: "siren",
+    },
+    {
+      key: "scale",
+      eyebrow: "— vowel scales —",
+      title: 'Climb the <em>steps.</em>',
+      meta: "5-note scale · rotate ah / ee / oo",
+      duration: 90,
+      tip: "Each vowel sits in a different resonator. Feel the shift.",
+      tipTone: "mint",
+      visual: "scale",
+    },
+    {
+      key: "swell",
+      eyebrow: "— messa di voce —",
+      title: 'Soft to <em>loud</em>, back.',
+      meta: "one note · grow and shrink, smoothly",
+      duration: 60,
+      tip: "Volume only. Same pitch. Breath does the work.",
+      tipTone: "warm",
+      visual: "swell",
+    },
+    {
+      key: "stacc",
+      eyebrow: "— staccato —",
+      title: 'Clean <em>onsets.</em>',
+      meta: "1 · 3 · 5 · 8 · short, precise",
+      duration: 60,
+      tip: "Light, not hard. The cord touches — doesn't slam.",
+      tipTone: "warm",
+      visual: "stacc",
+    },
+    {
+      key: "cool",
+      eyebrow: "— cool-down —",
+      title: 'Hum it <em>down.</em>',
+      meta: "mid note · gentle, closed mouth",
+      duration: 60,
+      tip: "Easy. This settles the cords like a stretch after a run.",
+      tipTone: "mint",
+      visual: "cool",
+    },
+  ];
+
+  // ===== State =====
+  let stepIdx = 0;
+  let remaining = STEPS[0].duration;
+  let playing = false;
+  let timer = null;
+  let staccatoTimer = null;
+  let scaleTimer = null;
+  let vowelTimer = null;
+  let vowelPositions = ["ah", "ee", "oo"];
+  let vowelIdx = 0;
+
+  // Session metrics for the LLM observation.
+  let stepsCompletedNaturally = 0;
+  let stepsSkipped = 0;
+  let sessionStartedAt = null;
+
+  // ===== LLM endpoint =====
+  const LLM_URL = "http://evox2:8083/v1/chat/completions";
+
+  async function fetchObservation() {
+    const lang = (document.getElementById("langSelect") || { value: "English" }).value;
+    const total = STEPS.length;
+    const elapsedSec = sessionStartedAt
+      ? Math.round((Date.now() - sessionStartedAt) / 1000)
+      : null;
+    const facts = [
+      `User just finished a Daily 8 vocal warm-up session.`,
+      `${stepsCompletedNaturally} of ${total} steps completed naturally.`,
+      `${stepsSkipped} steps skipped early.`,
+      elapsedSec ? `Total time: ${elapsedSec} seconds.` : "",
+      `Steps in order were: body release, lip trills (SOVT), sirens, vowel scales, messa di voce (swell), staccato, cool-down hum.`,
+    ].filter(Boolean).join(" ");
+
+    const body = {
+      model: "qwen3.5-2b",
+      messages: [
+        {
+          role: "system",
+          content:
+            `You write ONE short observation about a vocal warm-up session — a single sentence, friendly and supportive, like a kind vocal coach. ` +
+            `No headers, no lists, no emoji, no prefacing. Reply in ${lang}.`,
+        },
+        { role: "user", content: facts },
+      ],
+      max_tokens: 120,
+      temperature: 0.7,
+      chat_template_kwargs: { enable_thinking: false },
+    };
+    const resp = await fetch(LLM_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    return (data.choices?.[0]?.message?.content || "").trim();
+  }
+
+  async function renderObservation() {
+    const el = document.getElementById("observationText");
+    el.innerHTML = `<span class="obs-loader"></span>thinking...`;
+    try {
+      const text = await fetchObservation();
+      el.textContent = text || "Voice is ready.";
+    } catch (e) {
+      el.textContent = `(could not reach evox2:8083 — ${e.message})`;
+    }
+  }
+
+  // ===== Audio engine (Tone.js + Salamander piano + drone synth) =====
+  let piano = null;
+  let pianoReady = false;
+  let stopCurrentAudio = null;
+
+  async function ensureAudio() {
+    if (piano) return;
+    await Tone.start();
+    piano = new Tone.Sampler({
+      urls: {
+        "A2": "A2.mp3",
+        "C3": "C3.mp3",
+        "D#3": "Ds3.mp3",
+        "F#3": "Fs3.mp3",
+        "A3": "A3.mp3",
+        "C4": "C4.mp3",
+        "D#4": "Ds4.mp3",
+        "F#4": "Fs4.mp3",
+      },
+      baseUrl: "https://tonejs.github.io/audio/salamander/",
+      release: 1,
+      volume: -6,
+    }).toDestination();
+    await Tone.loaded();
+    pianoReady = true;
+  }
+
+  function cleanupAudio() {
+    if (stopCurrentAudio) {
+      try { stopCurrentAudio(); } catch (e) {}
+      stopCurrentAudio = null;
+    }
+    window.__scaleNoteCb = null;
+    window.__staccNoteCb = null;
+  }
+
+  // Per-step audio. Returns cleanup function.
+  const audioFor = {
+    release: () => {
+      // No tone — pure body work. Optional: soft tick on each breath cycle.
+      return () => {};
+    },
+    sovt: () => {
+      // Sustained drone on C3 — user matches with lip trill / straw.
+      const drone = new Tone.Synth({
+        oscillator: { type: "sine" },
+        envelope: { attack: 0.4, decay: 0, sustain: 1, release: 0.6 },
+        volume: -22,
+      }).toDestination();
+      drone.triggerAttack("C3");
+      return () => {
+        drone.triggerRelease();
+        setTimeout(() => drone.dispose(), 1000);
+      };
+    },
+    siren: () => {
+      // Continuous glide A2 ↔ F4, 2s up, 2s down.
+      const osc = new Tone.Oscillator(Tone.Frequency("A2").toFrequency(), "triangle").toDestination();
+      osc.volume.value = -20;
+      osc.start();
+      const lowHz = Tone.Frequency("A2").toFrequency();
+      const highHz = Tone.Frequency("F4").toFrequency();
+      let dir = "up";
+      let tid;
+      function step() {
+        osc.frequency.rampTo(dir === "up" ? highHz : lowHz, 1.9);
+        dir = dir === "up" ? "down" : "up";
+        tid = setTimeout(step, 1900);
+      }
+      step();
+      return () => {
+        clearTimeout(tid);
+        osc.stop();
+        setTimeout(() => osc.dispose(), 200);
+      };
+    },
+    scale: () => {
+      // Piano plays each rung as the visual hits it.
+      window.__scaleNoteCb = (note) => {
+        if (pianoReady && piano) piano.triggerAttackRelease(note, "8n");
+      };
+      return () => { window.__scaleNoteCb = null; };
+    },
+    swell: () => {
+      // D3 sustained, volume swells with the visual bar (~6s cycle).
+      const s = new Tone.Synth({
+        oscillator: { type: "sine" },
+        envelope: { attack: 0.3, decay: 0, sustain: 1, release: 0.6 },
+      }).toDestination();
+      s.volume.value = -36;
+      s.triggerAttack("D3");
+      let phase = 0;
+      const tid = setInterval(() => {
+        // 6s cycle, 100ms ticks = 60 steps, sin shape
+        const t = phase / 60;
+        const env = Math.sin(Math.PI * t); // 0..1..0
+        s.volume.value = -36 + 30 * env;
+        phase = (phase + 1) % 60;
+      }, 100);
+      return () => {
+        clearInterval(tid);
+        s.triggerRelease();
+        setTimeout(() => s.dispose(), 800);
+      };
+    },
+    stacc: () => {
+      // Piano hits 1-3-5-8 (C3 E3 G3 C4) in sync with dots.
+      window.__staccNoteCb = (note) => {
+        if (pianoReady && piano) piano.triggerAttackRelease(note, "16n");
+      };
+      return () => { window.__staccNoteCb = null; };
+    },
+    cool: () => {
+      // Soft D3 hum.
+      const drone = new Tone.Synth({
+        oscillator: { type: "sine" },
+        envelope: { attack: 0.6, decay: 0, sustain: 1, release: 1.5 },
+        volume: -28,
+      }).toDestination();
+      drone.triggerAttack("D3");
+      return () => {
+        drone.triggerRelease();
+        setTimeout(() => drone.dispose(), 2000);
+      };
+    },
+  };
+
+  function startStepAudio() {
+    cleanupAudio();
+    const key = STEPS[stepIdx].key;
+    const fn = audioFor[key];
+    if (fn) stopCurrentAudio = fn();
+  }
+
+  // ===== DOM =====
+  const introEl = document.getElementById("intro");
+  const sessionEl = document.getElementById("session");
+  const doneEl = document.getElementById("done");
+  const stepsListEl = document.getElementById("stepsList");
+  const segProgress = document.getElementById("segProgress");
+  const stepCountEl = document.getElementById("stepCount");
+  const stepEyebrowEl = document.getElementById("stepEyebrow");
+  const stepTitleEl = document.getElementById("stepTitle");
+  const stepMetaEl = document.getElementById("stepMeta");
+  const visualCardEl = document.getElementById("visualCard");
+  const tipCardEl = document.getElementById("tipCard");
+  const tipTextEl = document.getElementById("tipText");
+  const timerEl = document.getElementById("timer");
+  const playPauseIcon = document.getElementById("playPauseIcon");
+
+  // Build intro steps list
+  STEPS.forEach((s, i) => {
+    const row = document.createElement("div");
+    row.className = "steps-row";
+    const mmss = `${String(Math.floor(s.duration / 60)).padStart(2, "0")}:${String(s.duration % 60).padStart(2, "0")}`;
+    row.innerHTML = `
+      <div class="num">${i + 1}</div>
+      <div class="name">${s.eyebrow.replace(/—/g, "").trim()}</div>
+      <div class="dur">${mmss}</div>
+    `;
+    stepsListEl.appendChild(row);
+  });
+
+  // Build segment progress slots
+  STEPS.forEach(() => {
+    const seg = document.createElement("div");
+    segProgress.appendChild(seg);
+  });
+
+  // ===== Visuals =====
+  function renderVisual(kind) {
+    visualCardEl.innerHTML = "";
+    clearInterval(staccatoTimer);
+    clearInterval(scaleTimer);
+    clearInterval(vowelTimer);
+
+    if (kind === "breath") {
+      const wrap = document.createElement("div");
+      wrap.style.cssText = "display:flex;flex-direction:column;align-items:center;";
+      wrap.innerHTML = `
+        <div class="breath-circle"></div>
+        <div class="breath-text">— breathe · 4s in · 4s out —</div>
+      `;
+      visualCardEl.appendChild(wrap);
+      return;
+    }
+
+    if (kind === "sovt") {
+      const wrap = document.createElement("div");
+      wrap.className = "sovt-stage";
+      wrap.innerHTML = `
+        <div class="sovt-icon-row">
+          <div class="pick active">
+            <div style="text-align:center;">
+              <i class="ti ti-mood-tongue"></i>
+              <span class="lbl">lip trill</span>
+            </div>
+          </div>
+          <div class="pick">
+            <div style="text-align:center;">
+              <i class="ti ti-glass"></i>
+              <span class="lbl">straw</span>
+            </div>
+          </div>
+        </div>
+        <svg viewBox="0 0 280 50" style="margin-top:14px; width: 80%;">
+          <path d="M 4 25 Q 30 10, 56 25 T 108 25 T 160 25 T 212 25 T 264 25 T 276 25"
+            stroke="#7F77DD" stroke-width="2.5" fill="none" stroke-linecap="round" />
+        </svg>
+        <div class="note-tag">hold on C3 · steady</div>
+      `;
+      visualCardEl.appendChild(wrap);
+      return;
+    }
+
+    if (kind === "siren") {
+      const wrap = document.createElement("div");
+      wrap.style.cssText = "width:100%;";
+      wrap.innerHTML = `
+        <svg viewBox="0 0 320 170" preserveAspectRatio="xMidYMid meet">
+          <g font-family="DM Mono, monospace" font-size="9" fill="#888780">
+            <text x="6" y="22">F4</text>
+            <text x="6" y="62">C4</text>
+            <text x="6" y="102">G3</text>
+            <text x="6" y="142">A2</text>
+          </g>
+          <g stroke="#D3D1C7" stroke-width="0.5" stroke-dasharray="2,3">
+            <line x1="32" y1="20" x2="312" y2="20"/>
+            <line x1="32" y1="60" x2="312" y2="60"/>
+            <line x1="32" y1="100" x2="312" y2="100"/>
+            <line x1="32" y1="140" x2="312" y2="140"/>
+          </g>
+          <rect x="32" y="40" width="280" height="80" fill="#EEEDFE" opacity="0.5" rx="3"/>
+          <path class="target-path" d="M 32,140 Q 172,10 312,140"/>
+          <path class="siren-path"  d="M 32,140 Q 172,10 312,140"/>
+        </svg>
+        <div style="display:flex; gap: 10px; margin-top:8px;">
+          <span class="note-tag">A2 ↗ F4 ↘ A2</span>
+        </div>
+      `;
+      visualCardEl.appendChild(wrap);
+      return;
+    }
+
+    if (kind === "scale") {
+      const wrap = document.createElement("div");
+      wrap.style.cssText = "display:flex;flex-direction:column;align-items:center;width:100%;";
+      const noteNames = ["C3", "D3", "E3", "F3", "G3"]; // index 0..4 (low → high)
+      wrap.innerHTML = `
+        <div class="scale-ladder">
+          <div class="rung-row" data-i="4"><span class="lbl">G3</span><div class="rung"></div></div>
+          <div class="rung-row" data-i="3"><span class="lbl">F3</span><div class="rung"></div></div>
+          <div class="rung-row" data-i="2"><span class="lbl">E3</span><div class="rung"></div></div>
+          <div class="rung-row" data-i="1"><span class="lbl">D3</span><div class="rung"></div></div>
+          <div class="rung-row" data-i="0"><span class="lbl">C3</span><div class="rung"></div></div>
+        </div>
+        <div class="scale-rest" id="scaleRest">— breathe —</div>
+        <div class="scale-vowel" id="scaleVowel">ah</div>
+      `;
+      visualCardEl.appendChild(wrap);
+      const rows = wrap.querySelectorAll(".rung-row");
+      const restEl = wrap.querySelector("#scaleRest");
+      const vowelEl = wrap.querySelector("#scaleVowel");
+      restEl.textContent = "";
+      // 1-2-3-4-5-4-3-2-1 sequence + 4 ticks rest
+      const seq = [0, 1, 2, 3, 4, 3, 2, 1, 0];
+      const restTicks = 4;
+      const cycleLen = seq.length + restTicks;
+      let p = 0;
+      vowelIdx = 0;
+      scaleTimer = setInterval(() => {
+        const phase = p % cycleLen;
+        rows.forEach(r => { r.classList.remove("hit"); r.querySelector(".rung").classList.remove("hit"); });
+        if (phase < seq.length) {
+          // active note
+          const targetIdx = seq[phase];
+          const row = wrap.querySelector(`.rung-row[data-i="${targetIdx}"]`);
+          if (row) {
+            row.classList.add("hit");
+            row.querySelector(".rung").classList.add("hit");
+          }
+          restEl.textContent = "";
+          restEl.classList.remove("active");
+          // play piano note if synced via scaleNoteCb
+          if (typeof window.__scaleNoteCb === "function") {
+            window.__scaleNoteCb(noteNames[targetIdx]);
+          }
+        } else {
+          // rest
+          restEl.textContent = "— breathe —";
+          restEl.classList.add("active");
+        }
+        p++;
+        if (p % cycleLen === 0) {
+          vowelIdx = (vowelIdx + 1) % vowelPositions.length;
+          vowelEl.textContent = vowelPositions[vowelIdx];
+        }
+      }, 380);
+      return;
+    }
+
+    if (kind === "swell") {
+      const wrap = document.createElement("div");
+      wrap.style.cssText = "display:flex;flex-direction:column;align-items:center;";
+      wrap.innerHTML = `
+        <div class="swell-bar"></div>
+        <div style="font-family: 'DM Mono', monospace; font-size: 11px; color: var(--ink-muted); margin-top:14px; letter-spacing:0.1em;">— soft → loud → soft —</div>
+        <div class="note-tag" style="margin-top:10px;">hold on D3</div>
+      `;
+      visualCardEl.appendChild(wrap);
+      return;
+    }
+
+    if (kind === "stacc") {
+      const wrap = document.createElement("div");
+      wrap.style.cssText = "display:flex;flex-direction:column;align-items:center;";
+      const stNotes = ["C3", "E3", "G3", "C4"];
+      wrap.innerHTML = `
+        <div class="staccato-row">
+          <div class="dot" data-i="0"></div>
+          <div class="dot" data-i="1"></div>
+          <div class="dot" data-i="2"></div>
+          <div class="dot" data-i="3"></div>
+        </div>
+        <div class="staccato-labels"><span>C3</span><span>E3</span><span>G3</span><span>C4</span></div>
+        <div class="staccato-labels" style="margin-top:4px; opacity:0.7;"><span>1</span><span>3</span><span>5</span><span>8</span></div>
+      `;
+      visualCardEl.appendChild(wrap);
+      const dots = wrap.querySelectorAll(".dot");
+      let p = 0;
+      const cycleLen = 4 + 3; // 4 hits + 3 ticks rest
+      staccatoTimer = setInterval(() => {
+        dots.forEach(d => d.classList.remove("hit"));
+        const phase = p % cycleLen;
+        if (phase < 4) {
+          dots[phase].classList.add("hit");
+          if (typeof window.__staccNoteCb === "function") {
+            window.__staccNoteCb(stNotes[phase]);
+          }
+        }
+        p++;
+      }, 380);
+      return;
+    }
+
+    if (kind === "cool") {
+      const wrap = document.createElement("div");
+      wrap.style.cssText = "display:flex;flex-direction:column;align-items:center;width:100%;";
+      wrap.innerHTML = `
+        <svg viewBox="0 0 280 60" class="cool-wave" style="width:80%;">
+          <path d="M 4 30 Q 24 18, 44 30 T 84 30 T 124 30 T 164 30 T 204 30 T 244 30 T 276 30"/>
+        </svg>
+        <div class="cool-text">— hum · let it settle —</div>
+        <div class="note-tag" style="margin-top:10px;">D3 · gentle</div>
+      `;
+      visualCardEl.appendChild(wrap);
+      return;
+    }
+  }
+
+  // ===== Render =====
+  function fmt(s) {
+    return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  }
+
+  function renderStep() {
+    const s = STEPS[stepIdx];
+    stepCountEl.textContent = `${stepIdx + 1} of ${STEPS.length}`;
+    stepEyebrowEl.textContent = s.eyebrow;
+    stepTitleEl.innerHTML = s.title;
+    stepMetaEl.textContent = s.meta;
+    tipTextEl.textContent = s.tip;
+    tipCardEl.classList.remove("warm");
+    if (s.tipTone === "warm") tipCardEl.classList.add("warm");
+    timerEl.textContent = fmt(remaining);
+    renderVisual(s.visual);
+
+    // segments
+    const segs = segProgress.children;
+    for (let i = 0; i < segs.length; i++) {
+      segs[i].classList.remove("done", "active");
+      if (i < stepIdx) segs[i].classList.add("done");
+      else if (i === stepIdx) segs[i].classList.add("active");
+    }
+  }
+
+  function setPlaying(p) {
+    playing = p;
+    playPauseIcon.className = p
+      ? "ti ti-player-pause-filled"
+      : "ti ti-player-play-filled";
+    if (p) {
+      clearInterval(timer);
+      timer = setInterval(tick, 1000);
+      startStepAudio();
+    } else {
+      clearInterval(timer);
+      cleanupAudio();
+    }
+  }
+
+  function finishSession() {
+    clearInterval(timer);
+    clearInterval(staccatoTimer);
+    clearInterval(scaleTimer);
+    cleanupAudio();
+    sessionEl.style.display = "none";
+    doneEl.style.display = "flex";
+    playing = false;
+    renderObservation();
+  }
+
+  function tick() {
+    remaining -= 1;
+    if (remaining <= 0) {
+      stepsCompletedNaturally += 1;
+      // next step
+      if (stepIdx < STEPS.length - 1) {
+        stepIdx += 1;
+        remaining = STEPS[stepIdx].duration;
+        renderStep();
+        startStepAudio();
+      } else {
+        finishSession();
+      }
+    } else {
+      timerEl.textContent = fmt(remaining);
+    }
+  }
+
+  async function startSession() {
+    await ensureAudio();
+    stepIdx = 0;
+    remaining = STEPS[0].duration;
+    stepsCompletedNaturally = 0;
+    stepsSkipped = 0;
+    sessionStartedAt = Date.now();
+    introEl.style.display = "none";
+    doneEl.style.display = "none";
+    sessionEl.style.display = "flex";
+    renderStep();
+    setPlaying(true);
+  }
+
+  function endToIntro() {
+    clearInterval(timer);
+    clearInterval(staccatoTimer);
+    clearInterval(scaleTimer);
+    cleanupAudio();
+    sessionEl.style.display = "none";
+    doneEl.style.display = "none";
+    introEl.style.display = "flex";
+  }
+
+  document.getElementById("startBtn").addEventListener("click", startSession);
+  document.getElementById("restartBtn").addEventListener("click", startSession);
+  document.getElementById("closeBtn").addEventListener("click", endToIntro);
+  document.getElementById("playPauseBtn").addEventListener("click", () => setPlaying(!playing));
+  document.getElementById("prevBtn").addEventListener("click", () => {
+    if (stepIdx > 0) stepIdx -= 1;
+    remaining = STEPS[stepIdx].duration;
+    renderStep();
+    if (playing) startStepAudio();
+  });
+  document.getElementById("nextBtn").addEventListener("click", () => {
+    // Counts as a skip if there's still time left on this step.
+    if (remaining > 0) stepsSkipped += 1;
+    if (stepIdx < STEPS.length - 1) {
+      stepIdx += 1;
+      remaining = STEPS[stepIdx].duration;
+      renderStep();
+      if (playing) startStepAudio();
+    } else {
+      finishSession();
+    }
+  });
+</script>
+</body>
+</html>

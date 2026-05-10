@@ -13,3 +13,12 @@ CORS_ORIGINS = [
 ]
 
 INDEX_FILE = RUNS_DIR / "_index.json"
+
+# Auth + DB. SQLite in _data/ — same volume as runs but separate dir, gitignored.
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "sqlite:////srv/apps/stem-practice-studio/_data/app.db",
+)
+JWT_SECRET = os.environ.get("JWT_SECRET", "dev-secret-change-me")
+JWT_ALG = "HS256"
+JWT_EXPIRE_DAYS = 30
