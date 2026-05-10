@@ -190,9 +190,55 @@ Docker `-v` отказывается принимать относительны
 
 ---
 
+---
+
+# Phase 1.5 — A/B ASR на full-mix vs vocal-stem
+
+Дата: 2026-05-10
+Скрипты: `bench/asr/run_ab.sh` + `bench/asr/score_wer.py`
+Данные: `bench/results/ab_20260510-101227/`
+
+## Гипотеза
+
+Артефакты htdemucs (phasing, residual bleed, spectral mask edges) могут быть out-of-distribution для ASR-моделей, обученных на естественной речи. Full-mix может дать лучшее или равное качество и сэкономит 65% времени pipeline.
+
+## Метод
+
+Один и тот же source-файл (Калинов Мост 313s для RU, Tom Odell 247s для EN) → две ветки: GigaAM/Parakeet на полном миксе и на htdemucs vocal-стеме. WER считается word-Левенштейном к LRC reference (нормализация: lower + drop punct + ё→е).
+
+## Результаты
+
+| Case | ASR words | Ref | Edits | WER |
+|---|---|---|---|---|
+| RU full-mix | **1** | 258 | 257 | **99.6%** ⛔ |
+| RU vocal-stem | 222 | 258 | 114 | **44.2%** |
+| EN full-mix | 254 | 297 | 129 | **43.4%** |
+| EN vocal-stem | 265 | 297 | 102 | **34.3%** |
+
+## Поправка на baseline
+
+WER завышен из-за mismatch между LRC и реальным аудио:
+- RU: LRC = Башлачёв оригинал, аудио = Калинов Мост кавер с импровизациями → даже идеальный ASR ~20-25% WER
+- EN: студийный Tom Odell = LRC ref, baseline ~0%
+
+«Честный» WER vocal-stem: **RU ~20%**, **EN ~30%**.
+
+## Анализ RU full-mix провала
+
+GigaAM выдал 1 слово на 313 секунд. Текст: `'шли'` (правильное слово из «Долго шли, зноем»). Причина — `silero-vad` распознал только **1 chunk** на полном миксе. VAD-модель обучалась на речи, музыка для неё не похожа на голос по фичам. Это не GigaAM фейлит, а VAD не пропускает. На chunked-25s без VAD результат был бы другой, но это отдельный эксперимент.
+
+## Решения
+
+1. **RU: демиксинг обязателен.** Не из-за качества GigaAM, а из-за VAD. На vocal-стеме VAD работает, на full mix — нет. Без VAD GigaAM упирается в 30s limit.
+2. **EN: демиксинг помогает (+9pp).** 43% → 34% WER. Не критично, но реально. Parakeet робастен к фоновому шуму больше чем GigaAM, но всё равно sep даёт прибавку.
+3. **Pipeline остаётся sep → ASR.** Гипотеза «full mix лучше» не подтвердилась.
+4. **Возможный шорткат для EN**: при необходимости срезать 65% времени можно опускать sep с -9pp WER hit. Например: первый быстрый прогон без sep за 13s, потом фоном уточнять.
+
+---
+
 ## Что дальше
 
-- Phase 1.5: A/B GigaAM/Parakeet — full mix vs vocal stem (если full mix лучше — упрощаем pipeline, ASR параллельно с htdemucs)
-- Phase 1.6 (опц.): CTC forced alignment через GigaAM-CTC + torchaudio для замены NW-baseline
-- Phase 1.7: SongFormer (verse/chorus) — новая ML-нагрузка, отдельный smoke
+- Phase 1.6 (опц.): CTC forced alignment через GigaAM-CTC + torchaudio для замены NW-baseline (заменит интерполяцию точными CTC-таймингами)
+- Phase 1.7: SongFormer (verse/chorus) — новая ML-нагрузка, отдельный smoke на ROCm
 - Phase 1.8: chord recognition + N2N drum transcription для не-вокалистов
+- Phase 2: FastAPI + arq + SSE — обернуть pipeline.process в job-сервис
