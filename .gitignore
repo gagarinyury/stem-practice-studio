@@ -1,0 +1,77 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.python-version
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.eggs/
+
+# --- Node / Next.js ---
+node_modules/
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+.npm
+.pnpm-store/
+.yarn/
+
+# --- Env / secrets ---
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# --- Audio assets (do not commit) ---
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+*.aac
+*.opus
+*.aiff
+
+# --- ML weights (do not commit) ---
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.bin
+*.gguf
+*.h5
+*.pkl
+
+# --- Project artifacts ---
+bench/results/
+bench/tracks/
+output/
+tracks/
+models/
+storage/
+uploads/
+*.log
+
+# --- Claude / local tools ---
+.claude/
