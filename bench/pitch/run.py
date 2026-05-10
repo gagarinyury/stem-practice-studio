@@ -36,34 +36,137 @@ def slice_audio(audio_path: Path, from_sec: float, to_sec: float):
     return data.astype(np.float32), sr
 
 
-def run_basic_pitch(audio_path: Path, from_sec: float, to_sec: float, out_path: Path):
+def run_basic_pitch(
+    audio_path: Path,
+    from_sec: float,
+    to_sec: float,
+    out_path: Path,
+    onset_threshold: float = 0.5,
+    frame_threshold: float = 0.3,
+    minimum_note_length: float = 127.7,  # ms — basic-pitch default
+    melodia_trick: bool = True,
+):
     """Spotify basic-pitch — neural model that outputs MIDI notes."""
     import tempfile
     import soundfile as sf
     from basic_pitch.inference import predict
     from basic_pitch import ICASSP_2022_MODEL_PATH
 
-    # basic-pitch reads from disk; write a temp WAV of the slice.
     audio, sr = slice_audio(audio_path, from_sec, to_sec)
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         sf.write(tmp.name, audio, sr)
         tmp_path = tmp.name
 
-    print(f"[basic-pitch] running on {tmp_path} ({len(audio)/sr:.2f}s)", file=sys.stderr)
-    _, _, note_events = predict(tmp_path, model_or_model_path=ICASSP_2022_MODEL_PATH)
-    # note_events: list of (start_time, end_time, midi_note, amplitude, pitch_bends)
+    print(
+        f"[basic-pitch] {audio_path.name} {from_sec}–{to_sec}s "
+        f"onset={onset_threshold} frame={frame_threshold} "
+        f"melodia={melodia_trick} min_note={minimum_note_length}ms",
+        file=sys.stderr,
+    )
+    _, _, note_events = predict(
+        tmp_path,
+        model_or_model_path=ICASSP_2022_MODEL_PATH,
+        onset_threshold=onset_threshold,
+        frame_threshold=frame_threshold,
+        minimum_note_length=minimum_note_length,
+        melodia_trick=melodia_trick,
+    )
     notes = [
         {
             "midi": int(n[2]),
-            # Shift back into track time (slice was from from_sec)
             "fromSec": round(float(n[0]) + from_sec, 4),
             "toSec": round(float(n[1]) + from_sec, 4),
             "amplitude": round(float(n[3]), 3),
         }
         for n in note_events
     ]
-    out_path.write_text(json.dumps({"notes": notes}, indent=2))
+    out_path.write_text(json.dumps({"notes": notes, "params": {
+        "onset_threshold": onset_threshold,
+        "frame_threshold": frame_threshold,
+        "minimum_note_length": minimum_note_length,
+        "melodia_trick": melodia_trick,
+        "source": str(audio_path.name),
+    }}, indent=2))
     print(f"[basic-pitch] {len(notes)} notes → {out_path.name}", file=sys.stderr)
+    return notes
+
+
+def run_swift_f0(
+    audio_path: Path,
+    from_sec: float,
+    to_sec: float,
+    out_path: Path,
+    confidence_threshold: float = 0.9,
+    split_semitone_threshold: float = 0.8,
+    min_note_duration: float = 0.08,
+    unvoiced_grace_period: float = 0.02,
+):
+    """SwiftF0 — neural F0 detector with built-in note segmentation.
+    Tiny CNN (95K params), trained for monophonic. Faster + more accurate
+    than CREPE per the Aug-2025 paper.
+    """
+    import librosa
+    import numpy as np
+    from swift_f0 import SwiftF0, segment_notes
+
+    audio, sr = slice_audio(audio_path, from_sec, to_sec)
+    # SwiftF0 expects 16kHz mono.
+    if sr != 16000:
+        audio = librosa.resample(audio, orig_sr=sr, target_sr=16000)
+        sr = 16000
+
+    print(
+        f"[swift-f0] {audio_path.name} {from_sec}–{to_sec}s "
+        f"conf={confidence_threshold} split={split_semitone_threshold} "
+        f"min_note={min_note_duration}s grace={unvoiced_grace_period}s",
+        file=sys.stderr,
+    )
+    detector = SwiftF0(
+        fmin=46.875,
+        fmax=2093.75,
+        confidence_threshold=confidence_threshold,
+    )
+    result = detector.detect_from_array(audio_array=audio, sample_rate=sr)
+    notes_segs = segment_notes(
+        result,
+        split_semitone_threshold=split_semitone_threshold,
+        min_note_duration=min_note_duration,
+        unvoiced_grace_period=unvoiced_grace_period,
+    )
+
+    # Inspect first segment to learn the dataclass field names.
+    notes = []
+    for seg in notes_segs:
+        # Try common field names
+        midi = getattr(seg, "pitch_midi", None) or getattr(seg, "midi", None)
+        start = getattr(seg, "start_time", None)
+        if start is None:
+            start = getattr(seg, "start", None)
+        end = getattr(seg, "end_time", None)
+        if end is None:
+            end = getattr(seg, "end", None)
+        if midi is None or start is None or end is None:
+            print(f"[swift-f0] WARN unknown seg fields: {seg}", file=sys.stderr)
+            continue
+        notes.append({
+            "midi": int(midi),
+            "fromSec": round(float(start) + from_sec, 4),
+            "toSec": round(float(end) + from_sec, 4),
+            "amplitude": 0.6,
+        })
+
+    out_path.write_text(json.dumps({
+        "notes": notes,
+        "params": {
+            "confidence_threshold": confidence_threshold,
+            "split_semitone_threshold": split_semitone_threshold,
+            "min_note_duration": min_note_duration,
+            "unvoiced_grace_period": unvoiced_grace_period,
+            "source": str(audio_path.name),
+            "model": "swift-f0",
+        },
+    }, indent=2))
+    print(f"[swift-f0] {len(notes)} notes → {out_path.name}", file=sys.stderr)
     return notes
 
 

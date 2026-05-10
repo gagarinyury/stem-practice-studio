@@ -1,0 +1,32 @@
+[
+  {
+    "config": "A_basic_pitch_default",
+    "notes": 133,
+    "path": "mwpmebgc7da-p8uLM7_21-81_A_basic_pitch_default.json"
+  },
+  {
+    "config": "B_basic_pitch_tight",
+    "notes": 78,
+    "path": "mwpmebgc7da-p8uLM7_21-81_B_basic_pitch_tight.json"
+  },
+  {
+    "config": "C_basic_pitch_full",
+    "notes": 140,
+    "path": "mwpmebgc7da-p8uLM7_21-81_C_basic_pitch_full.json"
+  },
+  {
+    "config": "D_swift_f0_default",
+    "notes": 100,
+    "path": "mwpmebgc7da-p8uLM7_21-81_D_swift_f0_default.json"
+  },
+  {
+    "config": "E_swift_f0_strict",
+    "notes": 80,
+    "path": "mwpmebgc7da-p8uLM7_21-81_E_swift_f0_strict.json"
+  },
+  {
+    "config": "F_swift_f0_full",
+    "notes": 112,
+    "path": "mwpmebgc7da-p8uLM7_21-81_F_swift_f0_full.json"
+  }
+]

@@ -1,0 +1,32 @@
+[
+  {
+    "config": "A_basic_pitch_default",
+    "notes": 119,
+    "path": "kalinov-most_30-90_A_basic_pitch_default.json"
+  },
+  {
+    "config": "B_basic_pitch_tight",
+    "notes": 26,
+    "path": "kalinov-most_30-90_B_basic_pitch_tight.json"
+  },
+  {
+    "config": "C_basic_pitch_full",
+    "notes": 124,
+    "path": "kalinov-most_30-90_C_basic_pitch_full.json"
+  },
+  {
+    "config": "D_swift_f0_default",
+    "notes": 127,
+    "path": "kalinov-most_30-90_D_swift_f0_default.json"
+  },
+  {
+    "config": "E_swift_f0_strict",
+    "notes": 91,
+    "path": "kalinov-most_30-90_E_swift_f0_strict.json"
+  },
+  {
+    "config": "F_swift_f0_full",
+    "notes": 90,
+    "path": "kalinov-most_30-90_F_swift_f0_full.json"
+  }
+]

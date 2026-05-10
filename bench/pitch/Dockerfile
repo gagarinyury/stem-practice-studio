@@ -10,6 +10,8 @@ RUN pip install --no-cache-dir \
         "basic-pitch[onnx]==0.4.0" \
         "librosa==0.10.2" \
         "soundfile>=0.12" \
-        "numpy<2"
+        "numpy<2" \
+        "swift-f0" \
+        "mido"
 
 WORKDIR /work

@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>basic-pitch A/B/C — Калинов Мост 30–90s</title>
+<style>
+  :root {
+    --paper: #FAF7F2; --ink: #2C2C2A; --ink-muted: #6B6862;
+    --border: #E5E1D5; --vocal: #993C1D; --highlight: #FAEEDA;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Cormorant Garamond", "Georgia", serif;
+    background: var(--paper); color: var(--ink); margin: 0;
+    padding: 24px 16px; display: flex; justify-content: center;
+  }
+  .wrap { width: 100%; max-width: 980px; }
+  h1 { font-weight: 400; font-style: italic; margin: 0 0 6px; font-size: 22px; }
+  .sub {
+    font-family: "DM Mono", monospace; font-size: 11px; color: var(--ink-muted);
+    letter-spacing: 0.05em; margin-bottom: 18px;
+  }
+  .card {
+    background: white; border: 1px solid var(--border); border-radius: 16px;
+    padding: 16px; margin-bottom: 14px;
+  }
+  .controls {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    font-family: "DM Mono", monospace; font-size: 12px;
+  }
+  button {
+    font-family: "DM Mono", monospace; font-size: 11px;
+    border: 1px solid var(--ink); background: white; color: var(--ink);
+    padding: 8px 14px; border-radius: 999px; cursor: pointer;
+    letter-spacing: 0.05em;
+  }
+  button.primary { background: var(--ink); color: var(--paper); }
+  button.config { background: white; }
+  button.config.active { background: var(--vocal); color: var(--paper); border-color: var(--vocal); }
+  button[disabled] { opacity: 0.4; cursor: not-allowed; }
+  label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .time {
+    font-family: "DM Mono", monospace; font-size: 12px; color: var(--ink-muted);
+    margin-left: auto;
+  }
+  svg { display: block; width: 100%; }
+  .lane-stripe { fill: #FAF7F2; }
+  .lane-center { fill: var(--highlight); opacity: 0.55; }
+  .lane-line { stroke: var(--border); stroke-width: 0.4; stroke-dasharray: 1,3; }
+  .note-rect { fill: #7C7770; opacity: 0.85; }
+  .note-rect.active { fill: var(--vocal); opacity: 1; }
+  .axis-label { font-family: "DM Mono", monospace; font-size: 8px; fill: var(--ink-muted); }
+  .legend {
+    font-family: "DM Mono", monospace; font-size: 10px; color: var(--ink-muted);
+    margin-top: 10px; line-height: 1.6;
+  }
+  .meter {
+    height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;
+    margin-top: 12px;
+  }
+  .meter-fill { height: 100%; background: var(--vocal); width: 0; transition: width 0.05s linear; }
+  .desc { font-family: "DM Mono", monospace; font-size: 11px; color: var(--ink-muted); padding: 4px 0; line-height: 1.5; }
+  .desc strong { color: var(--ink); font-weight: normal; text-transform: uppercase; letter-spacing: 0.1em; font-size: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>basic-pitch A/B/C — Калинов Мост 30–90s</h1>
+  <div class="sub">— переключай конфиги и слушай разницу. Песня + синтезированное пианино из basic-pitch нот —</div>
+
+  <div class="card">
+    <div class="controls">
+      <button id="playBtn" class="primary" disabled>loading…</button>
+      <label><input type="checkbox" id="songOn" checked> song</label>
+      <label><input type="checkbox" id="pianoOn" checked> piano</label>
+      <label>piano gain
+        <input type="range" id="pianoGain" min="0" max="1" step="0.05" value="0.35">
+      </label>
+      <span class="time" id="timeLabel">0:00 / 1:00</span>
+    </div>
+    <div class="meter"><div class="meter-fill" id="meter"></div></div>
+  </div>
+
+  <div class="card">
+    <div class="controls" style="margin-bottom: 10px; flex-wrap: wrap;">
+      <button class="config active" data-cfg="A">A · basic-pitch default</button>
+      <button class="config" data-cfg="B">B · basic-pitch tight</button>
+      <button class="config" data-cfg="C">C · basic-pitch full</button>
+      <button class="config" data-cfg="D">D · SwiftF0 default</button>
+      <button class="config" data-cfg="E">E · SwiftF0 strict</button>
+      <button class="config" data-cfg="F">F · SwiftF0 full</button>
+      <span class="time" id="noteCount"></span>
+    </div>
+    <div class="desc" id="cfgDesc"></div>
+    <svg id="roll" viewBox="0 0 980 240"></svg>
+  </div>
+
+  <div class="card">
+    <div class="legend">
+      <strong>A · basic-pitch default</strong> — Spotify model, дефолт.<br>
+      <strong>B · basic-pitch tight</strong> — те же ноты, но onset=0.7 + melodia trick + 150ms минимум.<br>
+      <strong>C · basic-pitch full mix</strong> — на полной песне, не на стеме.<br>
+      <strong>D · SwiftF0 default</strong> — новая модель (Aug 2025, +12pp лучше CREPE).<br>
+      <strong>E · SwiftF0 strict</strong> — confidence 0.93, split 1.0 полутон, grace 50ms.<br>
+      <strong>F · SwiftF0 full mix</strong> — SwiftF0 на полной песне.
+    </div>
+  </div>
+</div>
+
+<script>
+const FROM = 30, TO = 90;
+const DURATION = TO - FROM;
+const W = 980, H = 240;
+const RANGE = 12;
+const PAD = 12;
+
+const CONFIG_FILES = {
+  A: { url: "/kalinov-most_30-90_A_basic_pitch_default.json", label: "A · basic-pitch default", desc: "basic-pitch · vocals.flac · onset=0.5 frame=0.3 min_note=128ms" },
+  B: { url: "/kalinov-most_30-90_B_basic_pitch_tight.json",   label: "B · basic-pitch tight",   desc: "basic-pitch · vocals.flac · onset=0.7 frame=0.5 min_note=150ms · melodia=on" },
+  C: { url: "/kalinov-most_30-90_C_basic_pitch_full.json",    label: "C · basic-pitch full mix", desc: "basic-pitch · source.wav (full mix) · onset=0.7 frame=0.5 min_note=150ms · melodia=on" },
+  D: { url: "/kalinov-most_30-90_D_swift_f0_default.json",    label: "D · SwiftF0 default",     desc: "SwiftF0 · vocals.flac · conf=0.9 split=0.8 min_note=80ms" },
+  E: { url: "/kalinov-most_30-90_E_swift_f0_strict.json",     label: "E · SwiftF0 strict",      desc: "SwiftF0 · vocals.flac · conf=0.93 split=1.0 min_note=120ms grace=50ms" },
+  F: { url: "/kalinov-most_30-90_F_swift_f0_full.json",       label: "F · SwiftF0 full mix",    desc: "SwiftF0 · source.wav (full mix) · conf=0.9 split=0.8 min_note=80ms" },
+};
+
+let currentCfg = "A";
+let configs = {};
+let medianMidi = 60;
+
+let ctx = null, songBuffer = null;
+let songSrc = null, songGain = null, pianoGain = null;
+let scheduledOscs = [];
+let isPlaying = false;
+let playStartCtxTime = 0, playStartOffset = 0;
+let raf = 0;
+
+const $ = (id) => document.getElementById(id);
+
+async function init() {
+  // Fetch all three configs
+  const entries = await Promise.all(Object.entries(CONFIG_FILES).map(async ([k, v]) => {
+    const r = await fetch(v.url);
+    const d = await r.json();
+    return [k, { ...d, ...v }];
+  }));
+  configs = Object.fromEntries(entries);
+
+  // Median is computed from config E (SwiftF0 strict — usually cleanest) for stable Y axis
+  const refCfg = configs.E?.notes?.length ? configs.E : configs.B;
+  const ms = refCfg.notes.map(n => n.midi).sort((a, b) => a - b);
+  medianMidi = Math.round(ms[Math.floor(ms.length / 2)]);
+
+  setConfig("A");
+
+  // Load source.wav
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  $("playBtn").textContent = "loading audio…";
+  const r = await fetch("http://evox2:8090/runs/kalinov-most/source.wav");
+  const buf = await r.arrayBuffer();
+  songBuffer = await ctx.decodeAudioData(buf);
+  $("playBtn").disabled = false;
+  $("playBtn").textContent = "▶ play";
+}
+
+function setConfig(name) {
+  currentCfg = name;
+  document.querySelectorAll("button.config").forEach(b => {
+    b.classList.toggle("active", b.dataset.cfg === name);
+  });
+  const cfg = configs[name];
+  $("noteCount").textContent = `${cfg.notes.length} notes`;
+  $("cfgDesc").textContent = cfg.desc;
+  drawRoll(isPlaying ? currentTrackTime() : undefined);
+  // Reschedule piano with new notes if currently playing
+  if (isPlaying) {
+    rescheduleAllPiano();
+  }
+}
+
+function rescheduleAllPiano() {
+  // Stop all current oscs
+  for (const o of scheduledOscs) { try { o.stop(); } catch {} }
+  scheduledOscs = [];
+  const offset = currentTrackTime() - FROM;
+  const cfg = configs[currentCfg];
+  for (const n of cfg.notes) {
+    const startInSlice = n.fromSec - FROM;
+    if (startInSlice < offset - 0.05) continue;
+    const dur = Math.min(n.toSec, TO) - Math.max(n.fromSec, FROM + offset);
+    if (dur <= 0.02) continue;
+    const startCtx = playStartCtxTime + (startInSlice - playStartOffset);
+    schedulePianoNote(n.midi, startCtx, dur, n.amplitude || 0.5);
+  }
+}
+
+function startPlay(offsetSec = 0) {
+  if (!ctx || !songBuffer || isPlaying) return;
+  songGain = ctx.createGain();
+  songGain.gain.value = $("songOn").checked ? 1 : 0;
+  songGain.connect(ctx.destination);
+  pianoGain = ctx.createGain();
+  pianoGain.gain.value = $("pianoOn").checked ? +$("pianoGain").value : 0;
+  pianoGain.connect(ctx.destination);
+
+  songSrc = ctx.createBufferSource();
+  songSrc.buffer = songBuffer;
+  songSrc.connect(songGain);
+  songSrc.start(0, FROM + offsetSec, DURATION - offsetSec);
+  playStartCtxTime = ctx.currentTime;
+  playStartOffset = offsetSec;
+
+  for (const n of configs[currentCfg].notes) {
+    const startInSlice = n.fromSec - FROM;
+    if (startInSlice < offsetSec - 0.05) continue;
+    const dur = Math.min(n.toSec, TO) - Math.max(n.fromSec, FROM + offsetSec);
+    if (dur <= 0.02) continue;
+    const startCtx = playStartCtxTime + (startInSlice - offsetSec);
+    schedulePianoNote(n.midi, startCtx, dur, n.amplitude || 0.5);
+  }
+
+  isPlaying = true;
+  $("playBtn").textContent = "■ stop";
+  raf = requestAnimationFrame(tick);
+  songSrc.onended = () => { if (isPlaying) stopPlay(); };
+}
+
+function stopPlay() {
+  if (!isPlaying) return;
+  try { songSrc?.stop(); } catch {}
+  for (const o of scheduledOscs) { try { o.stop(); } catch {} }
+  scheduledOscs = [];
+  cancelAnimationFrame(raf);
+  isPlaying = false;
+  $("playBtn").textContent = "▶ play";
+}
+
+function schedulePianoNote(midi, startCtx, durSec, amp) {
+  if (startCtx < ctx.currentTime - 0.001) startCtx = ctx.currentTime + 0.005;
+  const freq = 440 * Math.pow(2, (midi - 69) / 12);
+  const osc = ctx.createOscillator();
+  osc.type = "triangle";
+  osc.frequency.value = freq;
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0, startCtx);
+  env.gain.linearRampToValueAtTime(amp * 0.7, startCtx + 0.01);
+  env.gain.exponentialRampToValueAtTime(Math.max(0.001, amp * 0.25), startCtx + Math.min(0.4, durSec * 0.6));
+  env.gain.exponentialRampToValueAtTime(0.0005, startCtx + durSec + 0.08);
+  osc.connect(env);
+  env.connect(pianoGain);
+  osc.start(startCtx);
+  osc.stop(startCtx + durSec + 0.12);
+  scheduledOscs.push(osc);
+}
+
+function currentTrackTime() {
+  if (!isPlaying) return FROM;
+  return FROM + (ctx.currentTime - playStartCtxTime + playStartOffset);
+}
+
+function tick() {
+  if (!isPlaying) return;
+  const t = currentTrackTime();
+  $("timeLabel").textContent = `${fmt(t)} / ${fmt(TO)}`;
+  $("meter").style.width = `${((t - FROM) / DURATION) * 100}%`;
+  drawRoll(t);
+  raf = requestAnimationFrame(tick);
+}
+
+function fmt(s) {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60).toString().padStart(2, "0");
+  return `${m}:${sec}`;
+}
+
+function drawRoll(trackT) {
+  const svg = $("roll");
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  const usable = H - PAD * 2;
+  const laneH = usable / (RANGE * 2 + 1);
+  const midiToY = (m) => H / 2 - (m - medianMidi) * laneH;
+  const timeToX = (t) => ((t - FROM) / DURATION) * W;
+
+  for (let s = -RANGE; s <= RANGE; s++) {
+    if (s === 0 || Math.abs(s) % 2 === 0) {
+      const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      r.setAttribute("x", 0); r.setAttribute("y", midiToY(medianMidi + s) - laneH / 2);
+      r.setAttribute("width", W); r.setAttribute("height", laneH);
+      r.setAttribute("class", s === 0 ? "lane-center" : "lane-stripe");
+      svg.appendChild(r);
+    }
+  }
+
+  for (const off of [5, 7]) {
+    for (const dir of [-1, 1]) {
+      const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      l.setAttribute("x1", 0); l.setAttribute("x2", W);
+      l.setAttribute("y1", midiToY(medianMidi + off * dir));
+      l.setAttribute("y2", midiToY(medianMidi + off * dir));
+      l.setAttribute("class", "lane-line");
+      svg.appendChild(l);
+    }
+  }
+
+  const cfg = configs[currentCfg];
+  if (cfg) {
+    for (const n of cfg.notes) {
+      if (Math.abs(n.midi - medianMidi) > RANGE) continue;
+      const x = timeToX(Math.max(FROM, n.fromSec));
+      const x2 = timeToX(Math.min(TO, n.toSec));
+      const w = Math.max(2, x2 - x);
+      const y = midiToY(n.midi) - laneH / 2 + 1;
+      const h = Math.max(3, laneH - 2);
+      const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      r.setAttribute("x", x); r.setAttribute("y", y);
+      r.setAttribute("width", w); r.setAttribute("height", h);
+      r.setAttribute("rx", 2.5);
+      const active = trackT !== undefined && trackT >= n.fromSec && trackT < n.toSec;
+      r.setAttribute("class", active ? "note-rect active" : "note-rect");
+      svg.appendChild(r);
+    }
+  }
+
+  for (let t = Math.ceil(FROM / 5) * 5; t <= TO; t += 5) {
+    const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    txt.setAttribute("x", timeToX(t) + 2);
+    txt.setAttribute("y", H - 2);
+    txt.setAttribute("class", "axis-label");
+    txt.textContent = fmt(t);
+    svg.appendChild(txt);
+  }
+
+  if (trackT !== undefined) {
+    const x = timeToX(Math.max(FROM, Math.min(TO, trackT)));
+    const ph = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    ph.setAttribute("x1", x); ph.setAttribute("x2", x);
+    ph.setAttribute("y1", 0); ph.setAttribute("y2", H);
+    ph.setAttribute("stroke", "#2C2C2A"); ph.setAttribute("stroke-width", "1"); ph.setAttribute("opacity", "0.6");
+    svg.appendChild(ph);
+  }
+}
+
+$("playBtn").addEventListener("click", () => {
+  if (isPlaying) stopPlay();
+  else { if (ctx?.state === "suspended") ctx.resume(); startPlay(0); }
+});
+$("songOn").addEventListener("change", () => {
+  if (songGain) songGain.gain.setTargetAtTime($("songOn").checked ? 1 : 0, ctx.currentTime, 0.01);
+});
+$("pianoOn").addEventListener("change", () => {
+  if (pianoGain) pianoGain.gain.setTargetAtTime($("pianoOn").checked ? +$("pianoGain").value : 0, ctx.currentTime, 0.01);
+});
+$("pianoGain").addEventListener("input", () => {
+  if (pianoGain && $("pianoOn").checked) pianoGain.gain.setTargetAtTime(+$("pianoGain").value, ctx.currentTime, 0.01);
+});
+document.querySelectorAll("button.config").forEach(b => {
+  b.addEventListener("click", () => setConfig(b.dataset.cfg));
+});
+
+init();
+</script>
+</body>
+</html>

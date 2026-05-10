@@ -1,0 +1,167 @@
+{
+  "notes": [
+    {
+      "midi": 66,
+      "fromSec": 81.3714,
+      "toSec": 81.5572,
+      "amplitude": 0.6
+    },
+    {
+      "midi": 62,
+      "fromSec": 76.4578,
+      "toSec": 76.6436,
+      "amplitude": 0.685
+    },
+    {
+      "midi": 62,
+      "fromSec": 75.8193,
+      "toSec": 76.1676,
+      "amplitude": 0.733
+    },
+    {
+      "midi": 59,
+      "fromSec": 73.8211,
+      "toSec": 74.5293,
+      "amplitude": 0.692
+    },
+    {
+      "midi": 59,
+      "fromSec": 70.173,
+      "toSec": 70.3471,
+      "amplitude": 0.573
+    },
+    {
+      "midi": 60,
+      "fromSec": 67.6859,
+      "toSec": 67.9658,
+      "amplitude": 0.535
+    },
+    {
+      "midi": 59,
+      "fromSec": 66.0953,
+      "toSec": 66.3391,
+      "amplitude": 0.743
+    },
+    {
+      "midi": 60,
+      "fromSec": 65.8051,
+      "toSec": 66.0953,
+      "amplitude": 0.568
+    },
+    {
+      "midi": 54,
+      "fromSec": 64.2596,
+      "toSec": 64.4454,
+      "amplitude": 0.578
+    },
+    {
+      "midi": 54,
+      "fromSec": 61.5055,
+      "toSec": 62.0989,
+      "amplitude": 0.675
+    },
+    {
+      "midi": 54,
+      "fromSec": 57.4162,
+      "toSec": 57.6136,
+      "amplitude": 0.719
+    },
+    {
+      "midi": 54,
+      "fromSec": 55.3716,
+      "toSec": 55.9069,
+      "amplitude": 0.578
+    },
+    {
+      "midi": 55,
+      "fromSec": 51.3055,
+      "toSec": 51.8396,
+      "amplitude": 0.498
+    },
+    {
+      "midi": 54,
+      "fromSec": 47.5065,
+      "toSec": 47.6923,
+      "amplitude": 0.584
+    },
+    {
+      "midi": 54,
+      "fromSec": 41.0939,
+      "toSec": 41.3029,
+      "amplitude": 0.561
+    },
+    {
+      "midi": 54,
+      "fromSec": 37.411,
+      "toSec": 37.6548,
+      "amplitude": 0.56
+    },
+    {
+      "midi": 55,
+      "fromSec": 34.9716,
+      "toSec": 35.4244,
+      "amplitude": 0.763
+    },
+    {
+      "midi": 55,
+      "fromSec": 34.7278,
+      "toSec": 34.9716,
+      "amplitude": 0.707
+    },
+    {
+      "midi": 54,
+      "fromSec": 33.4611,
+      "toSec": 33.6352,
+      "amplitude": 0.722
+    },
+    {
+      "midi": 54,
+      "fromSec": 32.9618,
+      "toSec": 33.1708,
+      "amplitude": 0.593
+    },
+    {
+      "midi": 59,
+      "fromSec": 31.2771,
+      "toSec": 31.4396,
+      "amplitude": 0.716
+    },
+    {
+      "midi": 66,
+      "fromSec": 30.7546,
+      "toSec": 31.6254,
+      "amplitude": 0.575
+    },
+    {
+      "midi": 59,
+      "fromSec": 30.7314,
+      "toSec": 30.9288,
+      "amplitude": 0.696
+    },
+    {
+      "midi": 61,
+      "fromSec": 30.2322,
+      "toSec": 30.5224,
+      "amplitude": 0.543
+    },
+    {
+      "midi": 66,
+      "fromSec": 30.2438,
+      "toSec": 30.5108,
+      "amplitude": 0.555
+    },
+    {
+      "midi": 55,
+      "fromSec": 59.3448,
+      "toSec": 59.5189,
+      "amplitude": 0.605
+    }
+  ],
+  "params": {
+    "onset_threshold": 0.7,
+    "frame_threshold": 0.5,
+    "minimum_note_length": 150.0,
+    "melodia_trick": true,
+    "source": "source_(Vocals)_htdemucs_6s.flac"
+  }
+}
