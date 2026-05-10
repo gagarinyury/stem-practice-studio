@@ -63,12 +63,23 @@ def main() -> int:
     asr_model = asr_model.to(device).eval()
     print(f"[asr] model ready in {time.perf_counter() - t0:.1f}s", file=sys.stderr)
 
-    info = sf.info(str(args.audio))
-    duration = info.frames / info.samplerate
-    print(f"[asr] audio: {duration:.1f}s @ {info.samplerate}Hz, {info.channels}ch", file=sys.stderr)
+    audio, sr = sf.read(str(args.audio), dtype="float32", always_2d=False)
+    if audio.ndim == 2:
+        audio = audio.mean(axis=1)  # downmix to mono
+    duration = len(audio) / sr
+    print(f"[asr] audio raw: {duration:.1f}s @ {sr}Hz mono", file=sys.stderr)
+
+    # Parakeet expects 16 kHz mono; resample if needed.
+    if sr != 16000:
+        import torchaudio.functional as taF
+        audio = taF.resample(
+            torch.from_numpy(audio).unsqueeze(0), orig_freq=sr, new_freq=16000
+        ).squeeze(0).numpy()
+        sr = 16000
+        print(f"[asr] resampled to 16 kHz, {len(audio)} samples", file=sys.stderr)
 
     t0 = time.perf_counter()
-    output = asr_model.transcribe([str(args.audio)], timestamps=True)
+    output = asr_model.transcribe([audio], timestamps=True)
     elapsed = time.perf_counter() - t0
     rtf = elapsed / duration if duration else 0.0
     print(f"[asr] inference: {elapsed:.1f}s  RTF={rtf:.3f}", file=sys.stderr)
