@@ -38,6 +38,8 @@ export class StemEngine {
   private startCtxTime = 0;
   private startOffset = 0;
   private duration = 0;
+  private loopRange: { from: number; to: number } | null = null;
+  private rate = 1.0;
   state: EngineState = "idle";
   onStateChange?: (s: EngineState) => void;
 
@@ -129,6 +131,42 @@ export class StemEngine {
     const left = this.rmsBuckets(leftCh, buckets, totalSamples);
     const right = this.rmsBuckets(rightCh, buckets, totalSamples);
     // Normalize jointly so L/R retain their relative differences
+    const joint = new Float32Array(buckets * 2);
+    joint.set(left, 0);
+    joint.set(right, buckets);
+    this.normalizePercentile(joint);
+    left.set(joint.subarray(0, buckets));
+    right.set(joint.subarray(buckets));
+    return { left, right };
+  }
+
+  /** Mixed L/R peaks for a time slice [fromSec, toSec]. Same normalization as getPeaks. */
+  getPeaksRange(
+    buckets: number,
+    fromSec: number,
+    toSec: number,
+  ): { left: Float32Array; right: Float32Array } {
+    if (this.stems.length === 0 || toSec <= fromSec) {
+      return { left: new Float32Array(buckets), right: new Float32Array(buckets) };
+    }
+    const sampleRate = this.stems[0].buffer.sampleRate;
+    const startSample = Math.max(0, Math.floor(fromSec * sampleRate));
+    const endSample = Math.min(
+      Math.floor(this.duration * sampleRate),
+      Math.floor(toSec * sampleRate),
+    );
+    const span = endSample - startSample;
+    const leftCh: Float32Array[] = [];
+    const rightCh: Float32Array[] = [];
+    for (const s of this.stems) {
+      leftCh.push(s.buffer.getChannelData(0).subarray(startSample, endSample));
+      rightCh.push(
+        (s.buffer.numberOfChannels > 1 ? s.buffer.getChannelData(1) : s.buffer.getChannelData(0))
+          .subarray(startSample, endSample),
+      );
+    }
+    const left = this.rmsBuckets(leftCh, buckets, span);
+    const right = this.rmsBuckets(rightCh, buckets, span);
     const joint = new Float32Array(buckets * 2);
     joint.set(left, 0);
     joint.set(right, buckets);
@@ -230,12 +268,23 @@ export class StemEngine {
     if (!this.ctx || this.stems.length === 0) return;
     if (this.state === "playing") return;
     if (this.ctx.state === "suspended") this.ctx.resume();
-    const offset = this.startOffset;
+    let offset = this.startOffset;
+    if (this.loopRange) {
+      // Clamp to loop window so we always start somewhere sensible.
+      offset = Math.max(this.loopRange.from, Math.min(offset, this.loopRange.to - 0.001));
+      this.startOffset = offset;
+    }
     this.startCtxTime = this.ctx.currentTime;
     for (const stem of this.stems) {
       const src = this.ctx.createBufferSource();
       src.buffer = stem.buffer;
       src.connect(stem.gain);
+      src.playbackRate.value = this.rate;
+      if (this.loopRange) {
+        src.loop = true;
+        src.loopStart = this.loopRange.from;
+        src.loopEnd = this.loopRange.to;
+      }
       src.start(0, offset);
       stem.source = src;
     }
@@ -289,12 +338,52 @@ export class StemEngine {
     return this.stems.find((s) => s.key === key)?.muted ?? false;
   }
 
+  /** Set or clear an A-B loop window. Updates already-playing sources. */
+  setLoop(range: { from: number; to: number } | null): void {
+    this.loopRange = range;
+    for (const stem of this.stems) {
+      if (!stem.source) continue;
+      if (range && range.to > range.from) {
+        stem.source.loop = true;
+        stem.source.loopStart = range.from;
+        stem.source.loopEnd = range.to;
+      } else {
+        stem.source.loop = false;
+      }
+    }
+  }
+
+  /**
+   * Apply a global playback rate to all sources. Note: this also shifts pitch
+   * (Web Audio's `playbackRate` couples them). True independent tempo/pitch
+   * needs a rubberband-wasm worklet — wired in a later iteration.
+   */
+  setPlaybackRate(rate: number): void {
+    if (this.state === "playing" && this.ctx) {
+      // Snapshot current playhead before changing the clock.
+      this.startOffset = this.currentTime;
+      this.startCtxTime = this.ctx.currentTime;
+    }
+    this.rate = rate;
+    for (const stem of this.stems) {
+      if (stem.source) stem.source.playbackRate.value = rate;
+    }
+  }
+
   get currentTime(): number {
     if (!this.ctx) return 0;
+    let t = this.startOffset;
     if (this.state === "playing") {
-      return this.startOffset + (this.ctx.currentTime - this.startCtxTime);
+      t = this.startOffset + (this.ctx.currentTime - this.startCtxTime) * this.rate;
     }
-    return this.startOffset;
+    if (this.loopRange) {
+      const { from, to } = this.loopRange;
+      const len = to - from;
+      if (len > 0 && t >= from) {
+        return from + ((t - from) % len);
+      }
+    }
+    return t;
   }
 
   get totalDuration(): number {

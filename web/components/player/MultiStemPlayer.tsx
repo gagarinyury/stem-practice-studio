@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
   IconChevronDown,
@@ -8,7 +9,7 @@ import {
   IconMusic,
   IconPlayerPause,
   IconPlayerPlay,
-  IconRepeat,
+  IconHighlight,
   IconRewindBackward15,
   IconRewindForward15,
 } from "@tabler/icons-react";
@@ -343,9 +344,9 @@ export function MultiStemPlayer({ manifest, aligned }: Props) {
               <IconRewindForward15 size={22} stroke={1.5} className="text-ink" />
             </button>
           </div>
-          <button>
-            <IconRepeat size={22} stroke={1.5} className="text-ink" />
-          </button>
+          <Link href={`/select/${manifest.id}`} className="text-ink" title="Pick what to learn">
+            <IconHighlight size={22} stroke={1.5} />
+          </Link>
         </div>
 
         <div className="h-7" />
