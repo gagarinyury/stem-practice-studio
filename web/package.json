@@ -8,7 +8,7 @@
     "start": "next start -p 4323",
     "lint": "eslint",
     "test": "node scripts/test-rubberband.mjs && node scripts/test-engine-time.mjs",
-    "postinstall": "cp -f node_modules/@echogarden/rubberband-wasm/rubberband.wasm public/rubberband.wasm"
+    "postinstall": "cp -f node_modules/@echogarden/rubberband-wasm/rubberband.wasm public/rubberband.wasm && cp -f node_modules/@echogarden/rubberband-wasm/rubberband.js public/rubberband.js"
   },
   "dependencies": {
     "@echogarden/rubberband-wasm": "^0.2.0",

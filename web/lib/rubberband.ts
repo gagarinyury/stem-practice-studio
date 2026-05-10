@@ -51,10 +51,16 @@ let modulePromise: Promise<RBModule> | null = null;
 async function getModule(): Promise<RBModule> {
   if (!modulePromise) {
     modulePromise = (async () => {
-      const RubberbandFactory = (
-        await import(/* webpackIgnore: true */ "@echogarden/rubberband-wasm")
-      ).default as (opts: { locateFile: (p: string) => string }) => Promise<RBModule>;
-      return RubberbandFactory({
+      // Load the raw ESM file from /public — bypassing the bundler so
+      // Turbopack/Webpack don't trip over the Node-only branches inside
+      // rubberband.js (it does `await import("module")` if it detects
+      // ENVIRONMENT_IS_NODE, which never fires in the browser but the
+      // bundler tries to resolve it statically).
+      const url = "/rubberband.js";
+      const factoryMod = (await import(/* webpackIgnore: true */ /* turbopackIgnore: true */ url)) as {
+        default: (opts: { locateFile: (p: string) => string }) => Promise<RBModule>;
+      };
+      return factoryMod.default({
         locateFile: (path: string) => (path.endsWith(".wasm") ? "/rubberband.wasm" : path),
       });
     })();
