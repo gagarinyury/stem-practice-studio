@@ -1,0 +1,1241 @@
+{
+  "source": "lrclib",
+  "artist": "Tom Odell",
+  "title": "Another Love",
+  "duration": 248.0,
+  "synced": true,
+  "lines": [
+    "I wanna take you somewhere so you know I care",
+    "But it's so cold, and I don't know where",
+    "I brought you daffodils in a pretty string",
+    "But they won't flower like they did last spring",
+    "And I wanna kiss you, make you feel alright",
+    "I'm just so tired to share my nights",
+    "I wanna cry and I wanna love",
+    "But all my tears have been used up",
+    "On another love, another love",
+    "All my tears have been used up",
+    "On another love, another love",
+    "All my tears have been used up",
+    "On another love, another love",
+    "All my tears have been used up",
+    "Oh, ooh",
+    "And if somebody hurts you, I wanna fight",
+    "But my hands been broken, one too many times",
+    "So I'll use my voice, I'll be so fucking rude",
+    "Words, they always win, but I know I'll lose",
+    "And I'd sing a song, that'd be just ours",
+    "But I sang 'em all to another heart",
+    "And I wanna cry I wanna learn to love",
+    "But all my tears have been used up",
+    "On another love, another love",
+    "All my tears have been used up",
+    "On another love, another love",
+    "All my tears have been used up",
+    "On another love, another love",
+    "All my tears have been used up",
+    "Oh, oh, oh",
+    "(Oh, need a love, now, my heart is thinking of)",
+    "I wanna sing a song, that'd be just ours",
+    "But I sang 'em all to another heart",
+    "And I wanna cry, I wanna fall in love",
+    "But all my tears have been used up",
+    "On another love, another love",
+    "All my tears have been used up",
+    "On another love, another love",
+    "All my tears have been used up",
+    "On another love, another love",
+    "All my tears have been used up",
+    "Oh, oh"
+  ],
+  "words": [
+    {
+      "word": "I",
+      "line": 0
+    },
+    {
+      "word": "wanna",
+      "line": 0
+    },
+    {
+      "word": "take",
+      "line": 0
+    },
+    {
+      "word": "you",
+      "line": 0
+    },
+    {
+      "word": "somewhere",
+      "line": 0
+    },
+    {
+      "word": "so",
+      "line": 0
+    },
+    {
+      "word": "you",
+      "line": 0
+    },
+    {
+      "word": "know",
+      "line": 0
+    },
+    {
+      "word": "I",
+      "line": 0
+    },
+    {
+      "word": "care",
+      "line": 0
+    },
+    {
+      "word": "But",
+      "line": 1
+    },
+    {
+      "word": "it's",
+      "line": 1
+    },
+    {
+      "word": "so",
+      "line": 1
+    },
+    {
+      "word": "cold,",
+      "line": 1
+    },
+    {
+      "word": "and",
+      "line": 1
+    },
+    {
+      "word": "I",
+      "line": 1
+    },
+    {
+      "word": "don't",
+      "line": 1
+    },
+    {
+      "word": "know",
+      "line": 1
+    },
+    {
+      "word": "where",
+      "line": 1
+    },
+    {
+      "word": "I",
+      "line": 2
+    },
+    {
+      "word": "brought",
+      "line": 2
+    },
+    {
+      "word": "you",
+      "line": 2
+    },
+    {
+      "word": "daffodils",
+      "line": 2
+    },
+    {
+      "word": "in",
+      "line": 2
+    },
+    {
+      "word": "a",
+      "line": 2
+    },
+    {
+      "word": "pretty",
+      "line": 2
+    },
+    {
+      "word": "string",
+      "line": 2
+    },
+    {
+      "word": "But",
+      "line": 3
+    },
+    {
+      "word": "they",
+      "line": 3
+    },
+    {
+      "word": "won't",
+      "line": 3
+    },
+    {
+      "word": "flower",
+      "line": 3
+    },
+    {
+      "word": "like",
+      "line": 3
+    },
+    {
+      "word": "they",
+      "line": 3
+    },
+    {
+      "word": "did",
+      "line": 3
+    },
+    {
+      "word": "last",
+      "line": 3
+    },
+    {
+      "word": "spring",
+      "line": 3
+    },
+    {
+      "word": "And",
+      "line": 4
+    },
+    {
+      "word": "I",
+      "line": 4
+    },
+    {
+      "word": "wanna",
+      "line": 4
+    },
+    {
+      "word": "kiss",
+      "line": 4
+    },
+    {
+      "word": "you,",
+      "line": 4
+    },
+    {
+      "word": "make",
+      "line": 4
+    },
+    {
+      "word": "you",
+      "line": 4
+    },
+    {
+      "word": "feel",
+      "line": 4
+    },
+    {
+      "word": "alright",
+      "line": 4
+    },
+    {
+      "word": "I'm",
+      "line": 5
+    },
+    {
+      "word": "just",
+      "line": 5
+    },
+    {
+      "word": "so",
+      "line": 5
+    },
+    {
+      "word": "tired",
+      "line": 5
+    },
+    {
+      "word": "to",
+      "line": 5
+    },
+    {
+      "word": "share",
+      "line": 5
+    },
+    {
+      "word": "my",
+      "line": 5
+    },
+    {
+      "word": "nights",
+      "line": 5
+    },
+    {
+      "word": "I",
+      "line": 6
+    },
+    {
+      "word": "wanna",
+      "line": 6
+    },
+    {
+      "word": "cry",
+      "line": 6
+    },
+    {
+      "word": "and",
+      "line": 6
+    },
+    {
+      "word": "I",
+      "line": 6
+    },
+    {
+      "word": "wanna",
+      "line": 6
+    },
+    {
+      "word": "love",
+      "line": 6
+    },
+    {
+      "word": "But",
+      "line": 7
+    },
+    {
+      "word": "all",
+      "line": 7
+    },
+    {
+      "word": "my",
+      "line": 7
+    },
+    {
+      "word": "tears",
+      "line": 7
+    },
+    {
+      "word": "have",
+      "line": 7
+    },
+    {
+      "word": "been",
+      "line": 7
+    },
+    {
+      "word": "used",
+      "line": 7
+    },
+    {
+      "word": "up",
+      "line": 7
+    },
+    {
+      "word": "On",
+      "line": 8
+    },
+    {
+      "word": "another",
+      "line": 8
+    },
+    {
+      "word": "love,",
+      "line": 8
+    },
+    {
+      "word": "another",
+      "line": 8
+    },
+    {
+      "word": "love",
+      "line": 8
+    },
+    {
+      "word": "All",
+      "line": 9
+    },
+    {
+      "word": "my",
+      "line": 9
+    },
+    {
+      "word": "tears",
+      "line": 9
+    },
+    {
+      "word": "have",
+      "line": 9
+    },
+    {
+      "word": "been",
+      "line": 9
+    },
+    {
+      "word": "used",
+      "line": 9
+    },
+    {
+      "word": "up",
+      "line": 9
+    },
+    {
+      "word": "On",
+      "line": 10
+    },
+    {
+      "word": "another",
+      "line": 10
+    },
+    {
+      "word": "love,",
+      "line": 10
+    },
+    {
+      "word": "another",
+      "line": 10
+    },
+    {
+      "word": "love",
+      "line": 10
+    },
+    {
+      "word": "All",
+      "line": 11
+    },
+    {
+      "word": "my",
+      "line": 11
+    },
+    {
+      "word": "tears",
+      "line": 11
+    },
+    {
+      "word": "have",
+      "line": 11
+    },
+    {
+      "word": "been",
+      "line": 11
+    },
+    {
+      "word": "used",
+      "line": 11
+    },
+    {
+      "word": "up",
+      "line": 11
+    },
+    {
+      "word": "On",
+      "line": 12
+    },
+    {
+      "word": "another",
+      "line": 12
+    },
+    {
+      "word": "love,",
+      "line": 12
+    },
+    {
+      "word": "another",
+      "line": 12
+    },
+    {
+      "word": "love",
+      "line": 12
+    },
+    {
+      "word": "All",
+      "line": 13
+    },
+    {
+      "word": "my",
+      "line": 13
+    },
+    {
+      "word": "tears",
+      "line": 13
+    },
+    {
+      "word": "have",
+      "line": 13
+    },
+    {
+      "word": "been",
+      "line": 13
+    },
+    {
+      "word": "used",
+      "line": 13
+    },
+    {
+      "word": "up",
+      "line": 13
+    },
+    {
+      "word": "Oh,",
+      "line": 14
+    },
+    {
+      "word": "ooh",
+      "line": 14
+    },
+    {
+      "word": "And",
+      "line": 15
+    },
+    {
+      "word": "if",
+      "line": 15
+    },
+    {
+      "word": "somebody",
+      "line": 15
+    },
+    {
+      "word": "hurts",
+      "line": 15
+    },
+    {
+      "word": "you,",
+      "line": 15
+    },
+    {
+      "word": "I",
+      "line": 15
+    },
+    {
+      "word": "wanna",
+      "line": 15
+    },
+    {
+      "word": "fight",
+      "line": 15
+    },
+    {
+      "word": "But",
+      "line": 16
+    },
+    {
+      "word": "my",
+      "line": 16
+    },
+    {
+      "word": "hands",
+      "line": 16
+    },
+    {
+      "word": "been",
+      "line": 16
+    },
+    {
+      "word": "broken,",
+      "line": 16
+    },
+    {
+      "word": "one",
+      "line": 16
+    },
+    {
+      "word": "too",
+      "line": 16
+    },
+    {
+      "word": "many",
+      "line": 16
+    },
+    {
+      "word": "times",
+      "line": 16
+    },
+    {
+      "word": "So",
+      "line": 17
+    },
+    {
+      "word": "I'll",
+      "line": 17
+    },
+    {
+      "word": "use",
+      "line": 17
+    },
+    {
+      "word": "my",
+      "line": 17
+    },
+    {
+      "word": "voice,",
+      "line": 17
+    },
+    {
+      "word": "I'll",
+      "line": 17
+    },
+    {
+      "word": "be",
+      "line": 17
+    },
+    {
+      "word": "so",
+      "line": 17
+    },
+    {
+      "word": "fucking",
+      "line": 17
+    },
+    {
+      "word": "rude",
+      "line": 17
+    },
+    {
+      "word": "Words,",
+      "line": 18
+    },
+    {
+      "word": "they",
+      "line": 18
+    },
+    {
+      "word": "always",
+      "line": 18
+    },
+    {
+      "word": "win,",
+      "line": 18
+    },
+    {
+      "word": "but",
+      "line": 18
+    },
+    {
+      "word": "I",
+      "line": 18
+    },
+    {
+      "word": "know",
+      "line": 18
+    },
+    {
+      "word": "I'll",
+      "line": 18
+    },
+    {
+      "word": "lose",
+      "line": 18
+    },
+    {
+      "word": "And",
+      "line": 19
+    },
+    {
+      "word": "I'd",
+      "line": 19
+    },
+    {
+      "word": "sing",
+      "line": 19
+    },
+    {
+      "word": "a",
+      "line": 19
+    },
+    {
+      "word": "song,",
+      "line": 19
+    },
+    {
+      "word": "that'd",
+      "line": 19
+    },
+    {
+      "word": "be",
+      "line": 19
+    },
+    {
+      "word": "just",
+      "line": 19
+    },
+    {
+      "word": "ours",
+      "line": 19
+    },
+    {
+      "word": "But",
+      "line": 20
+    },
+    {
+      "word": "I",
+      "line": 20
+    },
+    {
+      "word": "sang",
+      "line": 20
+    },
+    {
+      "word": "'em",
+      "line": 20
+    },
+    {
+      "word": "all",
+      "line": 20
+    },
+    {
+      "word": "to",
+      "line": 20
+    },
+    {
+      "word": "another",
+      "line": 20
+    },
+    {
+      "word": "heart",
+      "line": 20
+    },
+    {
+      "word": "And",
+      "line": 21
+    },
+    {
+      "word": "I",
+      "line": 21
+    },
+    {
+      "word": "wanna",
+      "line": 21
+    },
+    {
+      "word": "cry",
+      "line": 21
+    },
+    {
+      "word": "I",
+      "line": 21
+    },
+    {
+      "word": "wanna",
+      "line": 21
+    },
+    {
+      "word": "learn",
+      "line": 21
+    },
+    {
+      "word": "to",
+      "line": 21
+    },
+    {
+      "word": "love",
+      "line": 21
+    },
+    {
+      "word": "But",
+      "line": 22
+    },
+    {
+      "word": "all",
+      "line": 22
+    },
+    {
+      "word": "my",
+      "line": 22
+    },
+    {
+      "word": "tears",
+      "line": 22
+    },
+    {
+      "word": "have",
+      "line": 22
+    },
+    {
+      "word": "been",
+      "line": 22
+    },
+    {
+      "word": "used",
+      "line": 22
+    },
+    {
+      "word": "up",
+      "line": 22
+    },
+    {
+      "word": "On",
+      "line": 23
+    },
+    {
+      "word": "another",
+      "line": 23
+    },
+    {
+      "word": "love,",
+      "line": 23
+    },
+    {
+      "word": "another",
+      "line": 23
+    },
+    {
+      "word": "love",
+      "line": 23
+    },
+    {
+      "word": "All",
+      "line": 24
+    },
+    {
+      "word": "my",
+      "line": 24
+    },
+    {
+      "word": "tears",
+      "line": 24
+    },
+    {
+      "word": "have",
+      "line": 24
+    },
+    {
+      "word": "been",
+      "line": 24
+    },
+    {
+      "word": "used",
+      "line": 24
+    },
+    {
+      "word": "up",
+      "line": 24
+    },
+    {
+      "word": "On",
+      "line": 25
+    },
+    {
+      "word": "another",
+      "line": 25
+    },
+    {
+      "word": "love,",
+      "line": 25
+    },
+    {
+      "word": "another",
+      "line": 25
+    },
+    {
+      "word": "love",
+      "line": 25
+    },
+    {
+      "word": "All",
+      "line": 26
+    },
+    {
+      "word": "my",
+      "line": 26
+    },
+    {
+      "word": "tears",
+      "line": 26
+    },
+    {
+      "word": "have",
+      "line": 26
+    },
+    {
+      "word": "been",
+      "line": 26
+    },
+    {
+      "word": "used",
+      "line": 26
+    },
+    {
+      "word": "up",
+      "line": 26
+    },
+    {
+      "word": "On",
+      "line": 27
+    },
+    {
+      "word": "another",
+      "line": 27
+    },
+    {
+      "word": "love,",
+      "line": 27
+    },
+    {
+      "word": "another",
+      "line": 27
+    },
+    {
+      "word": "love",
+      "line": 27
+    },
+    {
+      "word": "All",
+      "line": 28
+    },
+    {
+      "word": "my",
+      "line": 28
+    },
+    {
+      "word": "tears",
+      "line": 28
+    },
+    {
+      "word": "have",
+      "line": 28
+    },
+    {
+      "word": "been",
+      "line": 28
+    },
+    {
+      "word": "used",
+      "line": 28
+    },
+    {
+      "word": "up",
+      "line": 28
+    },
+    {
+      "word": "Oh,",
+      "line": 29
+    },
+    {
+      "word": "oh,",
+      "line": 29
+    },
+    {
+      "word": "oh",
+      "line": 29
+    },
+    {
+      "word": "(Oh,",
+      "line": 30
+    },
+    {
+      "word": "need",
+      "line": 30
+    },
+    {
+      "word": "a",
+      "line": 30
+    },
+    {
+      "word": "love,",
+      "line": 30
+    },
+    {
+      "word": "now,",
+      "line": 30
+    },
+    {
+      "word": "my",
+      "line": 30
+    },
+    {
+      "word": "heart",
+      "line": 30
+    },
+    {
+      "word": "is",
+      "line": 30
+    },
+    {
+      "word": "thinking",
+      "line": 30
+    },
+    {
+      "word": "of)",
+      "line": 30
+    },
+    {
+      "word": "I",
+      "line": 31
+    },
+    {
+      "word": "wanna",
+      "line": 31
+    },
+    {
+      "word": "sing",
+      "line": 31
+    },
+    {
+      "word": "a",
+      "line": 31
+    },
+    {
+      "word": "song,",
+      "line": 31
+    },
+    {
+      "word": "that'd",
+      "line": 31
+    },
+    {
+      "word": "be",
+      "line": 31
+    },
+    {
+      "word": "just",
+      "line": 31
+    },
+    {
+      "word": "ours",
+      "line": 31
+    },
+    {
+      "word": "But",
+      "line": 32
+    },
+    {
+      "word": "I",
+      "line": 32
+    },
+    {
+      "word": "sang",
+      "line": 32
+    },
+    {
+      "word": "'em",
+      "line": 32
+    },
+    {
+      "word": "all",
+      "line": 32
+    },
+    {
+      "word": "to",
+      "line": 32
+    },
+    {
+      "word": "another",
+      "line": 32
+    },
+    {
+      "word": "heart",
+      "line": 32
+    },
+    {
+      "word": "And",
+      "line": 33
+    },
+    {
+      "word": "I",
+      "line": 33
+    },
+    {
+      "word": "wanna",
+      "line": 33
+    },
+    {
+      "word": "cry,",
+      "line": 33
+    },
+    {
+      "word": "I",
+      "line": 33
+    },
+    {
+      "word": "wanna",
+      "line": 33
+    },
+    {
+      "word": "fall",
+      "line": 33
+    },
+    {
+      "word": "in",
+      "line": 33
+    },
+    {
+      "word": "love",
+      "line": 33
+    },
+    {
+      "word": "But",
+      "line": 34
+    },
+    {
+      "word": "all",
+      "line": 34
+    },
+    {
+      "word": "my",
+      "line": 34
+    },
+    {
+      "word": "tears",
+      "line": 34
+    },
+    {
+      "word": "have",
+      "line": 34
+    },
+    {
+      "word": "been",
+      "line": 34
+    },
+    {
+      "word": "used",
+      "line": 34
+    },
+    {
+      "word": "up",
+      "line": 34
+    },
+    {
+      "word": "On",
+      "line": 35
+    },
+    {
+      "word": "another",
+      "line": 35
+    },
+    {
+      "word": "love,",
+      "line": 35
+    },
+    {
+      "word": "another",
+      "line": 35
+    },
+    {
+      "word": "love",
+      "line": 35
+    },
+    {
+      "word": "All",
+      "line": 36
+    },
+    {
+      "word": "my",
+      "line": 36
+    },
+    {
+      "word": "tears",
+      "line": 36
+    },
+    {
+      "word": "have",
+      "line": 36
+    },
+    {
+      "word": "been",
+      "line": 36
+    },
+    {
+      "word": "used",
+      "line": 36
+    },
+    {
+      "word": "up",
+      "line": 36
+    },
+    {
+      "word": "On",
+      "line": 37
+    },
+    {
+      "word": "another",
+      "line": 37
+    },
+    {
+      "word": "love,",
+      "line": 37
+    },
+    {
+      "word": "another",
+      "line": 37
+    },
+    {
+      "word": "love",
+      "line": 37
+    },
+    {
+      "word": "All",
+      "line": 38
+    },
+    {
+      "word": "my",
+      "line": 38
+    },
+    {
+      "word": "tears",
+      "line": 38
+    },
+    {
+      "word": "have",
+      "line": 38
+    },
+    {
+      "word": "been",
+      "line": 38
+    },
+    {
+      "word": "used",
+      "line": 38
+    },
+    {
+      "word": "up",
+      "line": 38
+    },
+    {
+      "word": "On",
+      "line": 39
+    },
+    {
+      "word": "another",
+      "line": 39
+    },
+    {
+      "word": "love,",
+      "line": 39
+    },
+    {
+      "word": "another",
+      "line": 39
+    },
+    {
+      "word": "love",
+      "line": 39
+    },
+    {
+      "word": "All",
+      "line": 40
+    },
+    {
+      "word": "my",
+      "line": 40
+    },
+    {
+      "word": "tears",
+      "line": 40
+    },
+    {
+      "word": "have",
+      "line": 40
+    },
+    {
+      "word": "been",
+      "line": 40
+    },
+    {
+      "word": "used",
+      "line": 40
+    },
+    {
+      "word": "up",
+      "line": 40
+    },
+    {
+      "word": "Oh,",
+      "line": 41
+    },
+    {
+      "word": "oh",
+      "line": 41
+    }
+  ]
+}
