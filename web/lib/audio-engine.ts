@@ -52,7 +52,18 @@ export class StemEngine {
   state: EngineState = "idle";
   onStateChange?: (s: EngineState) => void;
 
-  async load(specs: StemSpec[]): Promise<void> {
+  /**
+   * Load stems from URLs.
+   *
+   * When `mergeStems` is set, after fetch+decode all stems whose key is NOT
+   * in `keep` get summed into a single buffer with `mergedKey`. Drill mode
+   * uses this to collapse 6 stems → `[vocals, music]`, cutting rubberband
+   * regeneration time by ~3×.
+   */
+  async load(
+    specs: StemSpec[],
+    mergeStems?: { keep: string[]; mergedKey: string },
+  ): Promise<void> {
     this.setState("loading");
     if (!this.ctx) this.ctx = new AudioContext();
     const ctx = this.ctx;
@@ -87,13 +98,31 @@ export class StemEngine {
       })
     );
 
-    this.stems = fetched.map(({ key, buffer }) => {
+    let finalBuffers = fetched;
+    if (mergeStems) {
+      const keepSet = new Set(mergeStems.keep);
+      const kept = fetched.filter((f) => keepSet.has(f.key));
+      const toMerge = fetched.filter((f) => !keepSet.has(f.key));
+      if (toMerge.length > 0) {
+        const merged = mixAudioBuffers(ctx, toMerge.map((f) => f.buffer));
+        finalBuffers = [...kept, { key: mergeStems.mergedKey, buffer: merged }];
+      } else {
+        finalBuffers = kept;
+      }
+    }
+
+    this.stems = finalBuffers.map(({ key, buffer }) => {
       const gain = ctx.createGain();
       gain.connect(this.mix!);
       return { key, buffer, activeBuffer: buffer, source: null, gain, muted: false };
     });
     this.duration = Math.max(...this.stems.map((s) => s.buffer.duration));
     this.setState("ready");
+  }
+
+  /** Keys of currently loaded stems (post-merge if applicable). */
+  get stemKeys(): string[] {
+    return this.stems.map((s) => s.key);
   }
 
   private rmsBuckets(channels: Float32Array[], buckets: number, totalSamples: number): Float32Array {
@@ -486,4 +515,27 @@ export class StemEngine {
     this.state = s;
     this.onStateChange?.(s);
   }
+}
+
+/**
+ * Sum N AudioBuffers sample-by-sample into one buffer with the channel
+ * count and length of the largest source. Used by drill to collapse
+ * non-vocal stems into a single "music" track.
+ */
+export function mixAudioBuffers(ctx: BaseAudioContext, buffers: AudioBuffer[]): AudioBuffer {
+  if (buffers.length === 0) throw new Error("mixAudioBuffers: empty input");
+  const sampleRate = buffers[0].sampleRate;
+  const channels = Math.max(...buffers.map((b) => b.numberOfChannels));
+  const length = Math.max(...buffers.map((b) => b.length));
+  const out = ctx.createBuffer(channels, length, sampleRate);
+  for (let c = 0; c < channels; c++) {
+    const dst = out.getChannelData(c);
+    for (const b of buffers) {
+      const srcCh =
+        b.numberOfChannels > c ? b.getChannelData(c) : b.getChannelData(0);
+      const n = Math.min(dst.length, srcCh.length);
+      for (let i = 0; i < n; i++) dst[i] += srcCh[i];
+    }
+  }
+  return out;
 }

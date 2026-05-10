@@ -232,8 +232,10 @@ function DrillInner({
       key,
       url: stemUrl(manifest.id, rel),
     }));
+    // Drill only needs vocals + everything-else: collapse 5 non-vocal stems
+    // into one "music" buffer so rubberband processes 2 instead of 6.
     engine
-      .load(stems)
+      .load(stems, { keep: ["vocals"], mergedKey: "music" })
       .then(() => {
         if (cancelled) return;
         engine.setLoop({ from: effFrom, to: effTo });
@@ -280,21 +282,22 @@ function DrillInner({
     return () => clearTimeout(handle);
   }, [tempo, pitch, effFrom, effTo, audioReady]);
 
-  // Practice mode.
+  // Practice mode. Drill engine has 2 stems: "vocals" and "music".
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine || !audioReady) return;
-    const stemKeys = Object.keys(manifest.stems);
     if (mode === "acappella") {
-      engine.setSolo("vocals");
+      engine.setMuted("vocals", false);
+      engine.setMuted("music", true);
     } else if (mode === "minus") {
-      engine.setSolo(null);
-      for (const k of stemKeys) engine.setMuted(k, k === "vocals");
+      engine.setMuted("vocals", true);
+      engine.setMuted("music", false);
     } else {
-      engine.setSolo(null);
-      for (const k of stemKeys) engine.setMuted(k, false);
+      engine.setMuted("vocals", false);
+      engine.setMuted("music", false);
     }
-  }, [mode, audioReady, manifest.stems]);
+    engine.setSolo(null);
+  }, [mode, audioReady]);
 
   // RAF: playhead + loop wrap counter (also bumps `attempts` on chunk).
   const lastTimeRef = useRef(effFrom);

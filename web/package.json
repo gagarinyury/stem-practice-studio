@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start -p 4323",
     "lint": "eslint",
-    "test": "node scripts/test-rubberband.mjs && node scripts/test-engine-time.mjs && node scripts/test-drill-logic.mjs",
+    "test": "node scripts/test-rubberband.mjs && node scripts/test-engine-time.mjs && node scripts/test-drill-logic.mjs && node scripts/test-mix-buffers.mjs",
     "postinstall": "cp -f node_modules/@echogarden/rubberband-wasm/rubberband.wasm public/rubberband.wasm && cp -f node_modules/@echogarden/rubberband-wasm/rubberband.js public/rubberband.js"
   },
   "dependencies": {
