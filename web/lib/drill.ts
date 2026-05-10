@@ -37,21 +37,47 @@ export function pickPhrase(
     const from = Math.min(opts.fromSec, opts.toSec);
     const to = Math.max(opts.fromSec, opts.toSec);
     const words = aligned.words.filter((w) => w.end > from && w.start < to);
-    if (words.length === 0) return null;
-    const wLines = new Set(words.map((w) => w.line));
-    const lineIndex = wLines.size === 1 ? words[0].line : null;
-    const text =
-      lineIndex !== null
-        ? lines[lineIndex] ?? words.map((w) => w.word).join(" ")
-        : words.map((w) => w.word).join(" ");
-    return {
-      lineIndex,
-      totalLines: lines.length,
-      text,
-      words,
-      from,
-      to,
-    };
+    if (words.length > 0) {
+      const wLines = new Set(words.map((w) => w.line));
+      const lineIndex = wLines.size === 1 ? words[0].line : null;
+      const text =
+        lineIndex !== null
+          ? lines[lineIndex] ?? words.map((w) => w.word).join(" ")
+          : words.map((w) => w.word).join(" ");
+      return {
+        lineIndex,
+        totalLines: lines.length,
+        text,
+        words,
+        from,
+        to,
+      };
+    }
+    // Range had no aligned words. Fall back to the closest line by midpoint.
+    const mid = (from + to) / 2;
+    let best: number | null = null;
+    let bestDist = Infinity;
+    for (const lineNo of linesWithWords) {
+      const ws = grouped.get(lineNo)!;
+      const lineMid = (Math.min(...ws.map((w) => w.start)) + Math.max(...ws.map((w) => w.end))) / 2;
+      const d = Math.abs(lineMid - mid);
+      if (d < bestDist) {
+        bestDist = d;
+        best = lineNo;
+      }
+    }
+    if (best !== null) {
+      const ws = grouped.get(best)!;
+      return {
+        lineIndex: best,
+        totalLines: lines.length,
+        text: lines[best] ?? ws.map((w) => w.word).join(" "),
+        words: ws,
+        from: Math.min(...ws.map((w) => w.start)),
+        to: Math.max(...ws.map((w) => w.end)),
+      };
+    }
+    return null;
   }
 
   // 2. Explicit line
