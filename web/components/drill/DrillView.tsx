@@ -20,6 +20,9 @@ import { stemUrl } from "@/lib/manifest";
 import { StemEngine } from "@/lib/audio-engine";
 import { type Chunk, listChunks, updateChunk } from "@/lib/chunks";
 import { LyricsReel } from "./LyricsReel";
+import { PitchRibbon } from "./PitchRibbon";
+import { detectPitchOffline, createMicTracker, centsDelta, type PitchCurve, type MicTracker } from "@/lib/pitch";
+import { requestMic } from "@/lib/mic";
 
 interface Props {
   manifest: Manifest;
@@ -184,6 +187,16 @@ function DrillInner({
   const [draftPre, setDraftPre] = useState<number | null>(null);
   const [draftPost, setDraftPost] = useState<number | null>(null);
 
+  // Pitch state.
+  const [targetCurve, setTargetCurve] = useState<PitchCurve | null>(null);
+  const [micActive, setMicActive] = useState(false);
+  const [micHz, setMicHz] = useState<number>(NaN);
+  const [lastScore, setLastScore] = useState<number | null>(null);
+  const [scoreHistory, setScoreHistory] = useState<number[]>([]);
+  const micTrackerRef = useRef<MicTracker | null>(null);
+  // Buffer of {hits, total} for the loop currently in progress.
+  const loopStatsRef = useRef<{ hits: number; total: number }>({ hits: 0, total: 0 });
+
   // Reset chunk-scoped state when phrase changes (chunk nav).
   useEffect(() => {
     setRepeats(0);
@@ -191,6 +204,10 @@ function DrillInner({
     setPost(initialPost);
     setDraftPre(null);
     setDraftPost(null);
+    setTargetCurve(null);
+    setLastScore(null);
+    setScoreHistory([]);
+    loopStatsRef.current = { hits: 0, total: 0 };
     // intentionally only react to phrase boundary changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phrase.from, phrase.to]);
@@ -263,6 +280,26 @@ function DrillInner({
     setPeaks(merged);
   }, [winFrom, winTo, audioReady]);
 
+  // Detect vocal pitch curve once for the current loop window. Cheap (~100ms
+  // for a 5-sec slice via pitchy MPM). Recomputed when loop boundaries shift
+  // significantly so ribbon stays accurate after pre/post nudges.
+  useEffect(() => {
+    if (!audioReady || !engineRef.current) return;
+    const vocal = engineRef.current.getStemBuffer("vocals");
+    if (!vocal) return;
+    let cancelled = false;
+    // Defer a frame so we don't block the layout commit.
+    const handle = setTimeout(() => {
+      if (cancelled) return;
+      const curve = detectPitchOffline(vocal, effFrom, effTo, 0.05);
+      if (!cancelled) setTargetCurve(curve);
+    }, 50);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [audioReady, effFrom, effTo]);
+
   // Apply tempo / pitch / loop range via rubberband. Debounced.
   const [processing, setProcessing] = useState(false);
   useEffect(() => {
@@ -299,8 +336,9 @@ function DrillInner({
     engine.setSolo(null);
   }, [mode, audioReady]);
 
-  // RAF: playhead + loop wrap counter (also bumps `attempts` on chunk).
+  // RAF: playhead + mic pitch poll + loop wrap counter + hit-rate scoring.
   const lastTimeRef = useRef(effFrom);
+  const lastMicPollRef = useRef(0);
   useEffect(() => {
     let raf = 0;
     const tick = () => {
@@ -308,16 +346,65 @@ function DrillInner({
       if (e) {
         const t = e.currentTime;
         setCurrentTime(t);
+
+        // Throttle mic pitch poll to ~50ms — pitchy is fast but RAF is 60Hz.
+        const tracker = micTrackerRef.current;
+        if (tracker && targetCurve) {
+          const now = performance.now();
+          if (now - lastMicPollRef.current >= 50) {
+            lastMicPollRef.current = now;
+            const sample = tracker.read();
+            if (sample) {
+              setMicHz(sample.hz);
+              if (Number.isFinite(sample.hz)) {
+                // Find target hz at this playback time.
+                const lo = Math.floor((t - targetCurve.fromSec) / targetCurve.hopSec);
+                const hi = lo + 1;
+                if (lo >= 0 && hi < targetCurve.times.length) {
+                  const a = targetCurve.hz[lo];
+                  const b = targetCurve.hz[hi];
+                  if (Number.isFinite(a) && Number.isFinite(b)) {
+                    const frac = (t - targetCurve.times[lo]) / (targetCurve.times[hi] - targetCurve.times[lo]);
+                    const targetHz = a + (b - a) * frac;
+                    const cents = Math.abs(centsDelta(sample.hz, targetHz, true));
+                    loopStatsRef.current.total += 1;
+                    if (cents < 50) loopStatsRef.current.hits += 1;
+                  }
+                }
+              }
+            }
+          }
+        }
+
         const len = effTo - effFrom;
         if (len > 0.1 && lastTimeRef.current > t + len * 0.5) {
           setRepeats((r) => r + 1);
-          if (currentChunkId) {
+          // Commit loop's hit-rate.
+          const { hits, total } = loopStatsRef.current;
+          if (total > 0) {
+            const score = (hits / total) * 100;
+            setLastScore(score);
+            setScoreHistory((h) => [...h.slice(-4), score]);
+            if (currentChunkId) {
+              const cur = listChunks(manifest.id).find((c) => c.id === currentChunkId);
+              if (cur) {
+                const best = Math.max(cur.bestScore ?? 0, score);
+                updateChunk(manifest.id, currentChunkId, {
+                  attempts: cur.attempts + 1,
+                  lastScore: score,
+                  bestScore: best,
+                });
+                onChunksChanged();
+              }
+            }
+          } else if (currentChunkId) {
             const cur = listChunks(manifest.id).find((c) => c.id === currentChunkId);
             if (cur) {
               updateChunk(manifest.id, currentChunkId, { attempts: cur.attempts + 1 });
               onChunksChanged();
             }
           }
+          loopStatsRef.current = { hits: 0, total: 0 };
         }
         lastTimeRef.current = t;
       }
@@ -325,7 +412,7 @@ function DrillInner({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [effFrom, effTo, currentChunkId, manifest.id, onChunksChanged]);
+  }, [effFrom, effTo, currentChunkId, manifest.id, onChunksChanged, targetCurve]);
 
   function nudge(setter: (n: number) => void, cur: number, step: number, min: number, max: number, dir: 1 | -1) {
     const next = Math.max(min, Math.min(max, +(cur + step * dir).toFixed(3)));
@@ -392,6 +479,36 @@ function DrillInner({
     setDraftPost(null);
     dragRef.current = null;
   }
+
+  // ─── Mic toggle ─────────────────────────────────────────────────────
+  async function toggleMic() {
+    if (micActive) {
+      micTrackerRef.current?.dispose();
+      micTrackerRef.current = null;
+      setMicActive(false);
+      setMicHz(NaN);
+      return;
+    }
+    try {
+      const stream = await requestMic();
+      const ctx = engineRef.current?.audioContext;
+      if (!ctx) return;
+      micTrackerRef.current = createMicTracker(ctx, stream);
+      setMicActive(true);
+      loopStatsRef.current = { hits: 0, total: 0 };
+      setLastScore(null);
+    } catch (err) {
+      console.error("[drill] mic permission denied", err);
+    }
+  }
+
+  // Cleanup mic on unmount.
+  useEffect(() => {
+    return () => {
+      micTrackerRef.current?.dispose();
+      micTrackerRef.current = null;
+    };
+  }, []);
 
   // ─── Mastered + next chunk ──────────────────────────────────────────
   function onMastered() {
@@ -510,6 +627,20 @@ function DrillInner({
         </div>
       </div>
 
+      {/* Pitch ribbon — target vocal curve + live mic dot */}
+      <div className="px-4">
+        <PitchRibbon
+          curve={targetCurve}
+          fromSec={effFrom}
+          toSec={effTo}
+          currentTime={currentTime}
+          micHz={micHz}
+          lastScore={lastScore}
+          scoreHistory={scoreHistory}
+          micActive={micActive}
+        />
+      </div>
+
       {/* Pre / Post inline row */}
       <div className="px-4 pt-2">
         <div className="flex items-center justify-between gap-3 font-mono text-[10px]">
@@ -590,12 +721,17 @@ function DrillInner({
       <div className="px-4 pt-3 pb-4 flex items-end justify-center gap-3">
         <button
           type="button"
-          className="h-14 w-12 flex flex-col items-center justify-center gap-1 text-ink opacity-50 cursor-not-allowed"
-          title="record (coming soon)"
-          disabled
+          onClick={toggleMic}
+          className="h-14 w-12 flex flex-col items-center justify-center gap-1"
+          title={micActive ? "stop pitch tracking" : "tap to enable mic + pitch feedback"}
         >
-          <IconMicrophone size={22} />
-          <span className="font-mono text-[8px] text-[var(--color-ink-muted)] leading-none">record</span>
+          <IconMicrophone
+            size={22}
+            className={micActive ? "text-[var(--color-accent-warn)]" : "text-ink"}
+          />
+          <span className="font-mono text-[8px] text-[var(--color-ink-muted)] leading-none">
+            {micActive ? "live" : "mic"}
+          </span>
         </button>
 
         <button

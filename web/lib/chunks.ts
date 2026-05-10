@@ -12,6 +12,10 @@ export interface Chunk {
   mastered: boolean;
   attempts: number;
   createdAt: number;   // unix ms
+  /** Best % in tune across all loops (octave-tolerant). */
+  bestScore?: number;
+  /** Score from the most recent completed loop. */
+  lastScore?: number;
 }
 
 const KEY = (trackId: string) => `chunks:${trackId}`;

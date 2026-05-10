@@ -7,13 +7,14 @@
     "build": "next build",
     "start": "next start -p 4323",
     "lint": "eslint",
-    "test": "node scripts/test-rubberband.mjs && node scripts/test-engine-time.mjs && node scripts/test-drill-logic.mjs && node scripts/test-mix-buffers.mjs",
+    "test": "node scripts/test-rubberband.mjs && node scripts/test-engine-time.mjs && node scripts/test-drill-logic.mjs && node scripts/test-mix-buffers.mjs && node scripts/test-pitch.mjs",
     "postinstall": "cp -f node_modules/@echogarden/rubberband-wasm/rubberband.wasm public/rubberband.wasm && cp -f node_modules/@echogarden/rubberband-wasm/rubberband.js public/rubberband.js"
   },
   "dependencies": {
     "@echogarden/rubberband-wasm": "^0.2.0",
     "@tabler/icons-react": "^3.44.0",
     "next": "16.2.6",
+    "pitchy": "^4.1.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "server-only": "^0.0.1"

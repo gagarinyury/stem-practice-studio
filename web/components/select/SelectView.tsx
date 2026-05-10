@@ -345,6 +345,9 @@ export function SelectView({ manifest, aligned }: Props) {
                     <div className="font-mono text-[10px] text-[var(--color-ink-muted)]">
                       {fmtTime(c.from)}–{fmtTime(c.to)} · {(c.to - c.from).toFixed(1)}s
                       {c.mastered ? " · ✓ mastered" : c.attempts > 0 ? ` · ${c.attempts}×` : ""}
+                      {typeof c.bestScore === "number" && c.bestScore > 0 ? (
+                        <span className="text-[var(--color-accent-vocal)]"> · best {Math.round(c.bestScore)}%</span>
+                      ) : null}
                     </div>
                   </div>
                   <Link

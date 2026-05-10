@@ -125,6 +125,16 @@ export class StemEngine {
     return this.stems.map((s) => s.key);
   }
 
+  /** Original full-length buffer for a stem (read-only — used for offline analysis). */
+  getStemBuffer(key: string): AudioBuffer | null {
+    return this.stems.find((s) => s.key === key)?.buffer ?? null;
+  }
+
+  /** AudioContext used by the engine — for callers that need to allocate buffers. */
+  get audioContext(): AudioContext | null {
+    return this.ctx;
+  }
+
   private rmsBuckets(channels: Float32Array[], buckets: number, totalSamples: number): Float32Array {
     const out = new Float32Array(buckets);
     const samplesPerBucket = Math.max(1, Math.floor(totalSamples / buckets));
