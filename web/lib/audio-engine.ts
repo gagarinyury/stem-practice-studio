@@ -5,7 +5,10 @@ export interface StemSpec {
 
 interface StemNode {
   key: string;
+  /** Original full-length stem buffer. */
   buffer: AudioBuffer;
+  /** Buffer currently bound to `source`. May be the original or a stretched slice. */
+  activeBuffer: AudioBuffer;
   source: AudioBufferSourceNode | null;
   gain: GainNode;
   muted: boolean;
@@ -40,6 +43,12 @@ export class StemEngine {
   private duration = 0;
   private loopRange: { from: number; to: number } | null = null;
   private rate = 1.0;
+  /** Set when active buffers are rubberband-stretched slices. */
+  private stretchInfo: {
+    timeRatio: number;
+    pitchScale: number;
+    loop: { from: number; to: number };
+  } | null = null;
   state: EngineState = "idle";
   onStateChange?: (s: EngineState) => void;
 
@@ -81,7 +90,7 @@ export class StemEngine {
     this.stems = fetched.map(({ key, buffer }) => {
       const gain = ctx.createGain();
       gain.connect(this.mix!);
-      return { key, buffer, source: null, gain, muted: false };
+      return { key, buffer, activeBuffer: buffer, source: null, gain, muted: false };
     });
     this.duration = Math.max(...this.stems.map((s) => s.buffer.duration));
     this.setState("ready");
@@ -270,22 +279,31 @@ export class StemEngine {
     if (this.ctx.state === "suspended") this.ctx.resume();
     let offset = this.startOffset;
     if (this.loopRange) {
-      // Clamp to loop window so we always start somewhere sensible.
       offset = Math.max(this.loopRange.from, Math.min(offset, this.loopRange.to - 0.001));
       this.startOffset = offset;
     }
     this.startCtxTime = this.ctx.currentTime;
     for (const stem of this.stems) {
       const src = this.ctx.createBufferSource();
-      src.buffer = stem.buffer;
+      src.buffer = stem.activeBuffer;
       src.connect(stem.gain);
-      src.playbackRate.value = this.rate;
-      if (this.loopRange) {
+      const stretched = !!this.stretchInfo;
+      if (!stretched) src.playbackRate.value = this.rate;
+      if (stretched && this.stretchInfo) {
+        // Stretched buffer = exactly the loop window scaled by timeRatio.
+        src.loop = true;
+        src.loopStart = 0;
+        src.loopEnd = stem.activeBuffer.duration;
+      } else if (this.loopRange) {
         src.loop = true;
         src.loopStart = this.loopRange.from;
         src.loopEnd = this.loopRange.to;
       }
-      src.start(0, offset);
+      const startAt =
+        stretched && this.stretchInfo
+          ? Math.max(0, (offset - this.stretchInfo.loop.from) * this.stretchInfo.timeRatio)
+          : offset;
+      src.start(0, startAt);
       stem.source = src;
     }
     this.setState("playing");
@@ -354,9 +372,57 @@ export class StemEngine {
   }
 
   /**
+   * Apply independent time-stretch + pitch-shift to the current loop window
+   * via offline rubberband processing. Pass `{ timeRatio: 1, pitchScale: 1 }`
+   * to fall back to native playback (cheaper, no processing time).
+   *
+   * Regenerates each stem buffer; expect ~0.5–2 s per call for short loops.
+   */
+  async setTimePitch(timeRatio: number, pitchScale: number, loopRange?: { from: number; to: number }): Promise<void> {
+    const range = loopRange ?? this.loopRange;
+    if (!range || !this.ctx) return;
+
+    const { isPassthrough, stretchAudioBuffer } = await import("./rubberband");
+
+    const wasPlaying = this.state === "playing";
+    const resumeAt = this.currentTime;
+    if (wasPlaying) this.pause();
+
+    if (isPassthrough(timeRatio, pitchScale)) {
+      // Native mode.
+      this.stretchInfo = null;
+      for (const stem of this.stems) stem.activeBuffer = stem.buffer;
+      this.loopRange = range;
+    } else {
+      const newBuffers = await Promise.all(
+        this.stems.map((stem) =>
+          stretchAudioBuffer(this.ctx!, stem.buffer, range.from, range.to, timeRatio, pitchScale),
+        ),
+      );
+      this.stems.forEach((stem, i) => {
+        stem.activeBuffer = newBuffers[i];
+      });
+      this.stretchInfo = { timeRatio, pitchScale, loop: { from: range.from, to: range.to } };
+      this.loopRange = range;
+    }
+
+    this.startOffset = Math.max(range.from, Math.min(resumeAt, range.to - 0.001));
+    if (wasPlaying) this.play();
+  }
+
+  /** Restart playback from the loop start (A marker). */
+  seekToLoopStart(): void {
+    if (this.loopRange) {
+      this.seek(this.loopRange.from);
+    } else {
+      this.seek(0);
+    }
+  }
+
+  /**
    * Apply a global playback rate to all sources. Note: this also shifts pitch
-   * (Web Audio's `playbackRate` couples them). True independent tempo/pitch
-   * needs a rubberband-wasm worklet — wired in a later iteration.
+   * (Web Audio's `playbackRate` couples them). For independent control use
+   * setTimePitch.
    */
   setPlaybackRate(rate: number): void {
     if (this.state === "playing" && this.ctx) {
@@ -372,6 +438,22 @@ export class StemEngine {
 
   get currentTime(): number {
     if (!this.ctx) return 0;
+    if (this.stretchInfo) {
+      const { from, to } = this.stretchInfo.loop;
+      const stretchedLen = (to - from) * this.stretchInfo.timeRatio;
+      let elapsedStretched = 0;
+      if (this.state === "playing") {
+        elapsedStretched =
+          (this.startOffset - from) * this.stretchInfo.timeRatio +
+          (this.ctx.currentTime - this.startCtxTime);
+      } else {
+        elapsedStretched = (this.startOffset - from) * this.stretchInfo.timeRatio;
+      }
+      if (stretchedLen > 0) {
+        elapsedStretched = ((elapsedStretched % stretchedLen) + stretchedLen) % stretchedLen;
+      }
+      return from + elapsedStretched / this.stretchInfo.timeRatio;
+    }
     let t = this.startOffset;
     if (this.state === "playing") {
       t = this.startOffset + (this.ctx.currentTime - this.startCtxTime) * this.rate;

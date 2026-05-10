@@ -4,8 +4,11 @@ import {
   IconBookmark,
   IconCheck,
   IconMicrophone,
+  IconMinus,
   IconPlayerPauseFilled,
   IconPlayerPlayFilled,
+  IconPlayerSkipBackFilled,
+  IconPlus,
   IconX,
 } from "@tabler/icons-react";
 import Link from "next/link";
@@ -14,6 +17,7 @@ import type { AlignedLyrics, Manifest } from "@/lib/manifest";
 import { pickPhrase, fmtTime, type Phrase } from "@/lib/drill";
 import { stemUrl } from "@/lib/manifest";
 import { StemEngine } from "@/lib/audio-engine";
+import { LyricsReel } from "./LyricsReel";
 
 interface Props {
   manifest: Manifest;
@@ -21,13 +25,26 @@ interface Props {
   initialLineIndex?: number;
   initialFromSec?: number;
   initialToSec?: number;
+  initialPre?: number;
+  initialPost?: number;
 }
 
-const ZOOM_PAD = 0.7; // sec of context on each side of the loop
-const BUCKETS = 53; // matches mockup bar count
+const BUCKETS = 53;
 const VIEW_W = 320;
-const VIEW_H = 80;
-const CENTER_Y = 40;
+const VIEW_H = 56;
+const CENTER_Y = 28;
+
+const TEMPO_STEP = 0.05;
+const TEMPO_MIN = 0.5;
+const TEMPO_MAX = 1.2;
+
+const PITCH_STEP = 1; // semitones
+const PITCH_MIN = -6;
+const PITCH_MAX = 6;
+
+const PAD_STEP = 0.25; // seconds
+const PAD_MIN = 0;
+const PAD_MAX = 4;
 
 export function DrillView({
   manifest,
@@ -35,6 +52,8 @@ export function DrillView({
   initialLineIndex,
   initialFromSec,
   initialToSec,
+  initialPre = 0,
+  initialPost = 0,
 }: Props) {
   const phrase = useMemo<Phrase | null>(
     () =>
@@ -54,32 +73,51 @@ export function DrillView({
     );
   }
 
-  return <DrillInner manifest={manifest} phrase={phrase} />;
+  return <DrillInner manifest={manifest} aligned={aligned} phrase={phrase} initialPre={initialPre} initialPost={initialPost} />;
 }
 
-function DrillInner({ manifest, phrase }: { manifest: Manifest; phrase: Phrase }) {
-  // Zoom window: phrase ± ZOOM_PAD sec.
-  const winFrom = Math.max(0, phrase.from - ZOOM_PAD);
-  const winTo = Math.min(manifest.duration ?? phrase.to + ZOOM_PAD, phrase.to + ZOOM_PAD);
-  const winLen = Math.max(0.001, winTo - winFrom);
-
-  // Loop A/B mapped to SVG x-coordinates.
-  const ax = ((phrase.from - winFrom) / winLen) * VIEW_W;
-  const bx = ((phrase.to - winFrom) / winLen) * VIEW_W;
-
+function DrillInner({
+  manifest,
+  aligned,
+  phrase,
+  initialPre,
+  initialPost,
+}: {
+  manifest: Manifest;
+  aligned: AlignedLyrics;
+  phrase: Phrase;
+  initialPre: number;
+  initialPost: number;
+}) {
   // Controls.
   const [tempo, setTempo] = useState(1.0);
-  const [keyShift, setKeyShift] = useState(0);
+  const [pitch, setPitch] = useState(0);
   const [mode, setMode] = useState<"acappella" | "with" | "minus">("with");
+  const [pre, setPre] = useState(initialPre);
+  const [post, setPost] = useState(initialPost);
   const [repeats, setRepeats] = useState(0);
 
-  // Engine + peaks for the zoom slice.
+  // Effective loop = phrase ± padding, clamped to track duration.
+  const trackDur = manifest.duration ?? phrase.to + 5;
+  const effFrom = Math.max(0, phrase.from - pre);
+  const effTo = Math.min(trackDur, phrase.to + post);
+
+  // Zoom window: a touch wider than the loop so A/B markers aren't on the edge.
+  const winFrom = Math.max(0, effFrom - 0.3);
+  const winTo = Math.min(trackDur, effTo + 0.3);
+  const winLen = Math.max(0.001, winTo - winFrom);
+
+  const ax = ((effFrom - winFrom) / winLen) * VIEW_W;
+  const bx = ((effTo - winFrom) / winLen) * VIEW_W;
+
+  // Engine state.
   const engineRef = useRef<StemEngine | null>(null);
   const [peaks, setPeaks] = useState<Float32Array | null>(null);
   const [audioReady, setAudioReady] = useState(false);
   const [playing, setPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(phrase.from);
+  const [currentTime, setCurrentTime] = useState(effFrom);
 
+  // Load engine once.
   useEffect(() => {
     let cancelled = false;
     const engine = new StemEngine();
@@ -93,51 +131,52 @@ function DrillInner({ manifest, phrase }: { manifest: Manifest; phrase: Phrase }
       .load(stems)
       .then(() => {
         if (cancelled) return;
-        const range = engine.getPeaksRange(BUCKETS, winFrom, winTo);
-        const merged = new Float32Array(BUCKETS);
-        for (let i = 0; i < BUCKETS; i++) merged[i] = (range.left[i] + range.right[i]) * 0.5;
-        setPeaks(merged);
-        engine.setLoop({ from: phrase.from, to: phrase.to });
-        engine.seek(phrase.from);
+        engine.setLoop({ from: effFrom, to: effTo });
+        engine.seek(effFrom);
         setAudioReady(true);
       })
       .catch(() => {
-        /* loading failed — bars stay flat */
+        /* loading failed */
       });
     return () => {
       cancelled = true;
       engine.dispose();
     };
-  }, [manifest.id, manifest.stems, winFrom, winTo, phrase.from, phrase.to]);
+    // We intentionally only depend on manifest.id — not on padding.
+    // Padding changes adjust the loop via setLoop in another effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manifest.id]);
 
-  // RAF: update playhead + count loop wraps.
-  const lastTimeRef = useRef(phrase.from);
+  // Recompute zoom-slice peaks whenever the visible window changes.
   useEffect(() => {
-    let raf = 0;
-    const tick = () => {
+    if (!audioReady || !engineRef.current) return;
+    const range = engineRef.current.getPeaksRange(BUCKETS, winFrom, winTo);
+    const merged = new Float32Array(BUCKETS);
+    for (let i = 0; i < BUCKETS; i++) merged[i] = (range.left[i] + range.right[i]) * 0.5;
+    setPeaks(merged);
+  }, [winFrom, winTo, audioReady]);
+
+  // Apply tempo / pitch / loop range via rubberband. Debounced so the user
+  // can click ± several times before triggering a regen.
+  const [processing, setProcessing] = useState(false);
+  useEffect(() => {
+    if (!audioReady) return;
+    const handle = setTimeout(async () => {
       const e = engineRef.current;
-      if (e) {
-        const t = e.currentTime;
-        setCurrentTime(t);
-        // Detect a loop wrap: time jumped backwards by ~ loopLen.
-        const len = phrase.to - phrase.from;
-        if (len > 0.1 && lastTimeRef.current > t + len * 0.5) {
-          setRepeats((r) => r + 1);
-        }
-        lastTimeRef.current = t;
+      if (!e) return;
+      const timeRatio = 1 / tempo; // tempo<1 → output longer (timeRatio>1)
+      const pitchScale = Math.pow(2, pitch / 12);
+      setProcessing(true);
+      try {
+        await e.setTimePitch(timeRatio, pitchScale, { from: effFrom, to: effTo });
+      } finally {
+        setProcessing(false);
       }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [phrase.from, phrase.to]);
+    }, 220);
+    return () => clearTimeout(handle);
+  }, [tempo, pitch, effFrom, effTo, audioReady]);
 
-  // Apply tempo to engine.
-  useEffect(() => {
-    engineRef.current?.setPlaybackRate(tempo);
-  }, [tempo]);
-
-  // Apply practice mode to engine.
+  // Practice mode.
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine || !audioReady) return;
@@ -153,135 +192,153 @@ function DrillInner({ manifest, phrase }: { manifest: Manifest; phrase: Phrase }
     }
   }, [mode, audioReady, manifest.stems]);
 
+  // RAF: update playhead + count loop wraps.
+  const lastTimeRef = useRef(effFrom);
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const e = engineRef.current;
+      if (e) {
+        const t = e.currentTime;
+        setCurrentTime(t);
+        const len = effTo - effFrom;
+        if (len > 0.1 && lastTimeRef.current > t + len * 0.5) {
+          setRepeats((r) => r + 1);
+        }
+        lastTimeRef.current = t;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [effFrom, effTo]);
+
+  function nudge(setter: (n: number) => void, cur: number, step: number, min: number, max: number, dir: 1 | -1) {
+    const next = Math.max(min, Math.min(max, +(cur + step * dir).toFixed(3)));
+    setter(next);
+  }
+
+  const playheadX = ((Math.max(winFrom, Math.min(winTo, currentTime)) - winFrom) / winLen) * VIEW_W;
+
   return (
     <div className="bg-paper rounded-[28px] border border-[var(--color-border-soft)] overflow-hidden font-serif w-[360px]">
-      {/* Status bar */}
-      <div className="px-5 pt-3.5 flex justify-between font-mono text-[11px] text-ink">
-        <span>9:41</span>
-        <span>·</span>
-      </div>
-
       {/* Header */}
-      <div className="px-5 pt-4 flex items-center justify-between">
+      <div className="px-5 pt-3.5 pb-2 flex items-center justify-between">
         <Link href={`/play/${manifest.id}`} className="text-ink">
-          <IconX size={22} />
+          <IconX size={20} />
         </Link>
         <div className="text-center">
           <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-[var(--color-accent-plan)]">
-            — drill mode —
+            — drill —
           </div>
-          <div className="text-[19px] text-ink leading-none mt-1">
+          <div className="text-[14px] font-mono text-ink leading-none mt-0.5">
             {phrase.lineIndex !== null
-              ? `Line ${phrase.lineIndex + 1} of ${phrase.totalLines}`
-              : "Custom range"}
+              ? `Line ${phrase.lineIndex + 1}/${phrase.totalLines}`
+              : "Custom"}
           </div>
         </div>
         <button type="button" className="text-ink">
-          <IconBookmark size={22} />
+          <IconBookmark size={20} />
         </button>
       </div>
 
       {/* Zoomed waveform */}
-      <div className="px-5 pt-[22px]">
-        <div className="bg-white border border-[var(--color-border-soft)] rounded-[var(--radius-md)] px-2 py-3.5">
-          <div className="flex justify-between font-mono text-[9px] text-[var(--color-ink-muted)] px-1.5 pb-2">
-            <span>{fmtTime(winFrom)}</span>
-            <span>{fmtTime((winFrom + winTo) / 2)}</span>
-            <span>{fmtTime(winTo)}</span>
-          </div>
-
+      <div className="px-4 pt-1.5">
+        <div className="bg-white border border-[var(--color-border-soft)] rounded-[var(--radius-md)] px-2 py-2.5">
           <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="block w-full">
-            {/* Loop range tint */}
-            <rect x={ax} y={0} width={Math.max(1, bx - ax)} height={VIEW_H} fill="#FAEEDA" opacity="0.45" rx="4" />
+            <rect
+              x={ax}
+              y={0}
+              width={Math.max(1, bx - ax)}
+              height={VIEW_H}
+              fill="#FAEEDA"
+              opacity="0.45"
+              rx="3"
+            />
             <line x1="0" y1={CENTER_Y} x2={VIEW_W} y2={CENTER_Y} stroke="#D3D1C7" strokeWidth="0.5" />
 
-            {/* Waveform bars (real peaks for the zoom slice) */}
             <g fill="var(--color-accent-vocal)">
               {Array.from({ length: BUCKETS }).map((_, i) => {
                 const v = peaks ? peaks[i] : 0;
-                const halfH = Math.max(1, v * (VIEW_H * 0.45));
-                const x = (i + 0.5) * (VIEW_W / BUCKETS) - 1.5;
+                const halfH = Math.max(1, v * (VIEW_H * 0.42));
+                const x = (i + 0.5) * (VIEW_W / BUCKETS) - 1.25;
                 const y = CENTER_Y - halfH;
-                return <rect key={i} x={x} y={y} width="3" height={halfH * 2} rx="1" />;
+                return <rect key={i} x={x} y={y} width="2.5" height={halfH * 2} rx="1" />;
               })}
             </g>
 
-            {/* A / B markers */}
             <line x1={ax} y1="0" x2={ax} y2={VIEW_H} stroke="#993C1D" strokeWidth="1.5" strokeDasharray="3,2" />
             <line x1={bx} y1="0" x2={bx} y2={VIEW_H} stroke="#993C1D" strokeWidth="1.5" strokeDasharray="3,2" />
-            <rect x={ax} y={0} width={Math.max(1, bx - ax)} height={VIEW_H} fill="#D85A30" opacity="0.06" />
+
+            {/* Marker labels */}
             <Marker cx={ax} label="A" />
             <Marker cx={bx} label="B" />
 
-            {/* Playhead — follows engine.currentTime */}
-            {(() => {
-              const t = playing ? currentTime : phrase.from;
-              const px = ((t - winFrom) / winLen) * VIEW_W;
-              return (
-                <>
-                  <line x1={px} y1="0" x2={px} y2={VIEW_H} stroke="#2C2C2A" strokeWidth="1" />
-                  <polygon points={`${px - 4},0 ${px + 4},0 ${px},6`} fill="#2C2C2A" />
-                </>
-              );
-            })()}
+            {/* Playhead */}
+            <line x1={playheadX} y1="0" x2={playheadX} y2={VIEW_H} stroke="#2C2C2A" strokeWidth="1" />
+            <polygon points={`${playheadX - 4},0 ${playheadX + 4},0 ${playheadX},5`} fill="#2C2C2A" />
           </svg>
-
-          <div className="flex justify-between font-mono text-[9px] text-[#993C1D] px-1.5 pt-2 tracking-[0.05em]">
-            <span>A — {fmtTime(phrase.from)}</span>
-            <span className="text-[var(--color-ink-muted)]">{(phrase.to - phrase.from).toFixed(1)} sec loop</span>
-            <span>B — {fmtTime(phrase.to)}</span>
+          <div className="flex justify-between font-mono text-[8.5px] text-[#993C1D] px-1 pt-1 tracking-[0.05em]">
+            <span>{fmtTime(effFrom)}</span>
+            <span className="text-[var(--color-ink-muted)]">{(effTo - effFrom).toFixed(1)}s · {repeats}×</span>
+            <span>{fmtTime(effTo)}</span>
           </div>
         </div>
       </div>
 
-      {/* Lyric focus */}
-      <div className="px-6 pt-[22px] text-center">
-        <div className="text-[26px] leading-[1.35] text-ink italic">
-          {renderLyric(phrase.text)}
-        </div>
-        <div className="font-mono text-[10px] text-[var(--color-ink-muted)] mt-2 tracking-[0.05em]">
-          {phrase.words.length} words · {(phrase.to - phrase.from).toFixed(1)}s
-        </div>
+      {/* Lyrics reel — 3 lines, smoothly sliding */}
+      <div className="px-4 pt-2 pb-1">
+        <LyricsReel aligned={aligned} currentTime={currentTime} />
       </div>
 
-      {/* Controls */}
-      <div className="px-5 pt-[22px] space-y-2">
-        <div className="grid grid-cols-2 gap-2">
-          <ControlCard label="tempo">
-            <div className="text-[22px] text-ink mt-0.5">×{tempo.toFixed(2)}</div>
-            <input
-              type="range"
-              min={50}
-              max={120}
-              value={Math.round(tempo * 100)}
-              onChange={(e) => setTempo(Number(e.target.value) / 100)}
-              className="w-full mt-1.5"
-            />
-          </ControlCard>
+      {/* Tempo / Pitch */}
+      <div className="px-4 pt-1 grid grid-cols-2 gap-2">
+        <NudgeCard
+          label="tempo"
+          value={`×${tempo.toFixed(2)}`}
+          onMinus={() => nudge(setTempo, tempo, TEMPO_STEP, TEMPO_MIN, TEMPO_MAX, -1)}
+          onPlus={() => nudge(setTempo, tempo, TEMPO_STEP, TEMPO_MIN, TEMPO_MAX, +1)}
+          minusDisabled={tempo <= TEMPO_MIN + 1e-6}
+          plusDisabled={tempo >= TEMPO_MAX - 1e-6}
+        />
+        <NudgeCard
+          label="key"
+          value={pitch === 0 ? "0 st" : `${pitch > 0 ? "+" : ""}${pitch} st`}
+          onMinus={() => nudge(setPitch, pitch, PITCH_STEP, PITCH_MIN, PITCH_MAX, -1)}
+          onPlus={() => nudge(setPitch, pitch, PITCH_STEP, PITCH_MIN, PITCH_MAX, +1)}
+          minusDisabled={pitch <= PITCH_MIN}
+          plusDisabled={pitch >= PITCH_MAX}
+        />
+      </div>
 
-          <ControlCard label="key">
-            <div className="text-[22px] text-ink mt-0.5">
-              {keyShift >= 0 ? "+" : ""}{keyShift}
-              <span className="text-[13px] text-[var(--color-ink-muted)] font-mono ml-1">st</span>
-            </div>
-            <input
-              type="range"
-              min={-12}
-              max={12}
-              value={keyShift}
-              onChange={(e) => setKeyShift(Number(e.target.value))}
-              className="w-full mt-1.5"
-            />
-          </ControlCard>
-        </div>
+      {/* Pre / Post padding */}
+      <div className="px-4 pt-2 grid grid-cols-2 gap-2">
+        <NudgeCard
+          label="pre"
+          value={`+${pre.toFixed(2)}s`}
+          onMinus={() => nudge(setPre, pre, PAD_STEP, PAD_MIN, PAD_MAX, -1)}
+          onPlus={() => nudge(setPre, pre, PAD_STEP, PAD_MIN, PAD_MAX, +1)}
+          minusDisabled={pre <= PAD_MIN + 1e-6}
+          plusDisabled={pre >= PAD_MAX - 1e-6}
+        />
+        <NudgeCard
+          label="post"
+          value={`+${post.toFixed(2)}s`}
+          onMinus={() => nudge(setPost, post, PAD_STEP, PAD_MIN, PAD_MAX, -1)}
+          onPlus={() => nudge(setPost, post, PAD_STEP, PAD_MIN, PAD_MAX, +1)}
+          minusDisabled={post <= PAD_MIN + 1e-6}
+          plusDisabled={post >= PAD_MAX - 1e-6}
+        />
+      </div>
 
-        {/* 3-mode practice selector */}
+      {/* 3-mode practice selector */}
+      <div className="px-4 pt-2">
         <div className="bg-white border border-[var(--color-border-soft)] rounded-[var(--radius-md)] p-1 grid grid-cols-3 gap-1">
           {(
             [
-              { key: "acappella", label: "a cappella", hint: "vocal only" },
-              { key: "with", label: "with vocals", hint: "full mix" },
-              { key: "minus", label: "minus", hint: "no vocals" },
+              { key: "acappella", label: "a cappella" },
+              { key: "with", label: "with vocals" },
+              { key: "minus", label: "minus" },
             ] as const
           ).map((m) => {
             const active = mode === m.key;
@@ -290,65 +347,98 @@ function DrillInner({ manifest, phrase }: { manifest: Manifest; phrase: Phrase }
                 key={m.key}
                 type="button"
                 onClick={() => setMode(m.key)}
-                className={`rounded-[var(--radius-sm)] py-1.5 px-2 text-center transition-colors ${
-                  active
-                    ? "bg-ink text-paper"
-                    : "text-ink hover:bg-[var(--color-surface-muted)]"
+                className={`rounded-[var(--radius-sm)] py-1.5 text-center transition-colors text-[12px] ${
+                  active ? "bg-ink text-paper" : "text-ink hover:bg-[var(--color-surface-muted)]"
                 }`}
               >
-                <div className="text-[12px] leading-tight">{m.label}</div>
-                <div
-                  className={`font-mono text-[8px] tracking-[0.05em] uppercase mt-0.5 ${
-                    active ? "text-paper/70" : "text-[var(--color-ink-muted)]"
-                  }`}
-                >
-                  {m.hint}
-                </div>
+                {m.label}
               </button>
             );
           })}
         </div>
-
-        <ControlCard label="repeats">
-          <div className="flex justify-between items-center mt-1">
-            <span className="text-[18px] text-ink">∞</span>
-            <span className="font-mono text-[11px] text-[var(--color-ink-muted)]">{repeats} done</span>
-          </div>
-        </ControlCard>
       </div>
 
-      {/* Bottom row: record / play / got it */}
-      <div className="px-6 pt-[22px] pb-7 flex items-center justify-center gap-7">
-        <button type="button" className="flex flex-col items-center gap-1 text-ink">
-          <IconMicrophone size={26} />
-          <span className="font-mono text-[9px] text-[var(--color-ink-muted)]">record</span>
+      {/* Bottom row: record / restart / play / got it */}
+      <div className="px-4 pt-3 pb-4 flex items-center justify-center gap-5">
+        <button type="button" className="flex flex-col items-center gap-0.5 text-ink">
+          <IconMicrophone size={22} />
+          <span className="font-mono text-[8px] text-[var(--color-ink-muted)]">record</span>
         </button>
 
         <button
           type="button"
           disabled={!audioReady}
-          onClick={() => engineRef.current?.toggle()}
-          className="w-16 h-16 rounded-full bg-ink flex items-center justify-center text-paper disabled:opacity-50"
+          onClick={() => engineRef.current?.seekToLoopStart()}
+          className="flex flex-col items-center gap-0.5 text-ink disabled:opacity-30"
+          title="restart loop from A"
         >
-          {playing ? <IconPlayerPauseFilled size={28} /> : <IconPlayerPlayFilled size={28} />}
+          <IconPlayerSkipBackFilled size={20} />
+          <span className="font-mono text-[8px] text-[var(--color-ink-muted)]">A</span>
         </button>
 
-        <button type="button" className="flex flex-col items-center gap-1">
-          <IconCheck size={26} className="text-[var(--color-accent-success)]" />
-          <span className="font-mono text-[9px] text-[var(--color-ink-muted)]">got it</span>
+        <button
+          type="button"
+          disabled={!audioReady || processing}
+          onClick={() => engineRef.current?.toggle()}
+          className="w-14 h-14 rounded-full bg-ink flex items-center justify-center text-paper disabled:opacity-50"
+        >
+          {processing ? (
+            <span className="font-mono text-[9px] text-paper">…</span>
+          ) : playing ? (
+            <IconPlayerPauseFilled size={24} />
+          ) : (
+            <IconPlayerPlayFilled size={24} />
+          )}
+        </button>
+
+        <button type="button" className="flex flex-col items-center gap-0.5">
+          <IconCheck size={22} className="text-[var(--color-accent-success)]" />
+          <span className="font-mono text-[8px] text-[var(--color-ink-muted)]">got it</span>
         </button>
       </div>
     </div>
   );
 }
 
-function ControlCard({ label, children }: { label: string; children: React.ReactNode }) {
+function NudgeCard({
+  label,
+  value,
+  onMinus,
+  onPlus,
+  minusDisabled,
+  plusDisabled,
+}: {
+  label: string;
+  value: string;
+  onMinus: () => void;
+  onPlus: () => void;
+  minusDisabled?: boolean;
+  plusDisabled?: boolean;
+}) {
   return (
-    <div className="bg-white border border-[var(--color-border-soft)] rounded-[var(--radius-md)] px-3.5 py-2.5">
-      <div className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-ink-muted)]">
+    <div className="bg-white border border-[var(--color-border-soft)] rounded-[var(--radius-md)] px-2 py-1.5">
+      <div className="font-mono text-[8.5px] uppercase tracking-[0.1em] text-[var(--color-ink-muted)] text-center">
         {label}
       </div>
-      {children}
+      <div className="flex items-center justify-between mt-0.5">
+        <button
+          type="button"
+          onClick={onMinus}
+          disabled={minusDisabled}
+          className="w-6 h-6 rounded-[var(--radius-sm)] bg-[var(--color-surface-muted)] text-ink flex items-center justify-center disabled:opacity-30"
+        >
+          <IconMinus size={14} />
+        </button>
+        <div className="font-mono text-[14px] text-ink tabular-nums">{value}</div>
+        <button
+          type="button"
+          onClick={onPlus}
+          disabled={plusDisabled}
+          className="w-6 h-6 rounded-[var(--radius-sm)] bg-[var(--color-surface-muted)] text-ink flex items-center justify-center disabled:opacity-30"
+        >
+          <IconPlus size={14} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -356,42 +446,18 @@ function ControlCard({ label, children }: { label: string; children: React.React
 function Marker({ cx, label }: { cx: number; label: string }) {
   return (
     <g>
-      <circle cx={cx} cy={CENTER_Y} r="6" fill="#FAF7F2" stroke="#993C1D" strokeWidth="1.5" />
+      <circle cx={cx} cy={CENTER_Y} r="5" fill="#FAF7F2" stroke="#993C1D" strokeWidth="1.5" />
       <text
         x={cx}
-        y={CENTER_Y + 4}
+        y={CENTER_Y + 3.5}
         textAnchor="middle"
         fontFamily="var(--font-mono)"
-        fontSize="8"
+        fontSize="7"
         fill="#993C1D"
         fontWeight="bold"
       >
         {label}
       </text>
     </g>
-  );
-}
-
-/** Highlight the centred word of a line (mockup-style accent). */
-function renderLyric(text: string): React.ReactNode {
-  const tokens = text.split(/(\s+)/);
-  const wordIdx: number[] = [];
-  tokens.forEach((t, i) => {
-    if (/\S/.test(t)) wordIdx.push(i);
-  });
-  if (wordIdx.length === 0) return text;
-  const focus = wordIdx[Math.floor(wordIdx.length / 2)];
-  return tokens.map((t, i) =>
-    i === focus ? (
-      <span
-        key={i}
-        className="bg-[var(--color-accent-vocal)] text-paper rounded-[3px]"
-        style={{ padding: "0 5px" }}
-      >
-        {t}
-      </span>
-    ) : (
-      <span key={i}>{t}</span>
-    ),
   );
 }
