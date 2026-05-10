@@ -137,9 +137,62 @@ build_preview.py → karaoke.html (offline, lyrics inlined, без CORS)
 
 ---
 
+# Phase 1.4 — End-to-end pipeline `pipeline/process.py`
+
+Дата: 2026-05-10
+Скрипт: `pipeline/process.py` + модули `yt.py`, `separate.py`, `asr.py`, `lrc.py`, `align.py`
+
+## Что делает
+
+Один CLI на evo: `python -m pipeline.process --url <YT> -o runs/<slug> --language ru|en --artist X --title Y`. Принимает либо локальный аудиофайл, либо YT URL.
+
+```
+yt-dlp (через bench image)              → source.wav + source.info.json
+   ↓
+htdemucs_6s (stem-practice-bench:rocm)  → 6 стемов в stems/
+   ↓
+GigaAM | Parakeet (stem-practice-asr)   → lyrics.json (raw ASR на vocals)
+   ↓
+LRCLib /api/get + /api/search           → lrc.txt + lrc_words.json
+   ↓
+NW alignment (CPU, локально)            → lyrics_aligned.json
+   ↓
+manifest.json (склейка для плеера)
+```
+
+## Замер на Калинов Мост (8LL0TgWmvaE, RU, 313.7s)
+
+| Стадия | Время | Доля |
+|---|---|---|
+| yt-dlp download | 3.1s | 3% |
+| htdemucs_6s separation | **64.8s** | **63%** |
+| GigaAM ASR (load + infer) | 28.3s | 27% |
+| LRCLib HTTP | 7.1s | 7% |
+| NW alignment | 0.3s | <1% |
+| **Total** | **103.6s** | |
+
+Match rate: **212/261 (81.2%)**, 49 interpolated. Манифест — единый JSON со всеми путями стемов, lyrics, aligned-lyrics, LRC source, и timings.
+
+## Граблиная реализационная мелочь
+
+Docker `-v` отказывается принимать относительные пути (трактует как именованные volumes). Все Path → `.resolve()` перед формированием cmd.
+
+## Доли времени — где экономить
+
+- **htdemucs 65% времени** — основной bottleneck. Если когда-нибудь докрутят ROCm-ускорение для BS-RoFormer ensemble — пересмотрим.
+- **GigaAM load 7.6s** — модель грузится при каждом запуске. В Phase 2 (FastAPI+arq) держим в памяти воркера → экономим эти 7-10 сек.
+- **LRCLib 7s** — HTTP с дефолтным таймаутом. Можно параллелить с htdemucs (зависит только от метаданных yt-dlp). На single-track выигрыш мизерный.
+- **htdemucs ↔ GigaAM нельзя параллелить** — GigaAM ест vocals-стем как вход.
+
+## Открытый вопрос — на что тратится htdemucs
+
+Может быть **демиксинг сам по себе вреден для ASR**. Артефакты demixing (phasing, spectral mask edges, residual bleed) — out-of-distribution для ASR-моделей, обученных на естественной речи. Возможно `source.wav` напрямую даст лучше WER, чем `vocals.flac`. **Phase 1.5 = A/B**.
+
+---
+
 ## Что дальше
 
-- Phase 1.3 (опц.): CTC forced alignment через GigaAM-CTC + torchaudio для замены NW-baseline
-- Phase 1.4: SongFormer для verse/chorus меток (новый чип — отдельный smoke на ROCm)
-- Phase 1.5: chord recognition + N2N drum transcription
-- Phase 1.6: единый `pipeline/process.py` поверх всего стека
+- Phase 1.5: A/B GigaAM/Parakeet — full mix vs vocal stem (если full mix лучше — упрощаем pipeline, ASR параллельно с htdemucs)
+- Phase 1.6 (опц.): CTC forced alignment через GigaAM-CTC + torchaudio для замены NW-baseline
+- Phase 1.7: SongFormer (verse/chorus) — новая ML-нагрузка, отдельный smoke
+- Phase 1.8: chord recognition + N2N drum transcription для не-вокалистов
