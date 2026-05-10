@@ -33,15 +33,18 @@ def main() -> int:
         return 2
 
     import torch
-    import nemo.collections.asr as nemo_asr
     import soundfile as sf
+    # Parakeet-TDT-v3 = RNN-T-style joint with BPE tokenizer. In NeMo 2.x the
+    # generic ASRModel.from_pretrained dispatcher is unreliable (instantiates
+    # the abstract base) — use the concrete EncDecRNNTBPEModel directly.
+    from nemo.collections.asr.models import EncDecRNNTBPEModel
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"[asr] torch device: {device}  (ROCm masquerades as CUDA in PyTorch)", file=sys.stderr)
     print(f"[asr] loading {args.model}...", file=sys.stderr)
 
     t0 = time.perf_counter()
-    asr_model = nemo_asr.models.ASRModel.from_pretrained(args.model)
+    asr_model = EncDecRNNTBPEModel.from_pretrained(args.model)
     asr_model = asr_model.to(device).eval()
     print(f"[asr] model ready in {time.perf_counter() - t0:.1f}s", file=sys.stderr)
 
