@@ -30,24 +30,13 @@ run_asr () {  # engine, src_audio, out_json
     python "/code/$script" "/in/$(basename "$src")" --out "/out/$(basename "$out")"
 }
 
-# RU — Калинов Мост
+# RU — Калинов Мост (use Phase 1.4 pipeline run as the source pair).
 mkdir -p "$OUT/ru-full" "$OUT/ru-vocals"
 
-# Need Tom Odell's full mix on host: pull it via yt-dlp run on demand.
-EN_DIR=$REPO/runs/another-love
-if [[ ! -f $EN_DIR/source.wav ]]; then
-  echo "[ab] downloading EN source via yt-dlp..."
-  mkdir -p "$EN_DIR"
-  docker run --rm -v "$EN_DIR":/out stem-practice-bench:rocm \
-    yt-dlp -f bestaudio --extract-audio --audio-format wav --audio-quality 0 \
-           --write-info-json --no-playlist -o '/out/source.%(ext)s' \
-           'https://www.youtube.com/watch?v=MwpMEbgC7DA'
-fi
-
-# We need EN vocals stem too. Reuse preview/ copy if missing under runs/.
-if [[ ! -f $EN_DIR/vocals.flac ]]; then
-  cp "$PARAKEET_RUN/vocals.flac" "$EN_DIR/vocals.flac"
-fi
+# EN — Tom Odell. Reuse the Phase 0 download + stem so the full mix and vocal
+# stem are guaranteed to come from the same source file.
+EN_FULL=$REPO/bench/tracks/MwpMEbgC7DA.wav
+EN_VOCAL=$REPO/bench/results/gpu_20260510-091747/htdemucs_6s/MwpMEbgC7DA/MwpMEbgC7DA_\(Vocals\)_htdemucs_6s.flac
 
 mkdir -p "$OUT/en-full" "$OUT/en-vocals"
 
@@ -59,9 +48,9 @@ run_asr gigaam   "$PIPE_RUN/stems/source_(Vocals)_htdemucs_6s.flac"             
 
 echo
 echo "[ab] === EN (Parakeet) full mix ==="
-run_asr parakeet "$EN_DIR/source.wav"                                              "$OUT/en-full/lyrics.json"
+run_asr parakeet "$EN_FULL"                                                        "$OUT/en-full/lyrics.json"
 echo "[ab] === EN (Parakeet) vocal stem ==="
-run_asr parakeet "$EN_DIR/vocals.flac"                                             "$OUT/en-vocals/lyrics.json"
+run_asr parakeet "$EN_VOCAL"                                                       "$OUT/en-vocals/lyrics.json"
 
 # Copy LRC refs for the scorer
 cp "$REPO/bench/asr/preview/8LL0TgWmvaE/lrc_words.json" "$OUT/ru-lrc.json"
