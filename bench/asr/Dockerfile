@@ -10,18 +10,16 @@ USER root
 RUN dnf install -y time libsndfile && dnf clean all
 
 # onnx-asr: thin wrapper around ONNX Runtime that knows Parakeet's TDT decoding
-# and emits native word timestamps. Pin reasonably loose — package is small & stable.
-#
-# onnxruntime-rocm: AMD's ROCm execution provider build. If pip can't find a wheel
-# for this base's ROCm version, the script will fall back to CPU EP (Parakeet on
-# CPU INT8 still beats Whisper-large-v3 on CUDA in throughput per Agent B research).
+# and emits native word timestamps.
+# onnxruntime: vanilla CPU EP. Parakeet INT8 on CPU still outpaces faster-whisper
+# on CUDA per Agent B benchmarks, so this is a usable baseline.
+# onnxruntime-rocm AMD wheel for ROCm 7.x isn't published as of this build —
+# add it later from https://repo.radeon.com/rocm/manylinux/<rel>/ when available.
 RUN pip install --no-cache-dir \
+        "onnxruntime>=1.20" \
         "onnx-asr[hub]>=0.5" \
         "soundfile>=0.12" \
-        "numpy<2.0" \
-    && (pip install --no-cache-dir onnxruntime-rocm \
-        --index-url https://repo.radeon.com/rocm/manylinux/rocm-rel-7.0/ \
-        || echo "WARN: onnxruntime-rocm wheel unavailable for this ROCm; staying on default ORT")
+        "numpy<2.0"
 
 # Cache model weights here; mount /asr-models -> /srv/models/stem-practice-asr
 ENV ONNX_ASR_HOME=/asr-models
