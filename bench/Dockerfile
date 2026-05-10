@@ -6,6 +6,10 @@ FROM kyuz0/amd-strix-halo-comfyui:latest
 ENTRYPOINT []
 WORKDIR /work
 
+# `time` for /usr/bin/time -v wall+RSS metrics. Base is Fedora.
+USER root
+RUN dnf install -y time && dnf clean all
+
 # Install audio-separator with full deps (CPU + GPU paths supported by upstream)
 # and yt-dlp. Keep pip cache clean to slim the layer.
 RUN pip install --no-cache-dir \
