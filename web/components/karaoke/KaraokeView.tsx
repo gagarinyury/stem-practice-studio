@@ -22,10 +22,12 @@ import type { AlignedLyrics, Manifest, StemKey } from "@/lib/manifest";
 import { stemUrl } from "@/lib/manifest";
 import { KaraokeSpectrum } from "./KaraokeSpectrum";
 import { YouTubeBackground } from "./YouTubeBackground";
+import { LocalVideoBackground } from "./LocalVideoBackground";
 import { StemRow } from "@/components/player/StemRow";
 import { useViewportMode } from "@/lib/useViewportMode";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { t } from "@/lib/strings";
+import { getLocalVideo } from "@/lib/local-video";
 
 function ytIdFromUrl(url: string): string | null {
   const m = url.match(/[?&]v=([\w-]{6,})/);
@@ -86,6 +88,8 @@ export function KaraokeView({ manifest, aligned }: Props) {
   const [showVideo, setShowVideo] = useState(true);
   const [cursorVisible, setCursorVisible] = useState(true);
   const ytId = useMemo(() => ytIdFromUrl(manifest.url), [manifest.url]);
+  const localVideo = useMemo(() => getLocalVideo(manifest.id), [manifest.id]);
+  const hasVideo = !!localVideo || !!ytId;
   const cursorTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -255,7 +259,7 @@ export function KaraokeView({ manifest, aligned }: Props) {
         {/* Stable YouTube mount — same tree position for both orientations.
             In portrait it's just a positioned block (offset by the header below
             via order; in landscape it's absolutely positioned full-screen. */}
-        {ytId && showVideo && (
+        {hasVideo && showVideo && (
           <div
             className={
               isLandscape
@@ -267,7 +271,11 @@ export function KaraokeView({ manifest, aligned }: Props) {
             role={!isLandscape ? "button" : undefined}
             aria-label={!isLandscape ? t.karaoke.ariaPlayPause : undefined}
           >
-            <YouTubeBackground videoId={ytId} currentTime={currentTime} playing={playing} />
+            {localVideo ? (
+              <LocalVideoBackground src={localVideo.webPath} mime={localVideo.mime} currentTime={currentTime} playing={playing} />
+            ) : ytId ? (
+              <YouTubeBackground videoId={ytId} currentTime={currentTime} playing={playing} />
+            ) : null}
             {!isLandscape && !playing && phase === "ready" && (
               <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex h-12 w-12 items-center justify-center rounded-full bg-black/55 backdrop-blur z-10">
                 <IconPlayerPlay size={22} fill="currentColor" className="ml-0.5 text-[var(--color-paper)]" />
@@ -503,9 +511,13 @@ export function KaraokeView({ manifest, aligned }: Props) {
         onClick={togglePlay}
         className="relative flex flex-1 cursor-pointer flex-col overflow-hidden"
       >
-        {showVideo && ytId && (
+        {showVideo && hasVideo && (
           <>
-            <YouTubeBackground videoId={ytId} currentTime={currentTime} playing={playing} />
+            {localVideo ? (
+              <LocalVideoBackground src={localVideo.webPath} mime={localVideo.mime} currentTime={currentTime} playing={playing} />
+            ) : ytId ? (
+              <YouTubeBackground videoId={ytId} currentTime={currentTime} playing={playing} />
+            ) : null}
             <div
               className="pointer-events-none absolute inset-0"
               style={{
@@ -729,7 +741,7 @@ export function KaraokeView({ manifest, aligned }: Props) {
 
       {/* Top-right floating controls */}
       <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
-        {ytId && (
+        {hasVideo && (
           <button
             onClick={() => setShowVideo((v) => !v)}
             className={`flex h-9 items-center gap-1 rounded-full border-[0.5px] border-border-soft bg-surface px-3 font-mono text-[10px] uppercase tracking-[0.15em] ${

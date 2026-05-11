@@ -41,7 +41,7 @@
 **Phase 1.6** ✅ Separation speed matrix: htdemucs_6s остаётся sweet spot. mel_kim даёт −6pp WER но только 2 стема.
 **Phase 3.0** ✅ Next.js 15/16 + Tailwind v4 + design system. Tokens в `web/lib/design/tokens.ts`, primitives в `web/components/ui/`, каталог `/design`.
 **Phase 3.1** ✅ Compact player `/play/[id]` — 6 стемов синхронно, mute/solo/volume, lyric karaoke, FFT live timeline (Winamp-style L/R + peak-hold).
-**Phase 3.2** ✅ Karaoke video view `/karaoke/[id]` — fullscreen, YT-iframe фон с drift-correction, sliding lyric reel в нижней трети с blur-backdrop, live FFT spectrum, sidebar (vocals + music + split на 5 sub-стемов).
+**Phase 3.2** ✅ Karaoke video view `/karaoke/[id]` — fullscreen, YT-iframe фон с drift-correction, sliding lyric reel в нижней трети с blur-backdrop, live FFT spectrum, sidebar (vocals + music + split на 5 sub-стемов). Локальный видеофон: при загрузке видеофайла оригинал параллельно сохраняется в Capacitor `Directory.Data` (`web/lib/local-video.ts`); `KaraokeView` рендерит `<LocalVideoBackground>` поверх YT-fallback'а. Серверу видео не нужно — он держит только стемы и лирику. На вебе сейчас no-op (нет Capacitor Filesystem) — пойдёт через IndexedDB когда упрёмся.
 
 Подробности: `bench/results.md`.
 

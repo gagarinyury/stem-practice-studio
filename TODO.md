@@ -20,3 +20,12 @@
       и LRClib теперь вернул хороший матч, можно использовать наш
       user-submit API key (`oE3OFS6h3M`) чтобы засабмитить fingerprint
       → MBID связку в AcoustID. Сделает базу полнее для всех.
+
+## Server storage
+
+- [ ] **Cleanup серверных source.*** после успешной обработки — оригинал
+      загруженного файла лежит в `tracks/<id>/source.<ext>` и больше не
+      нужен (видео хранится локально на устройстве через Capacitor
+      Filesystem, аудио — в виде стемов). Добавить cleanup-стадию в
+      `pipeline/process.py` после `manifest` или в `backend/app/jobs.py`
+      на completion. Сейчас намеренно оставляем — на время отладки.

@@ -8,6 +8,7 @@ import { ScreenShell } from "./ui/ScreenShell";
 import { ScreenHeader } from "./ui/ScreenHeader";
 import { MonoSmall, Label, ButtonText, ErrorText } from "./ui/text";
 import { submitYouTube, uploadTrack, deleteTrack, type TrackSummary } from "@/lib/api";
+import { isVideoFile, saveLocalVideo } from "@/lib/local-video";
 import { t } from "@/lib/strings";
 
 const PALETTE = [
@@ -67,6 +68,9 @@ export function LibraryScreen({ tracks: initialTracks }: { tracks: TrackSummary[
     setErr(null);
     try {
       const { id } = await uploadTrack(file);
+      if (isVideoFile(file)) {
+        saveLocalVideo(id, file).catch((e) => console.warn("local video save failed", e));
+      }
       router.push(`/processing/${id}`);
     } catch (e) {
       setErr(String(e));
