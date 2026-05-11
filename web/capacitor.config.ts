@@ -15,7 +15,11 @@ const config: CapacitorConfig = {
     cleartext: true,
   },
   ios: {
-    contentInset: "always",
+    // "never" — WebView does NOT auto-adjust for safe area; CSS env() in
+    // ScreenShell handles top/bottom insets directly. "always" double-pads
+    // (iOS inset + CSS inset) and the offset only stabilises after a
+    // navigation, which is why the header jumps down after login.
+    contentInset: "never",
     limitsNavigationsToAppBoundDomains: false,
     // Disable WKWebView's outer rubberband scroll so the page can't be
     // pulled. Inner overflow-y-auto containers still scroll normally.
