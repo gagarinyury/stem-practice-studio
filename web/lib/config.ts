@@ -6,5 +6,5 @@
  *   NEXT_PUBLIC_API_BASE=http://localhost:8090 npm run dev
  */
 export const API_BASE = (
-  process.env.NEXT_PUBLIC_API_BASE || "http://evox2:8090"
+  process.env.NEXT_PUBLIC_API_BASE || "http://100.86.227.110:8090"
 ).replace(/\/+$/, "");

@@ -4,18 +4,18 @@
  *
  * Browsers require a user gesture before audio starts — call `init()` on click.
  */
-import * as Tone from "tone";
+import { start, Sampler, Synth, Oscillator, Frequency, loaded } from "tone/build/esm/index.js";
 
 import type { StepKey } from "./protocol";
 import type { StepNotes } from "./transpose";
 
-let piano: Tone.Sampler | null = null;
+let piano: Sampler | null = null;
 let pianoReady = false;
 
 export async function ensureAudio(): Promise<void> {
   if (piano) return;
-  await Tone.start();
-  piano = new Tone.Sampler({
+  await start();
+  piano = new Sampler({
     urls: {
       A2: "A2.mp3",
       C3: "C3.mp3",
@@ -30,7 +30,7 @@ export async function ensureAudio(): Promise<void> {
     release: 1,
     volume: -6,
   }).toDestination();
-  await Tone.loaded();
+  await loaded();
   pianoReady = true;
 }
 
@@ -42,7 +42,7 @@ export function playStep(key: StepKey, notes: StepNotes): AudioCleanup {
     case "release":
       return () => {};
     case "sovt": {
-      const drone = new Tone.Synth({
+      const drone = new Synth({
         oscillator: { type: "sine" },
         envelope: { attack: 0.4, decay: 0, sustain: 1, release: 0.6 },
         volume: -22,
@@ -54,9 +54,9 @@ export function playStep(key: StepKey, notes: StepNotes): AudioCleanup {
       };
     }
     case "siren": {
-      const low = Tone.Frequency(notes.sirenLow || "A2").toFrequency();
-      const high = Tone.Frequency(notes.sirenHigh || "F4").toFrequency();
-      const osc = new Tone.Oscillator(low, "triangle").toDestination();
+      const low = Frequency(notes.sirenLow || "A2").toFrequency();
+      const high = Frequency(notes.sirenHigh || "F4").toFrequency();
+      const osc = new Oscillator(low, "triangle").toDestination();
       osc.volume.value = -20;
       osc.start();
       let dir: "up" | "down" = "up";
@@ -77,7 +77,7 @@ export function playStep(key: StepKey, notes: StepNotes): AudioCleanup {
     case "stacc":
       return () => {};
     case "swell": {
-      const s = new Tone.Synth({
+      const s = new Synth({
         oscillator: { type: "sine" },
         envelope: { attack: 0.3, decay: 0, sustain: 1, release: 0.6 },
       }).toDestination();
@@ -97,7 +97,7 @@ export function playStep(key: StepKey, notes: StepNotes): AudioCleanup {
       };
     }
     case "cool": {
-      const drone = new Tone.Synth({
+      const drone = new Synth({
         oscillator: { type: "sine" },
         envelope: { attack: 0.6, decay: 0, sustain: 1, release: 1.5 },
         volume: -28,

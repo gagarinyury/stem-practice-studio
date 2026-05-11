@@ -7,7 +7,7 @@ import { listTracks, postWarmupSession, type TrackSummary } from "@/lib/api";
 import { getUser } from "@/lib/auth";
 import { RangeStrip } from "@/components/warmup/RangeStrip";
 
-const LLM_URL = "http://evox2:8083/v1/chat/completions";
+const LLM_URL = "http://100.86.227.110:8083/v1/chat/completions";
 
 interface SessionResult {
   startedAt: string;

@@ -1,3 +1,9 @@
+// Path to a real 1-second silent WAV in /public — used to convince iOS the
+// page is playing HTML5 media, lifting the ringer-silent mute on Web Audio.
+// A 0-length WAV header alone is parsed but never reports as "playing", so
+// iOS doesn't lift the mute. A real-duration file does.
+const SILENT_WAV = "/silent.wav";
+
 export interface StemSpec {
   key: string;
   url: string;
@@ -312,6 +318,49 @@ export class StemEngine {
     return this.smoothLevel;
   }
 
+  private unlocked = false;
+  private silentEl: HTMLAudioElement | null = null;
+
+  /** Synchronous iOS unlock — call inside a user gesture before play().
+   *  Plays a tiny silent <audio> tag alongside AudioContext: this is the only
+   *  way to get Web Audio output past the iOS ringer-silent-switch mute. */
+  unlock(): void {
+    if (!this.ctx) return;
+    if (this.ctx.state === "suspended") {
+      this.ctx.resume().catch(() => {});
+    }
+    if (!this.unlocked) {
+      try {
+        // 1-sample buffer through Web Audio destination
+        const buf = this.ctx.createBuffer(1, 1, this.ctx.sampleRate);
+        const src = this.ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(this.ctx.destination);
+        src.start(0);
+
+        // Silent HTML5 audio tag — tells iOS the page is "playing media",
+        // which lifts the Web Audio mute when the device's silent switch is on.
+        if (typeof window !== "undefined" && typeof document !== "undefined") {
+          const a = document.createElement("audio");
+          a.src = SILENT_WAV;
+          a.loop = true;
+          a.preload = "auto";
+          a.setAttribute("playsinline", "");
+          a.muted = false;
+          a.volume = 0.001; // ≠ 0 — iOS sometimes treats 0 as "not really audible"
+          a.setAttribute("webkit-playsinline", "true");
+          a.style.position = "fixed";
+          a.style.left = "-9999px";
+          document.body.appendChild(a);
+          a.play().catch(() => {});
+          this.silentEl = a;
+        }
+
+        this.unlocked = true;
+      } catch { /* ignore */ }
+    }
+  }
+
   play(): void {
     if (!this.ctx || this.stems.length === 0) return;
     if (this.state === "playing") return;
@@ -516,6 +565,14 @@ export class StemEngine {
       try { stem.source?.stop(); } catch { /* noop */ }
     }
     this.stems = [];
+    if (this.silentEl) {
+      try {
+        this.silentEl.pause();
+        this.silentEl.src = "";
+        this.silentEl.remove();
+      } catch { /* noop */ }
+      this.silentEl = null;
+    }
     this.ctx?.close();
     this.ctx = null;
     this.setState("idle");

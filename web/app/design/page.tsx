@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Pill } from "@/components/ui/Pill";
 import { MonoLabel } from "@/components/ui/MonoLabel";
 import { SerifTitle } from "@/components/ui/SerifTitle";
 import { MonoText } from "@/components/ui/MonoText";
+import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { tokens } from "@/lib/design/tokens";
 
 const colors: Array<[string, string]> = Object.entries(tokens.color);
@@ -63,6 +65,36 @@ export default function DesignCatalog() {
           <div><MonoLabel size="xs">monoXs uppercase 0.15em</MonoLabel></div>
           <div><MonoLabel size="micro">monoMicro uppercase 0.20em</MonoLabel></div>
         </Card>
+      </Section>
+
+      <Section title="screen primitives">
+        <div className="space-y-3">
+          <Card className="p-5">
+            <ScreenHeader
+              eyebrow="welcome back"
+              title="Sign"
+              emphasis="in."
+              subtitle="email + password · no verification · no fuss"
+            />
+          </Card>
+          <Card className="p-5">
+            <ScreenHeader
+              back="/design"
+              eyebrow="finding your range"
+              title="Now go"
+              emphasis="up."
+              subtitle="slide your voice up on 'ah' — stop the moment it strains"
+            />
+          </Card>
+          <div className="flex items-center gap-3 pt-2">
+            <Link href="/design/tour" className="font-mono text-[11px] text-[var(--color-accent-vocal)] underline">
+              open screen tour →
+            </Link>
+            <Link href="/login" className="font-mono text-[11px] text-[var(--color-accent-vocal)] underline">
+              see /login (reference) →
+            </Link>
+          </div>
+        </div>
       </Section>
 
       <Section title="primitives — Card">

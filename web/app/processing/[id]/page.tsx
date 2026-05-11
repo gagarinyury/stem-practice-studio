@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 
 interface Props {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ preview?: string }>;
 }
 
 async function loadInitial(id: string): Promise<TrackSummary | null> {
@@ -18,12 +19,9 @@ async function loadInitial(id: string): Promise<TrackSummary | null> {
   }
 }
 
-export default async function ProcessingPage({ params }: Props) {
+export default async function ProcessingPage({ params, searchParams }: Props) {
   const { id } = await params;
+  const { preview } = await searchParams;
   const initial = await loadInitial(id);
-  return (
-    <main className="flex-1 flex items-start justify-center py-10 px-4">
-      <ProcessingScreen id={id} initial={initial} />
-    </main>
-  );
+  return <ProcessingScreen id={id} initial={initial} preview={preview === "1"} />;
 }

@@ -82,6 +82,7 @@ export function StemRow({
         max={100}
         value={Math.round(volume * 100)}
         onChange={(e) => onVolume(parseInt(e.target.value) / 100)}
+        suppressHydrationWarning
         className="thin-range w-[44px]"
       />
     </div>

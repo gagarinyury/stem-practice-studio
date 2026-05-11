@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { IconCheck, IconMicrophone, IconRotate, IconArrowRight } from "@tabler/icons-react";
+import Link from "next/link";
+import { IconCheck, IconMicrophone, IconRotate } from "@tabler/icons-react";
 import { patchProfile } from "@/lib/api";
 import { setUser } from "@/lib/auth";
 import { createMicTracker } from "@/lib/pitch";
@@ -10,9 +11,7 @@ import { requestMic, releaseMic } from "@/lib/mic";
 import { hzToNote, hzToMidi, nameOf, inferVoiceType } from "@/lib/notes";
 import { RangeStrip } from "@/components/warmup/RangeStrip";
 
-type Step = "language" | "low" | "high" | "confirm";
-
-const LANGUAGES = ["English", "Russian", "Spanish", "German", "French", "Chinese"];
+type Step = "low" | "high" | "confirm";
 
 interface SustainedTracker {
   /** All sustained MIDI notes captured this round. */
@@ -25,8 +24,7 @@ interface SustainedTracker {
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>("language");
-  const [language, setLanguage] = useState("English");
+  const [step, setStep] = useState<Step>("low");
   const [low, setLow] = useState<string | null>(null);
   const [high, setHigh] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -155,7 +153,7 @@ export default function OnboardingPage() {
     setError(null);
     try {
       const voiceType = inferVoiceType(low, high);
-      const updated = await patchProfile({ language, voice_low: low, voice_high: high, voice_type: voiceType });
+      const updated = await patchProfile({ voice_low: low, voice_high: high, voice_type: voiceType });
       setUser(updated);
       router.replace("/warmup");
     } catch (e) {
@@ -167,16 +165,34 @@ export default function OnboardingPage() {
   }
 
   // Step indicator
-  const stepIndex = { language: 0, low: 1, high: 2, confirm: 3 }[step];
+  const stepIndex = { low: 0, high: 1, confirm: 2 }[step];
+
+  function goBack() {
+    stopRecording();
+    setError(null);
+    setTracker({ values: [], current: null, pinned: null });
+    if (step === "high") { setLow(null); setStep("low"); }
+    else if (step === "confirm") { setHigh(null); setStep("high"); }
+  }
 
   return (
     <main className="flex-1 flex flex-col items-center px-4 pt-7 pb-10">
       <div className="w-full max-w-sm">
         {/* Stepper */}
         <div className="flex items-center justify-between">
-          <div className="font-mono text-[10px] text-[var(--color-ink-muted)]">step {stepIndex + 1} / 4</div>
+          {step === "low" ? (
+            <Link href="/warmup" className="font-mono text-[10px] text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]">← back</Link>
+          ) : (
+            <button
+              type="button"
+              onClick={goBack}
+              className="font-mono text-[10px] text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
+            >
+              ← back
+            </button>
+          )}
           <div className="flex gap-[6px]">
-            {[0, 1, 2, 3].map((i) => (
+            {[0, 1, 2].map((i) => (
               <div
                 key={i}
                 className="w-6 h-[3px] rounded"
@@ -185,39 +201,6 @@ export default function OnboardingPage() {
             ))}
           </div>
         </div>
-
-        {step === "language" && (
-          <section className="mt-7 text-center">
-            <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-[var(--color-accent-vocal)]">— first —</div>
-            <h1 className="mt-2 text-[30px] italic leading-tight">Pick your <em className="not-italic text-[var(--color-ink-muted)]">language.</em></h1>
-            <p className="mt-3 font-mono text-[11px] text-[var(--color-ink-muted)] leading-relaxed">
-              UI stays English. We'll send AI feedback in this language.
-            </p>
-            <div className="mt-7 flex flex-col gap-2">
-              {LANGUAGES.map((l) => (
-                <button
-                  key={l}
-                  type="button"
-                  onClick={() => setLanguage(l)}
-                  className={`text-[16px] py-3 rounded-pill border transition-colors ${
-                    language === l
-                      ? "bg-[var(--color-ink)] text-[var(--color-paper)] border-[var(--color-ink)]"
-                      : "bg-white border-[var(--color-border-soft)] text-[var(--color-ink)]"
-                  }`}
-                >
-                  {l}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={() => setStep("low")}
-              className="mt-7 inline-flex items-center gap-2 font-mono text-[12px] uppercase tracking-[0.15em] bg-[var(--color-ink)] text-[var(--color-paper)] py-4 px-6 rounded-pill"
-            >
-              continue <IconArrowRight size={14} />
-            </button>
-          </section>
-        )}
 
         {(step === "low" || step === "high") && (
           <section className="mt-6 text-center">

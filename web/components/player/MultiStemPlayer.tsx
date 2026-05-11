@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
   IconChevronDown,
-  IconDots,
   IconMicrophone2,
   IconMusic,
   IconPlayerPause,
@@ -16,9 +15,12 @@ import {
 import { StemRow } from "./StemRow";
 import { LyricView } from "./LyricView";
 import { Timeline } from "./Timeline";
+import { ScreenShell } from "../ui/ScreenShell";
+import { ScreenHeader } from "../ui/ScreenHeader";
 import { StemEngine, type Spectrum } from "@/lib/audio-engine";
 import type { AlignedLyrics, Manifest, StemKey } from "@/lib/manifest";
 import { stemUrl } from "@/lib/manifest";
+import { t } from "@/lib/strings";
 
 const ALL_STEMS: StemKey[] = ["vocals", "drums", "bass", "guitar", "piano", "other"];
 const SECONDARY: StemKey[] = ["drums", "bass", "guitar", "piano", "other"];
@@ -147,6 +149,7 @@ export function MultiStemPlayer({ manifest, aligned }: Props) {
   const togglePlay = () => {
     const e = engineRef.current;
     if (!e || phase !== "ready") return;
+    e.unlock();
     e.toggle();
     setPlaying(e.state === "playing");
   };
@@ -210,158 +213,130 @@ export function MultiStemPlayer({ manifest, aligned }: Props) {
   const headerProgress = phase === "ready" ? currentTime / Math.max(dur, 1) : 0;
 
   return (
-    <div className="flex min-h-screen items-start justify-center bg-surface-muted p-6">
-      <div className="w-full max-w-[360px] overflow-hidden rounded-[28px] border-[0.5px] border-border-soft bg-paper font-serif">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-[18px]">
-          <IconChevronDown size={22} stroke={1.5} className="text-ink" />
-          <div className="text-center">
-            <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-muted">
-              Now studying
-            </div>
-          </div>
-          <IconDots size={22} stroke={1.5} className="text-ink" />
-        </div>
+    <ScreenShell variant="flow" compact>
+      <div className="shrink-0">
+      <ScreenHeader
+        eyebrow={t.play.eyebrow}
+        title={t.play.titleA}
+        emphasis={t.play.titleB}
+        subtitle={
+          <>
+            <span className="block line-clamp-2 text-[var(--color-ink)]">{titleClean}</span>
+            <span className="block mt-0.5">{manifest.artist} · {fmt(currentTime)} / {fmt(dur)}</span>
+          </>
+        }
+      />
+      </div>
 
-        {/* Title */}
-        <div className="px-6 pb-4 pt-2 text-center">
-          <div className="text-[26px] leading-[1.1] text-ink">{titleClean}</div>
-          <div className="mt-[2px] font-mono text-[11px] text-ink-muted">
-            {manifest.artist} · {fmt(currentTime)} / {fmt(dur)}
-          </div>
-        </div>
-
-        {/* Stems card */}
-        <div className="px-5">
-          <div className="overflow-hidden rounded-[12px] border-[0.5px] border-border-soft bg-surface">
+      <div className="shrink-0 overflow-hidden rounded-[12px] border border-[var(--color-border-soft)] bg-[var(--color-surface)]">
+        <StemRow
+          icon={<IconMicrophone2 size={14} className="text-accent-vocal" />}
+          label={t.play.stems.vocals}
+          colorPlayed="var(--color-accent-vocal)"
+          colorRemain="#AFA9EC"
+          progress={headerProgress}
+          volume={vocalsVol}
+          muted={muted.vocals}
+          soloed={solo === "vocals-group"}
+          onVolume={onVocalsVol}
+          onToggleMute={() => toggleMute("vocals-group")}
+          onToggleSolo={() => toggleSolo("vocals-group")}
+          peaks={stemPeaks.vocals}
+          level={level}
+        />
+        {!showAll && (
+          <StemRow
+            icon={<IconMusic size={14} className="text-ink-muted" />}
+            label={t.play.stems.instrum}
+            colorPlayed="var(--color-ink-muted)"
+            colorRemain="var(--color-ink-faint)"
+            progress={headerProgress}
+            volume={instrumVol}
+            muted={SECONDARY.every((k) => muted[k])}
+            soloed={solo === "instrum"}
+            onVolume={onInstrumVol}
+            onToggleMute={() => toggleMute("instrum")}
+            onToggleSolo={() => toggleSolo("instrum")}
+            peaks={instrumPeaks}
+            level={level}
+          />
+        )}
+        {showAll &&
+          SECONDARY.map((k, i) => (
             <StemRow
-              icon={<IconMicrophone2 size={14} className="text-accent-vocal" />}
-              label="vocals"
-              colorPlayed="#534AB7"
-              colorRemain="#AFA9EC"
+              key={k}
+              icon={<IconMusic size={14} className="text-ink-muted" />}
+              label={(t.play.stems as Record<string, string>)[k] ?? k}
+              colorPlayed="var(--color-ink-muted)"
+              colorRemain="var(--color-ink-faint)"
               progress={headerProgress}
-              volume={vocalsVol}
-              muted={muted.vocals}
-              soloed={solo === "vocals-group"}
-              onVolume={onVocalsVol}
-              onToggleMute={() => toggleMute("vocals-group")}
-              onToggleSolo={() => toggleSolo("vocals-group")}
-              peaks={stemPeaks.vocals}
+              volume={perStemVol[k]}
+              muted={muted[k]}
+              soloed={solo === k}
+              onVolume={(v) => onSingleVol(k, v)}
+              onToggleMute={() => toggleMute(k)}
+              onToggleSolo={() => toggleSolo(k)}
+              bordered={i < SECONDARY.length - 1}
+              peaks={stemPeaks[k]}
               level={level}
             />
-            {!showAll && (
-              <StemRow
-                icon={<IconMusic size={14} className="text-ink-muted" />}
-                label="instrum."
-                colorPlayed="#888780"
-                colorRemain="#B4B2A9"
-                progress={headerProgress}
-                volume={instrumVol}
-                muted={SECONDARY.every((k) => muted[k])}
-                soloed={solo === "instrum"}
-                onVolume={onInstrumVol}
-                onToggleMute={() => toggleMute("instrum")}
-                onToggleSolo={() => toggleSolo("instrum")}
-                peaks={instrumPeaks}
-                level={level}
-              />
-            )}
-            {showAll &&
-              SECONDARY.map((k, i) => (
-                <StemRow
-                  key={k}
-                  icon={<IconMusic size={14} className="text-ink-muted" />}
-                  label={k}
-                  colorPlayed="#888780"
-                  colorRemain="#B4B2A9"
-                  progress={headerProgress}
-                  volume={perStemVol[k]}
-                  muted={muted[k]}
-                  soloed={solo === k}
-                  onVolume={(v) => onSingleVol(k, v)}
-                  onToggleMute={() => toggleMute(k)}
-                  onToggleSolo={() => toggleSolo(k)}
-                  bordered={i < SECONDARY.length - 1}
-                  peaks={stemPeaks[k]}
-                  level={level}
-                />
-              ))}
+          ))}
 
-            <button
-              onClick={() => setShowAll((v) => !v)}
-              className="flex w-full items-center gap-[10px] px-3 py-2 text-left"
-            >
-              <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-ink-muted">
-                {showAll ? "− HIDE EXTRAS" : "+ DRUMS / BASS"}
-              </span>
-              <span className="flex-1" />
-              <IconChevronDown
-                size={14}
-                className={`text-ink-muted transition-transform ${showAll ? "rotate-180" : ""}`}
-              />
-            </button>
-          </div>
-        </div>
-
-        {/* Lyrics */}
-        <LyricView words={aligned.words} lines={aligned.lines} currentTime={currentTime} />
-
-        {/* Timeline */}
-        <div className="px-6 pt-[18px]">
-          <Timeline duration={dur} currentTime={currentTime} spectrum={spectrum} onSeek={seek} />
-          <div className="mt-1 flex justify-between font-mono text-[10px] text-ink-muted">
-            <span>{fmt(currentTime)}</span>
-            <span>{fmt(dur)}</span>
-          </div>
-        </div>
-
-        {/* Transport */}
-        <div className="flex items-center justify-between px-6 pb-2 pt-4">
-          <div className="flex items-center gap-2">
-            <span className="rounded-full border-[0.5px] border-border-soft bg-surface px-[11px] py-[5px] font-mono text-[11px] text-ink">
-              ×1.00
-            </span>
-            <span className="rounded-full border-[0.5px] border-border-soft bg-surface px-[11px] py-[5px] font-mono text-[11px] text-ink">
-              0 st
-            </span>
-          </div>
-          <div className="flex items-center gap-[14px]">
-            <button onClick={() => seek(Math.max(0, currentTime - 15))}>
-              <IconRewindBackward15 size={22} stroke={1.5} className="text-ink" />
-            </button>
-            <button
-              onClick={togglePlay}
-              disabled={phase !== "ready"}
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-ink disabled:opacity-50"
-            >
-              {playing ? (
-                <IconPlayerPause size={26} fill="#FAF7F2" className="text-paper" />
-              ) : (
-                <IconPlayerPlay size={26} fill="#FAF7F2" className="text-paper" />
-              )}
-            </button>
-            <button onClick={() => seek(Math.min(dur, currentTime + 15))}>
-              <IconRewindForward15 size={22} stroke={1.5} className="text-ink" />
-            </button>
-          </div>
-          <Link href={`/select/${manifest.id}`} className="text-ink" title="Pick what to learn">
-            <IconHighlight size={22} stroke={1.5} />
-          </Link>
-        </div>
-
-        <div className="h-7" />
-
-        {phase === "loading" && (
-          <div className="px-6 pb-4 text-center font-mono text-[10px] uppercase tracking-[0.15em] text-ink-muted">
-            loading stems…
-          </div>
-        )}
-        {error && (
-          <div className="px-6 pb-4 text-center font-mono text-[10px] text-accent-warn">
-            {error}
-          </div>
-        )}
+        <button
+          onClick={() => setShowAll((v) => !v)}
+          className="flex w-full items-center gap-2.5 px-3 py-2 text-left"
+        >
+          <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-[var(--color-ink-muted)]">
+            {showAll ? t.play.hideExtras : t.play.showExtras}
+          </span>
+          <span className="flex-1" />
+          <IconChevronDown
+            size={14}
+            className={`text-ink-muted transition-transform ${showAll ? "rotate-180" : ""}`}
+          />
+        </button>
       </div>
-    </div>
+
+      <div className="shrink-0">
+        <LyricView words={aligned.words} lines={aligned.lines} currentTime={currentTime} />
+      </div>
+
+      <div className="shrink-0">
+        <Timeline duration={dur} currentTime={currentTime} spectrum={spectrum} onSeek={seek} />
+        <div className="mt-1 flex justify-between font-mono text-[10px] text-[var(--color-ink-muted)]">
+          <span>{fmt(currentTime)}</span>
+          <span>{fmt(dur)}</span>
+        </div>
+      </div>
+
+      <div className="shrink-0 flex items-center justify-between">
+        <span className="w-[44px]" aria-hidden />
+        <div className="flex items-center gap-3.5">
+          <button onClick={() => seek(Math.max(0, currentTime - 15))} aria-label="back 15s">
+            <IconRewindBackward15 size={22} stroke={1.5} className="text-ink" />
+          </button>
+          <button
+            onClick={togglePlay}
+            disabled={phase !== "ready"}
+            aria-label="play/pause"
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-ink)] disabled:opacity-50"
+          >
+            {playing ? (
+              <IconPlayerPause size={26} className="text-[var(--color-paper)]" fill="currentColor" />
+            ) : (
+              <IconPlayerPlay size={26} className="text-[var(--color-paper)]" fill="currentColor" />
+            )}
+          </button>
+          <button onClick={() => seek(Math.min(dur, currentTime + 15))} aria-label="forward 15s">
+            <IconRewindForward15 size={22} stroke={1.5} className="text-ink" />
+          </button>
+        </div>
+        <Link href={`/select/${manifest.id}`} className="text-ink flex flex-col items-center gap-0.5" aria-label={t.play.learnHint}>
+          <IconHighlight size={22} stroke={1.5} />
+          <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-[var(--color-ink-muted)]">{t.play.learnHint}</span>
+        </Link>
+      </div>
+
+    </ScreenShell>
   );
 }

@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { IconMusic, IconMicrophone2, IconChartBar, IconUser } from "@tabler/icons-react";
+import { hasBottomNav } from "@/lib/nav-visibility";
 
 const TABS = [
   { key: "library", path: "/library", Icon: IconMusic, label: "library" },
@@ -10,22 +11,10 @@ const TABS = [
   { key: "profile", path: "/profile", Icon: IconUser, label: "profile" },
 ] as const;
 
-const HIDDEN_PATHS = [
-  "/login",
-  "/warmup/onboarding",
-  "/warmup/session",
-  "/processing",
-  "/play",
-  "/karaoke",
-  "/select",
-  "/drill",
-];
-
 export function BottomNav() {
   const router = useRouter();
   const pathname = usePathname() || "/";
-  const hidden = HIDDEN_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
-  if (hidden) return null;
+  if (!hasBottomNav(pathname)) return null;
 
   return (
     <nav

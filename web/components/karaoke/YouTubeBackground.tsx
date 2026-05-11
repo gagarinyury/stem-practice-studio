@@ -7,6 +7,7 @@ interface YTPlayer {
   seekTo: (s: number, allowSeek?: boolean) => void;
   playVideo: () => void;
   pauseVideo: () => void;
+  cueVideoById: (id: string, startSeconds?: number) => void;
   getCurrentTime: () => number;
   getPlayerState: () => number;
 }
@@ -98,6 +99,8 @@ export function YouTubeBackground({ videoId, currentTime, playing }: Props) {
           onReady: (e: { target: YTPlayer }) => {
             e.target.mute();
             readyRef.current = true;
+            // Cue the video so iOS Safari renders the poster frame even before play.
+            try { e.target.cueVideoById(videoId, timeRef.current); } catch {}
             try { e.target.seekTo(timeRef.current, true); } catch {}
             if (playingRef.current) {
               try { e.target.playVideo(); } catch {}
