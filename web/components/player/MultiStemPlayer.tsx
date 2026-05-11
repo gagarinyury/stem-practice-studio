@@ -303,6 +303,17 @@ export function MultiStemPlayer({ manifest, aligned }: Props) {
 
       <div className="shrink-0">
         <Timeline duration={dur} currentTime={currentTime} spectrum={spectrum} onSeek={seek} />
+        <input
+          type="range"
+          suppressHydrationWarning
+          min={0}
+          max={dur}
+          step={0.1}
+          value={currentTime}
+          onChange={(e) => seek(parseFloat(e.target.value))}
+          aria-label={t.play.ariaSeek}
+          className="thin-range mt-1 w-full"
+        />
         <div className="mt-1 flex justify-between font-mono text-[10px] text-[var(--color-ink-muted)]">
           <span>{fmt(currentTime)}</span>
           <span>{fmt(dur)}</span>
@@ -312,13 +323,13 @@ export function MultiStemPlayer({ manifest, aligned }: Props) {
       <div className="shrink-0 flex items-center justify-between">
         <span className="w-[44px]" aria-hidden />
         <div className="flex items-center gap-3.5">
-          <button onClick={() => seek(Math.max(0, currentTime - 15))} aria-label="back 15s">
+          <button onClick={() => seek(Math.max(0, currentTime - 15))} aria-label={t.play.ariaBack15}>
             <IconRewindBackward15 size={22} stroke={1.5} className="text-ink" />
           </button>
           <button
             onClick={togglePlay}
             disabled={phase !== "ready"}
-            aria-label="play/pause"
+            aria-label={t.play.ariaPlayPause}
             className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-ink)] disabled:opacity-50"
           >
             {playing ? (
@@ -327,7 +338,7 @@ export function MultiStemPlayer({ manifest, aligned }: Props) {
               <IconPlayerPlay size={26} className="text-[var(--color-paper)]" fill="currentColor" />
             )}
           </button>
-          <button onClick={() => seek(Math.min(dur, currentTime + 15))} aria-label="forward 15s">
+          <button onClick={() => seek(Math.min(dur, currentTime + 15))} aria-label={t.play.ariaForward15}>
             <IconRewindForward15 size={22} stroke={1.5} className="text-ink" />
           </button>
         </div>

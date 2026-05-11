@@ -1,13 +1,13 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { IconLink, IconLoader2, IconPlayerPlay, IconUpload } from "@tabler/icons-react";
+import { IconLink, IconLoader2, IconPlayerPlay, IconTrash, IconUpload } from "@tabler/icons-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ScreenShell } from "./ui/ScreenShell";
 import { ScreenHeader } from "./ui/ScreenHeader";
 import { MonoSmall, Label, ButtonText, ErrorText } from "./ui/text";
-import { submitYouTube, uploadTrack, type TrackSummary } from "@/lib/api";
+import { submitYouTube, uploadTrack, deleteTrack, type TrackSummary } from "@/lib/api";
 import { t } from "@/lib/strings";
 
 const PALETTE = [
@@ -32,12 +32,22 @@ function fmtMeta(tr: TrackSummary): string {
     .join(" · ");
 }
 
-export function LibraryScreen({ tracks }: { tracks: TrackSummary[] }) {
+export function LibraryScreen({ tracks: initialTracks }: { tracks: TrackSummary[] }) {
   const router = useRouter();
+  const [tracks, setTracks] = useState(initialTracks);
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  async function onDelete(id: string) {
+    setTracks((prev) => prev.filter((tr) => tr.id !== id));
+    try {
+      await deleteTrack(id);
+    } catch (e) {
+      setErr(String(e));
+    }
+  }
 
   async function startYouTube() {
     if (!url.trim()) return;
@@ -128,7 +138,7 @@ export function LibraryScreen({ tracks }: { tracks: TrackSummary[] }) {
         <input
           ref={fileRef}
           type="file"
-          accept="audio/*,video/*"
+          accept="audio/*,video/*,.mp3,.m4a,.wav,.flac,.aac,.ogg,.mp4,.mov,.webm"
           suppressHydrationWarning
           className="hidden"
           onChange={(e) => {
@@ -161,6 +171,7 @@ export function LibraryScreen({ tracks }: { tracks: TrackSummary[] }) {
                 t={tr}
                 palette={PALETTE[i % PALETTE.length]}
                 onClick={() => router.push(`/processing/${tr.id}`)}
+                onDelete={() => onDelete(tr.id)}
                 icon={<IconLoader2 size={16} className="text-[var(--color-accent-vocal)] animate-spin" />}
               />
             ))}
@@ -175,6 +186,7 @@ export function LibraryScreen({ tracks }: { tracks: TrackSummary[] }) {
                 t={tr}
                 palette={PALETTE[i % PALETTE.length]}
                 onClick={() => router.push(`/play/${tr.id}`)}
+                onDelete={() => onDelete(tr.id)}
                 icon={<IconPlayerPlay size={18} className="text-ink" />}
               />
             ))}
@@ -203,34 +215,99 @@ function Section({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
+const SWIPE_REVEAL = 88;
+const SWIPE_THRESHOLD = 44;
+
 function Row({
   t: tr,
   palette,
   onClick,
+  onDelete,
   icon,
 }: {
   t: TrackSummary;
   palette: { bg: string; fg: string };
   onClick: () => void;
+  onDelete: () => void;
   icon: React.ReactNode;
 }) {
+  const [offset, setOffset] = useState(0);
+  const [open, setOpen] = useState(false);
+  const startXRef = useRef<number | null>(null);
+  const movedRef = useRef(false);
+
+  function onTouchStart(e: React.TouchEvent) {
+    startXRef.current = e.touches[0].clientX;
+    movedRef.current = false;
+  }
+  function onTouchMove(e: React.TouchEvent) {
+    if (startXRef.current === null) return;
+    const dx = e.touches[0].clientX - startXRef.current;
+    const base = open ? -SWIPE_REVEAL : 0;
+    const next = Math.min(0, Math.max(-SWIPE_REVEAL - 20, base + dx));
+    if (Math.abs(dx) > 4) movedRef.current = true;
+    setOffset(next);
+  }
+  function onTouchEnd() {
+    startXRef.current = null;
+    if (offset < -SWIPE_THRESHOLD) {
+      setOpen(true);
+      setOffset(-SWIPE_REVEAL);
+    } else {
+      setOpen(false);
+      setOffset(0);
+    }
+  }
+
+  function handleClick(e: React.MouseEvent) {
+    if (open) {
+      e.preventDefault();
+      setOpen(false);
+      setOffset(0);
+      return;
+    }
+    if (movedRef.current) {
+      e.preventDefault();
+      return;
+    }
+    onClick();
+  }
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full flex items-center gap-3 py-3 border-t border-[var(--color-border-soft)] text-left"
-    >
-      <div
-        className="w-12 h-12 rounded-md flex items-center justify-center"
-        style={{ background: palette.bg, color: palette.fg }}
+    <div className="relative border-t border-[var(--color-border-soft)] overflow-hidden">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+        aria-label={t.library.delete}
+        className="absolute inset-y-0 right-0 w-[88px] flex items-center justify-center bg-[var(--color-accent-warn)] text-[var(--color-paper)]"
       >
-        <span className="font-serif italic text-[24px] leading-none">{initials(tr.title)}</span>
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="font-serif text-[19px] text-ink leading-[1.1] truncate">{tr.title}</div>
-        <div className="font-mono text-[11px] text-[var(--color-ink-muted)] truncate">{fmtMeta(tr)}</div>
-      </div>
-      {icon}
-    </button>
+        <IconTrash size={20} stroke={1.6} />
+      </button>
+      <button
+        type="button"
+        onClick={handleClick}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchEnd}
+        style={{ transform: `translateX(${offset}px)`, transition: startXRef.current === null ? "transform 180ms ease-out" : "none" }}
+        className="relative w-full flex items-center gap-3 py-3 text-left bg-paper"
+      >
+        <div
+          className="w-12 h-12 rounded-md flex items-center justify-center shrink-0"
+          style={{ background: palette.bg, color: palette.fg }}
+        >
+          <span className="font-serif italic text-[24px] leading-none">{initials(tr.title)}</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-serif text-[19px] text-ink leading-[1.1] truncate">{tr.title}</div>
+          <div className="font-mono text-[11px] text-[var(--color-ink-muted)] truncate">{fmtMeta(tr)}</div>
+        </div>
+        {icon}
+      </button>
+    </div>
   );
 }
