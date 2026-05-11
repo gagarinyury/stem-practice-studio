@@ -88,6 +88,18 @@ def fetch(
     if not hits:
         return None
 
+    # Cheap pre-filter before expensive NW alignment: rank candidates by
+    # (synced desc, |duration delta| asc) and keep top 5. LRClib can return
+    # 50+ hits for popular songs; running NW on every one was eating ~50s.
+    def _cheap_score(h: dict) -> tuple:
+        synced = bool(h.get("syncedLyrics"))
+        d = h.get("duration") or 0.0
+        delta = abs(d - duration) if duration else 0.0
+        return (-int(synced), delta)
+
+    hits.sort(key=_cheap_score)
+    hits = hits[:5]
+
     # Score each candidate by how well it matches the actual recording.
     # Two axes:
     #   match_rate    = matched_words / lrc_words   (penalises LRC entries
