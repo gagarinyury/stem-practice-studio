@@ -7,6 +7,7 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { AlignedLyrics, AlignedWord, Manifest } from "@/lib/manifest";
 import { fmtTime } from "@/lib/drill";
@@ -16,6 +17,7 @@ import { stemUrl } from "@/lib/manifest";
 import { ScreenShell } from "@/components/ui/ScreenShell";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { BackLink } from "@/components/ui/BackLink";
+import { Eyebrow } from "@/components/ui/text";
 import { t } from "@/lib/strings";
 
 interface Props {
@@ -32,6 +34,7 @@ interface Selection {
 const NULL_SEL: Selection = { anchor: -1, focus: -1, active: false };
 
 export function SelectView({ manifest, aligned }: Props) {
+  const router = useRouter();
   const linesData = useLinesData(aligned);
 
   const [sel, setSel] = useState<Selection>(NULL_SEL);
@@ -45,8 +48,17 @@ export function SelectView({ manifest, aligned }: Props) {
   const playAllRef = useRef<{ chunkIds: string[]; idx: number } | null>(null);
 
   useEffect(() => {
-    setChunks(listChunks(manifest.id));
+    const loaded = listChunks(manifest.id);
+    setChunks(loaded);
     setHydrated(true);
+    // Auto-activate the latest chunk as the current selection — so the
+    // user can hit "drill" immediately on entry without re-selecting.
+    if (loaded.length > 0) {
+      const last = loaded[loaded.length - 1];
+      if (typeof last.fromWordIdx === "number" && typeof last.toWordIdx === "number") {
+        setSel({ anchor: last.fromWordIdx, focus: last.toWordIdx, active: true });
+      }
+    }
   }, [manifest.id]);
 
   async function ensureEngine(): Promise<StemEngine> {
@@ -110,24 +122,6 @@ export function SelectView({ manifest, aligned }: Props) {
     setActiveChunkId(c.id);
   }
 
-  async function playAll() {
-    if (chunks.length === 0) return;
-    const e = await ensureEngine();
-    if (playAllRef.current) {
-      e.pause();
-      playAllRef.current = null;
-      setActiveChunkId(null);
-      return;
-    }
-    const seq = chunks.slice().sort((a, b) => a.from - b.from).map((c) => c.id);
-    playAllRef.current = { chunkIds: seq, idx: 0 };
-    const first = chunks.find((c) => c.id === seq[0])!;
-    e.setLoop({ from: first.from, to: first.to });
-    e.seek(first.from);
-    e.play();
-    setActiveChunkId(first.id);
-  }
-
   const lo = sel.active ? Math.min(sel.anchor, sel.focus) : -1;
   const hi = sel.active ? Math.max(sel.anchor, sel.focus) : -1;
   const selectedWords =
@@ -181,7 +175,8 @@ export function SelectView({ manifest, aligned }: Props) {
       label,
     });
     setChunks((xs) => [...xs, c]);
-    clearSelection();
+    // Selection stays — so the user can immediately tap "drill" on the
+    // phrase they just saved without re-selecting it.
   }
 
   function removeChunk(id: string) {
@@ -189,8 +184,15 @@ export function SelectView({ manifest, aligned }: Props) {
     setChunks((xs) => xs.filter((c) => c.id !== id));
   }
 
+  // If the current selection matches a saved chunk, pass its id along —
+  // DrillView uses chunk id to enable ◄ ► navigation across all chunks.
+  const matchedChunk = sel.active
+    ? chunks.find((c) => c.fromWordIdx === lo && c.toWordIdx === hi)
+    : undefined;
   const drillHref = sel.active
-    ? `/drill/${manifest.id}?from=${selFrom.toFixed(2)}&to=${selTo.toFixed(2)}`
+    ? matchedChunk
+      ? `/drill/${manifest.id}?chunk=${matchedChunk.id}&from=${selFrom.toFixed(2)}&to=${selTo.toFixed(2)}`
+      : `/drill/${manifest.id}?from=${selFrom.toFixed(2)}&to=${selTo.toFixed(2)}`
     : null;
 
   return (
@@ -248,25 +250,8 @@ export function SelectView({ manifest, aligned }: Props) {
       {/* Saved chunks — compact, always visible if any */}
       {hydrated && chunks.length > 0 && (
         <div className="shrink-0 border-t border-[var(--color-border-soft)] pt-2.5">
-          <div className="flex items-center justify-between mb-2">
-            <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-[var(--color-ink-muted)]">
-              — {t.select.myChunks} ({chunks.length})
-            </div>
-            <button
-              type="button"
-              onClick={playAll}
-              className="bg-ink text-paper rounded-pill px-3 py-1 font-mono text-[10px] tracking-[0.05em] flex items-center gap-1.5"
-            >
-              {playAllRef.current ? (
-                <>
-                  <IconPlayerPauseFilled size={12} /> {t.select.stop}
-                </>
-              ) : (
-                <>
-                  <IconPlayerPlayFilled size={12} /> {t.select.playAll}
-                </>
-              )}
-            </button>
+          <div className="mb-2">
+            <Eyebrow>— {t.select.myChunks} ({chunks.length})</Eyebrow>
           </div>
           <div
             className="overflow-y-auto pr-1 -mr-1 select-scroll"
@@ -292,7 +277,15 @@ export function SelectView({ manifest, aligned }: Props) {
                     >
                       {isActive ? <IconPlayerPauseFilled size={14} /> : <IconPlayerPlayFilled size={14} />}
                     </button>
-                    <div className="flex-1 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (typeof c.fromWordIdx === "number" && typeof c.toWordIdx === "number") {
+                          setSel({ anchor: c.fromWordIdx, focus: c.toWordIdx, active: true });
+                        }
+                      }}
+                      className="flex-1 min-w-0 text-left"
+                    >
                       <div className="text-[14px] text-ink truncate font-serif italic leading-tight">{c.label}</div>
                       <div className="font-mono text-[10px] text-[var(--color-ink-muted)]">
                         {fmtTime(c.from)}–{fmtTime(c.to)} · {(c.to - c.from).toFixed(1)}s
@@ -301,13 +294,7 @@ export function SelectView({ manifest, aligned }: Props) {
                           <span className="text-[var(--color-accent-vocal)]"> · {t.select.best} {Math.round(c.bestScore)}%</span>
                         ) : null}
                       </div>
-                    </div>
-                    <Link
-                      href={`/drill/${manifest.id}?chunk=${c.id}&from=${c.from.toFixed(2)}&to=${c.to.toFixed(2)}`}
-                      className="font-mono text-[11px] text-[var(--color-accent-vocal)] px-1.5 shrink-0"
-                    >
-                      {t.select.drillArrow}
-                    </Link>
+                    </button>
                     <button
                       type="button"
                       onClick={() => removeChunk(c.id)}
@@ -356,22 +343,16 @@ export function SelectView({ manifest, aligned }: Props) {
         >
           {t.select.saveChunk}
         </button>
-        {drillHref ? (
-          <Link
-            href={drillHref}
-            className="flex-1 bg-[var(--color-accent-vocal)] text-[var(--color-paper)] rounded-pill py-3 font-mono text-[12px] tracking-[0.05em] flex items-center justify-center gap-1.5"
-          >
-            {t.select.drill} <IconArrowRight size={14} />
-          </Link>
-        ) : (
-          <button
-            type="button"
-            disabled
-            className="flex-1 bg-[var(--color-accent-vocal)] text-[var(--color-paper)] rounded-pill py-3 font-mono text-[12px] tracking-[0.05em] flex items-center justify-center gap-1.5 opacity-40"
-          >
-            {t.select.drill} <IconArrowRight size={14} />
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => {
+            if (drillHref) router.push(drillHref);
+          }}
+          disabled={!drillHref}
+          className="flex-1 bg-[var(--color-accent-vocal)] text-[var(--color-paper)] rounded-pill py-3 font-mono text-[12px] tracking-[0.05em] flex items-center justify-center gap-1.5 disabled:opacity-40"
+        >
+          {t.select.drill} <IconArrowRight size={14} />
+        </button>
       </div>
     </ScreenShell>
   );
