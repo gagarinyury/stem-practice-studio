@@ -14,6 +14,15 @@ const config: CapacitorConfig = {
     url: "http://100.116.66.5:4323",
     cleartext: true,
   },
+  plugins: {
+    Keyboard: {
+      // Don't resize the WebView when the keyboard opens — the keyboard
+      // simply overlays the page. Without this iOS pushes the entire
+      // WebView frame up and the header floats off-screen.
+      resize: "none",
+      resizeOnFullScreen: false,
+    },
+  },
   ios: {
     // "never" — WebView does NOT auto-adjust for safe area; CSS env() in
     // ScreenShell handles top/bottom insets directly. "always" double-pads
