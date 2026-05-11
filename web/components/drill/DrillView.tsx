@@ -9,9 +9,7 @@ import {
   IconPlayerPlayFilled,
   IconPlayerSkipBackFilled,
   IconPlus,
-  IconX,
 } from "@tabler/icons-react";
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AlignedLyrics, Manifest } from "@/lib/manifest";
 import { pickPhrase, fmtTime, type Phrase } from "@/lib/drill";
@@ -20,6 +18,11 @@ import { StemEngine } from "@/lib/audio-engine";
 import { type Chunk, listChunks, updateChunk } from "@/lib/chunks";
 import { LyricsReel } from "./LyricsReel";
 import { EqualizerBars } from "./EqualizerBars";
+import { ScreenShell } from "@/components/ui/ScreenShell";
+import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { BackLink } from "@/components/ui/BackLink";
+import { MonoSmall } from "@/components/ui/text";
+import { t } from "@/lib/strings";
 
 interface Props {
   manifest: Manifest;
@@ -120,9 +123,15 @@ export function DrillView({
 
   if (!phrase) {
     return (
-      <div className="flex-1 flex items-center justify-center text-ink-muted font-mono text-[12px]">
-        no phrase to drill — track has no aligned lyrics
-      </div>
+      <ScreenShell variant="flow">
+        <div className="relative">
+          <ScreenHeader eyebrow={t.drill.eyebrow} title={t.drill.titleA} emphasis={t.drill.titleB} />
+          <BackLink href={`/play/${manifest.id}`} />
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <MonoSmall>{t.drill.emptyPhrase}</MonoSmall>
+        </div>
+      </ScreenShell>
     );
   }
 
@@ -411,58 +420,54 @@ function DrillInner({
   const hasPrev = chunkIdx > 0;
   const hasNext = chunkIdx >= 0 && chunkIdx < sortedChunks.length - 1;
 
+  const phraseLabel =
+    chunkIdx >= 0
+      ? `${t.drill.chunk} ${chunkIdx + 1}/${sortedChunks.length}`
+      : phrase.lineIndex !== null
+      ? `${t.drill.line} ${phrase.lineIndex + 1}/${phrase.totalLines}`
+      : t.drill.custom;
+
   return (
-    <div className="bg-paper rounded-[28px] border border-[var(--color-border-soft)] overflow-hidden font-serif w-[360px]">
-      {/* Header */}
-      <div className="px-5 pt-3.5 pb-2 flex items-center justify-between">
-        <Link href={`/play/${manifest.id}`} className="text-ink">
-          <IconX size={20} />
-        </Link>
+    <ScreenShell variant="flow" compact>
+      <div className="relative shrink-0">
+        <ScreenHeader
+          eyebrow={t.drill.eyebrow}
+          title={t.drill.titleA}
+          emphasis={t.drill.titleB}
+        />
+        <BackLink href={`/play/${manifest.id}`} />
+      </div>
 
-        <div className="flex items-center gap-2">
-          {hasChunks && chunkIdx >= 0 && (
-            <button
-              type="button"
-              onClick={() => hasPrev && onNavigate(sortedChunks[chunkIdx - 1])}
-              disabled={!hasPrev}
-              className="text-ink disabled:opacity-25"
-              aria-label="previous chunk"
-            >
-              <IconChevronLeft size={18} />
-            </button>
-          )}
-          <div className="text-center min-w-[110px]">
-            <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-[var(--color-accent-plan)]">
-              — drill —
-            </div>
-            <div className="text-[14px] font-mono text-ink leading-none mt-0.5 tabular-nums">
-              {chunkIdx >= 0
-                ? `chunk ${chunkIdx + 1}/${sortedChunks.length}`
-                : phrase.lineIndex !== null
-                ? `Line ${phrase.lineIndex + 1}/${phrase.totalLines}`
-                : "Custom"}
-            </div>
-          </div>
-          {hasChunks && chunkIdx >= 0 && (
-            <button
-              type="button"
-              onClick={() => hasNext && onNavigate(sortedChunks[chunkIdx + 1])}
-              disabled={!hasNext}
-              className="text-ink disabled:opacity-25"
-              aria-label="next chunk"
-            >
-              <IconChevronRight size={18} />
-            </button>
-          )}
-        </div>
-
-        {/* Spacer keeps the X mirrored. */}
-        <div className="w-[20px]" />
+      {/* Chunk navigation row: ◄ chunk N/M ► */}
+      <div className="shrink-0 flex items-center justify-center gap-3">
+        {hasChunks && chunkIdx >= 0 && (
+          <button
+            type="button"
+            onClick={() => hasPrev && onNavigate(sortedChunks[chunkIdx - 1])}
+            disabled={!hasPrev}
+            className="text-ink disabled:opacity-25"
+            aria-label={t.drill.prevChunk}
+          >
+            <IconChevronLeft size={18} />
+          </button>
+        )}
+        <div className="font-mono text-[13px] text-ink tabular-nums">{phraseLabel}</div>
+        {hasChunks && chunkIdx >= 0 && (
+          <button
+            type="button"
+            onClick={() => hasNext && onNavigate(sortedChunks[chunkIdx + 1])}
+            disabled={!hasNext}
+            className="text-ink disabled:opacity-25"
+            aria-label={t.drill.nextChunk}
+          >
+            <IconChevronRight size={18} />
+          </button>
+        )}
       </div>
 
       {/* Zoomed waveform with draggable A/B */}
-      <div className="px-4 pt-1.5">
-        <div className="bg-white border border-[var(--color-border-soft)] rounded-[var(--radius-md)] px-2 py-2.5">
+      <div className="shrink-0">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border-soft)] rounded-[var(--radius-md)] px-2 py-2.5">
           <svg
             ref={svgRef}
             viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
@@ -511,37 +516,35 @@ function DrillInner({
         </div>
       </div>
 
-      {/* Lyrics reel — 3 lines, smoothly sliding */}
-      <div className="px-4 pt-2 pb-1">
+      {/* Lyrics reel — grows to absorb slack so transport stays anchored at bottom */}
+      <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden">
         <LyricsReel aligned={aligned} currentTime={currentTime} />
       </div>
 
       {/* Pre / Post inline row */}
-      <div className="px-4 pt-2">
-        <div className="flex items-center justify-between gap-3 font-mono text-[10px]">
-          <InlineNudge
-            label="pre"
-            value={`${pre.toFixed(2)}s`}
-            onMinus={() => nudge(setPre, pre, PAD_STEP, PAD_MIN, PAD_MAX, -1)}
-            onPlus={() => nudge(setPre, pre, PAD_STEP, PAD_MIN, PAD_MAX, +1)}
-            minusDisabled={pre <= PAD_MIN + 1e-6}
-            plusDisabled={pre >= PAD_MAX - 1e-6}
-          />
-          <InlineNudge
-            label="post"
-            value={`${post.toFixed(2)}s`}
-            onMinus={() => nudge(setPost, post, PAD_STEP, PAD_MIN, PAD_MAX, -1)}
-            onPlus={() => nudge(setPost, post, PAD_STEP, PAD_MIN, PAD_MAX, +1)}
-            minusDisabled={post <= PAD_MIN + 1e-6}
-            plusDisabled={post >= PAD_MAX - 1e-6}
-          />
-        </div>
+      <div className="shrink-0 flex items-center justify-between gap-3 font-mono text-[10px]">
+        <InlineNudge
+          label={t.drill.pre}
+          value={`${pre.toFixed(2)}s`}
+          onMinus={() => nudge(setPre, pre, PAD_STEP, PAD_MIN, PAD_MAX, -1)}
+          onPlus={() => nudge(setPre, pre, PAD_STEP, PAD_MIN, PAD_MAX, +1)}
+          minusDisabled={pre <= PAD_MIN + 1e-6}
+          plusDisabled={pre >= PAD_MAX - 1e-6}
+        />
+        <InlineNudge
+          label={t.drill.post}
+          value={`${post.toFixed(2)}s`}
+          onMinus={() => nudge(setPost, post, PAD_STEP, PAD_MIN, PAD_MAX, -1)}
+          onPlus={() => nudge(setPost, post, PAD_STEP, PAD_MIN, PAD_MAX, +1)}
+          minusDisabled={post <= PAD_MIN + 1e-6}
+          plusDisabled={post >= PAD_MAX - 1e-6}
+        />
       </div>
 
       {/* Tempo / Pitch */}
-      <div className="px-4 pt-1 grid grid-cols-2 gap-2">
+      <div className="shrink-0 grid grid-cols-2 gap-2">
         <NudgeCard
-          label="tempo"
+          label={t.drill.tempo}
           value={`×${tempo.toFixed(2)}`}
           onMinus={() => nudge(setTempo, tempo, TEMPO_STEP, TEMPO_MIN, TEMPO_MAX, -1)}
           onPlus={() => nudge(setTempo, tempo, TEMPO_STEP, TEMPO_MIN, TEMPO_MAX, +1)}
@@ -549,7 +552,7 @@ function DrillInner({
           plusDisabled={tempo >= TEMPO_MAX - 1e-6}
         />
         <NudgeCard
-          label="key"
+          label={t.drill.key}
           value={pitch === 0 ? "0 st" : `${pitch > 0 ? "+" : ""}${pitch} st`}
           onMinus={() => nudge(setPitch, pitch, PITCH_STEP, PITCH_MIN, PITCH_MAX, -1)}
           onPlus={() => nudge(setPitch, pitch, PITCH_STEP, PITCH_MIN, PITCH_MAX, +1)}
@@ -559,46 +562,44 @@ function DrillInner({
       </div>
 
       {/* 3-mode practice selector */}
-      <div className="px-4 pt-2">
-        <div className="bg-white border border-[var(--color-border-soft)] rounded-[var(--radius-md)] p-1 grid grid-cols-3 gap-1">
-          {(
-            [
-              { key: "acappella", label: "a cappella" },
-              { key: "with", label: "with vocals" },
-              { key: "minus", label: "minus" },
-            ] as const
-          ).map((m) => {
-            const active = mode === m.key;
-            return (
-              <button
-                key={m.key}
-                type="button"
-                onClick={() => setMode(m.key)}
-                className={`rounded-[var(--radius-sm)] py-1.5 text-center transition-colors text-[12px] ${
-                  active ? "bg-ink text-paper" : "text-ink hover:bg-[var(--color-surface-muted)]"
-                }`}
-              >
-                {m.label}
-              </button>
-            );
-          })}
-        </div>
+      <div className="shrink-0 bg-[var(--color-surface)] border border-[var(--color-border-soft)] rounded-[var(--radius-md)] p-1 grid grid-cols-3 gap-1">
+        {(
+          [
+            { key: "acappella", label: t.drill.acappella },
+            { key: "with", label: t.drill.withVocals },
+            { key: "minus", label: t.drill.minus },
+          ] as const
+        ).map((m) => {
+          const active = mode === m.key;
+          return (
+            <button
+              key={m.key}
+              type="button"
+              onClick={() => setMode(m.key)}
+              className={`rounded-[var(--radius-sm)] py-1.5 text-center transition-colors text-[12px] ${
+                active ? "bg-ink text-paper" : "text-ink hover:bg-[var(--color-surface-muted)]"
+              }`}
+            >
+              {m.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Winamp-style FFT equalizer — bottom-anchored bars with peak hold */}
-      <div className="px-4 pt-2">
+      <div className="shrink-0">
         <EqualizerBars getEngine={() => engineRef.current} bars={28} height={70} />
       </div>
 
       {/* Bottom row: restart / repeats / play / got it
           Every slot is the same height (h-14 = 56px). */}
-      <div className="px-4 pt-3 pb-4 flex items-end justify-center gap-4">
+      <div className="shrink-0 flex items-end justify-center gap-4 pt-1">
         <button
           type="button"
           disabled={!audioReady}
           onClick={() => engineRef.current?.seekToLoopStart()}
           className="h-14 w-12 flex flex-col items-center justify-center gap-1 text-ink disabled:opacity-30"
-          title="restart loop from A"
+          title={t.drill.restartLoop}
         >
           <IconPlayerSkipBackFilled size={22} />
           <span className="font-mono text-[8px] text-[var(--color-ink-muted)] leading-none">A</span>
@@ -606,24 +607,29 @@ function DrillInner({
 
         <div
           className="h-14 w-12 flex flex-col items-center justify-center gap-1"
-          title="loop repeats"
+          title={t.drill.loops}
           data-testid="repeats-counter"
         >
           <span className="font-mono text-[22px] text-ink tabular-nums leading-none">
             {repeats}
             <span className="text-[12px] text-[var(--color-ink-muted)]">×</span>
           </span>
-          <span className="font-mono text-[8px] text-[var(--color-ink-muted)] leading-none">loops</span>
+          <span className="font-mono text-[8px] text-[var(--color-ink-muted)] leading-none">{t.drill.loops}</span>
         </div>
 
         <button
           type="button"
           disabled={!audioReady || processing}
-          onClick={() => engineRef.current?.toggle()}
+          onClick={() => {
+            const e = engineRef.current;
+            if (!e) return;
+            e.unlock();
+            e.toggle();
+          }}
           className="w-14 h-14 rounded-full bg-ink flex items-center justify-center text-paper disabled:opacity-50 shrink-0"
         >
           {processing ? (
-            <span className="font-mono text-[9px] text-paper">…</span>
+            <span className="font-mono text-[9px] text-paper">{t.drill.processing}</span>
           ) : playing ? (
             <IconPlayerPauseFilled size={24} />
           ) : (
@@ -638,10 +644,10 @@ function DrillInner({
           className="h-14 w-12 flex flex-col items-center justify-center gap-1 disabled:opacity-30"
           title={
             !currentChunkId
-              ? "save as chunk first to track mastery"
+              ? t.drill.masteryNeedChunk
               : mastered
-              ? "unmark mastered"
-              : "mark mastered & next"
+              ? t.drill.masteryUnmark
+              : t.drill.masteryMark
           }
         >
           <IconCheck
@@ -649,11 +655,11 @@ function DrillInner({
             className={mastered ? "text-[var(--color-accent-success)]" : "text-ink"}
           />
           <span className="font-mono text-[8px] text-[var(--color-ink-muted)] leading-none">
-            {mastered ? "mastered" : "got it"}
+            {mastered ? t.drill.mastered : t.drill.gotIt}
           </span>
         </button>
       </div>
-    </div>
+    </ScreenShell>
   );
 }
 
@@ -673,7 +679,7 @@ function NudgeCard({
   plusDisabled?: boolean;
 }) {
   return (
-    <div className="bg-white border border-[var(--color-border-soft)] rounded-[var(--radius-md)] px-2 py-1.5">
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border-soft)] rounded-[var(--radius-md)] px-2 py-1.5">
       <div className="font-mono text-[8.5px] uppercase tracking-[0.1em] text-[var(--color-ink-muted)] text-center">
         {label}
       </div>

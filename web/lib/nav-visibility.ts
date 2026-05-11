@@ -11,7 +11,6 @@ const HIDDEN_PREFIXES = [
   "/warmup/onboarding",
   "/warmup/session",
   "/processing",
-  "/drill",
   "/design",
 ];
 

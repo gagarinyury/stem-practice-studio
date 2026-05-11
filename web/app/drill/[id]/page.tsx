@@ -34,17 +34,15 @@ export default async function DrillPage({ params, searchParams }: Props) {
   }
 
   return (
-    <main className="flex-1 flex items-start justify-center py-10 px-4">
-      <DrillView
-        manifest={manifest}
-        aligned={aligned}
-        initialLineIndex={lineIndex}
-        initialFromSec={fromSec}
-        initialToSec={toSec}
-        initialPre={initialPre}
-        initialPost={initialPost}
-        initialChunkId={initialChunkId}
-      />
-    </main>
+    <DrillView
+      manifest={manifest}
+      aligned={aligned}
+      initialLineIndex={lineIndex}
+      initialFromSec={fromSec}
+      initialToSec={toSec}
+      initialPre={initialPre}
+      initialPost={initialPost}
+      initialChunkId={initialChunkId}
+    />
   );
 }
