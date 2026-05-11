@@ -5,6 +5,30 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+
+def _script_profile(text: str) -> tuple[float, float]:
+    """Return (cyrillic_ratio, latin_ratio) over letter-only chars.
+
+    Used to reject LRC candidates whose script disagrees with what was
+    actually sung — e.g. NW alignment will happily report 100% match_rate
+    between a 190-word English LRC and a 218-word Russian ASR transcript
+    because bag-of-tokens overlap exists for any short LRC, but the songs
+    are obviously not the same. Comparing character scripts is the
+    cheapest reliable language proxy.
+    """
+    cyr = lat = total = 0
+    for ch in text:
+        if ch.isalpha():
+            total += 1
+            o = ord(ch)
+            if 0x0400 <= o <= 0x04FF:
+                cyr += 1
+            elif (0x41 <= o <= 0x5A) or (0x61 <= o <= 0x7A):
+                lat += 1
+    if not total:
+        return 0.0, 0.0
+    return cyr / total, lat / total
+
 UA = "stem-practice-studio/0.1 (https://github.com/gagarinyury/stem-practice-studio)"
 LRC_TIMESTAMP = re.compile(r"\[\d{1,2}:\d{2}(?:\.\d{1,3})?\]")
 LRC_META = re.compile(r"\[(?:ti|ar|al|au|by|offset|re|ve|length):[^\]]*\]", re.IGNORECASE)
@@ -88,6 +112,26 @@ def fetch(
     if not hits:
         return None
 
+    # Script guard — drop hits whose lyrics use a fundamentally different
+    # script from what ASR transcribed. NW alignment can't tell language
+    # apart (it matches tokens), so this is the only place we catch e.g.
+    # an English LRC sneaking into a Russian recording's results.
+    if asr_words:
+        asr_text = " ".join(w.get("word", "") for w in asr_words)
+        asr_cyr, asr_lat = _script_profile(asr_text)
+        if asr_cyr > 0.5 or asr_lat > 0.5:
+            asr_is_cyr = asr_cyr > asr_lat
+            filtered = []
+            for h in hits:
+                lrc_text = h.get("syncedLyrics") or h.get("plainLyrics") or ""
+                lrc_cyr, lrc_lat = _script_profile(lrc_text)
+                lrc_is_cyr = lrc_cyr > lrc_lat
+                if (lrc_cyr + lrc_lat) > 0.1 and lrc_is_cyr != asr_is_cyr:
+                    continue
+                filtered.append(h)
+            if filtered:
+                hits = filtered
+
     # Cheap pre-filter before expensive NW alignment: rank candidates by
     # (synced desc, |duration delta| asc) and keep top 5. LRClib can return
     # 50+ hits for popular songs; running NW on every one was eating ~50s.
@@ -111,7 +155,9 @@ def fetch(
     #                                                song while the recording
     #                                                has 264 ASR words)
     # Use min(match_rate, asr_coverage) — both must be high for a real hit.
+    # Cache stats per candidate: combined score + structural signals.
     asr_combined: dict[int, float] = {}
+    asr_stats: dict[int, dict] = {}
     if asr_words:
         from . import align as align_mod
         for idx, h in enumerate(hits):
@@ -124,6 +170,7 @@ def fetch(
                 match_rate = stats["match_rate"]
                 asr_coverage = stats["matched"] / max(len(asr_words), 1)
                 asr_combined[idx] = min(match_rate, asr_coverage)
+                asr_stats[idx] = stats
             except Exception:
                 continue
 
@@ -141,12 +188,28 @@ def fetch(
     indexed = list(enumerate(hits))
     indexed.sort(key=score)
     best_idx, best_hit = indexed[0]
-    # Reject low-quality matches when we have ASR — a "best" candidate
-    # whose lyrics line up under 30% with the recording is almost
-    # certainly the wrong song (e.g. happens when title is a junk
-    # filename like "source"). Caller falls back to ASR-only.
-    if asr_combined and asr_combined.get(best_idx, 0.0) < 0.30:
-        return None
+    # Reject low-quality matches when we have ASR. Three guards, any
+    # one failing kills the candidate — caller falls back to Genius
+    # identification or pure ASR.
+    #
+    #   1. combined_rate ≥ 0.30 — minimum bag-of-tokens overlap. Catches
+    #      junk LRC with almost no word coincidence.
+    #   2. run_quality ≥ 0.40 — fraction of matched words sitting in
+    #      consecutive runs of length ≥ 3. A real song match has long
+    #      phrase-level streaks; a noise match is scattered singletons.
+    #      This is the guard that catches the Башлачёв×"Source Tags &
+    #      Codes" case where bag-overlap was 86% but no actual phrase
+    #      aligned.
+    #   3. lrc_span ≥ 0.50 — matched words spread across at least half
+    #      the LRC. False matches cluster in a narrow window.
+    if asr_combined:
+        best_stats = asr_stats.get(best_idx, {})
+        if asr_combined.get(best_idx, 0.0) < 0.30:
+            return None
+        if best_stats.get("run_quality", 0.0) < 0.40:
+            return None
+        if best_stats.get("lrc_span", 0.0) < 0.50:
+            return None
     return best_hit
 
 

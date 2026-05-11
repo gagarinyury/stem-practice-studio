@@ -53,6 +53,7 @@ services:
       RUNS_DIR: /srv/apps/stem-practice-studio/runs
       PYTHONPATH: /srv/apps/stem-practice-studio
       ACOUSTID_API_KEY: ${ACOUSTID_API_KEY:-}
+      GENIUS_API_TOKEN: ${GENIUS_API_TOKEN:-}
     # docker-out-of-docker: pipeline modules shell out to `docker run` on the
     # host (htdemucs_6s, gigaam, parakeet, yt-dlp). Mount the socket so
     # sibling containers can be created. Repo and runs are mounted RW at the

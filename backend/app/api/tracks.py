@@ -62,11 +62,18 @@ async def submit_track(
     if file and url:
         raise HTTPException(400, "provide only one of `file` or `url`")
 
-    body = TrackSubmit(url=url, language=language, artist=artist, title=title)
+    # For raw file uploads with no explicit title, fall back to the
+    # original filename (sans extension) so the pipeline doesn't end up
+    # with title="source" — that placeholder used to leak into LRCLib
+    # search and matched garbage like "...And You Will Know Us By the
+    # Trail of Dead — Source Tags & Codes".
+    upload_stem = (file.filename or "").rsplit(".", 1)[0] if file else None
+    effective_title = title or upload_stem
+    body = TrackSubmit(url=url, language=language, artist=artist, title=effective_title)
 
     # Display title for the index pre-pipeline. yt-dlp will overwrite later.
-    display_title = title or (file.filename if file else url) or "untitled"
-    track_id = make_track_id(title or (file.filename.rsplit(".", 1)[0] if file else None))
+    display_title = effective_title or (file.filename if file else url) or "untitled"
+    track_id = make_track_id(effective_title)
     create_track(track_id, display_title, artist, url, language)
 
     source_path: str | None = None

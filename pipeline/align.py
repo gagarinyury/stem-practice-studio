@@ -131,12 +131,43 @@ def align(asr_words: list[dict], lrc_words: list[dict], duration: float) -> tupl
             w["start"] = 0.0; w["end"] = duration
 
     interp = sum(1 for w in out if w["match"] == "interp")
+
+    # Run-length quality: count consecutive (ai, li) → (ai+1, li+1) pairs.
+    # A real song match has long runs (phrase-level alignment); a noise
+    # match is a sparse scatter of single-token coincidences with gaps.
+    matched_pairs = [(ai, li) for ai, li in pairs if ai is not None and li is not None]
+    runs: list[int] = []
+    if matched_pairs:
+        cur = 1
+        for k in range(1, len(matched_pairs)):
+            prev_ai, prev_li = matched_pairs[k - 1]
+            ai, li = matched_pairs[k]
+            if ai == prev_ai + 1 and li == prev_li + 1:
+                cur += 1
+            else:
+                runs.append(cur); cur = 1
+        runs.append(cur)
+    longest_run = max(runs) if runs else 0
+    in_long_runs = sum(r for r in runs if r >= 3)
+    run_quality = round(in_long_runs / max(matched, 1), 3)
+
+    # Span coverage: a true match spreads matched LRC positions across
+    # most of the LRC; a noise match clusters them in a narrow window.
+    if matched_pairs:
+        li_indices = [li for _, li in matched_pairs]
+        span = (max(li_indices) - min(li_indices) + 1) / max(len(lrc_words), 1)
+    else:
+        span = 0.0
+
     stats = {
         "asr_words": len(asr_words),
         "lrc_words": len(lrc_words),
         "matched": matched,
         "match_rate": round(matched / max(len(lrc_words), 1), 3),
         "interpolated": interp,
+        "longest_run": longest_run,
+        "run_quality": run_quality,
+        "lrc_span": round(span, 3),
     }
     return out, stats
 

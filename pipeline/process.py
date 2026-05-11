@@ -198,6 +198,34 @@ def run(opts: RunOpts, on_progress: Optional[ProgressCb] = None) -> dict:
             print(f"[pipeline] lrclib error: {e}", file=sys.stderr)
         timings["lrclib"] = round(time.perf_counter() - t, 2)
 
+    # Fallback: if LRCLib didn't find a confident match using the metadata
+    # we have, identify the song by searching Genius with snippets of the
+    # ASR transcript. This catches cases where the source has no usable
+    # title (uploaded mp3 with no tags, junk YouTube playlist names) AND
+    # AcoustID missed (live recordings, covers, unreleased material).
+    if not lrc_entry:
+        try:
+            from . import genius as genius_mod
+            asr_for_search = asr_data.get("words") or []
+            gen_hit = genius_mod.identify_from_asr(asr_for_search, language=opts.language)
+        except Exception as e:
+            print(f"[pipeline] genius error: {e}", file=sys.stderr)
+            gen_hit = None
+        if gen_hit:
+            meta["genius"] = gen_hit
+            # Overwrite title/artist with Genius result — it's content-based,
+            # so it's authoritative over any junk metadata we had.
+            meta["title"] = gen_hit["title"]
+            if not meta.get("uploader"):
+                meta["uploader"] = gen_hit["artist"]
+            try:
+                lrc_entry = lrc_mod.fetch(
+                    gen_hit["artist"], gen_hit["title"], duration,
+                    asr_words=asr_data.get("words") or None,
+                )
+            except Exception as e:
+                print(f"[pipeline] lrclib retry error: {e}", file=sys.stderr)
+
     if lrc_entry:
         lrc_raw = lrc_entry.get("syncedLyrics") or lrc_entry.get("plainLyrics") or ""
         lines = lrc_mod.parse(lrc_raw)
