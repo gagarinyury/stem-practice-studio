@@ -18,9 +18,5 @@ export default async function SelectPage({ params }: Props) {
     notFound();
   }
 
-  return (
-    <main className="flex-1 flex items-start justify-center py-10 px-4">
-      <SelectView manifest={manifest} aligned={aligned} />
-    </main>
-  );
+  return <SelectView manifest={manifest} aligned={aligned} />;
 }

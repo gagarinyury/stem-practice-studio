@@ -2,11 +2,9 @@
 
 import {
   IconArrowRight,
-  IconCheck,
   IconPlayerPauseFilled,
   IconPlayerPlayFilled,
   IconTrash,
-  IconX,
 } from "@tabler/icons-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -15,6 +13,10 @@ import { fmtTime } from "@/lib/drill";
 import { type Chunk, deleteChunk, listChunks, saveChunk } from "@/lib/chunks";
 import { StemEngine } from "@/lib/audio-engine";
 import { stemUrl } from "@/lib/manifest";
+import { ScreenShell } from "@/components/ui/ScreenShell";
+import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { BackLink } from "@/components/ui/BackLink";
+import { t } from "@/lib/strings";
 
 interface Props {
   manifest: Manifest;
@@ -30,9 +32,6 @@ interface Selection {
 const NULL_SEL: Selection = { anchor: -1, focus: -1, active: false };
 
 export function SelectView({ manifest, aligned }: Props) {
-  // Words organised by line for rendering, but we keep the global word index
-  // (position in aligned.words) as the selection anchor — that's the unit we
-  // persist as a chunk.
   const linesData = useLinesData(aligned);
 
   const [sel, setSel] = useState<Selection>(NULL_SEL);
@@ -40,7 +39,6 @@ export function SelectView({ manifest, aligned }: Props) {
   const [hydrated, setHydrated] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Engine for in-place chunk preview / play-all sequence.
   const engineRef = useRef<StemEngine | null>(null);
   const [audioReady, setAudioReady] = useState(false);
   const [activeChunkId, setActiveChunkId] = useState<string | null>(null);
@@ -51,7 +49,6 @@ export function SelectView({ manifest, aligned }: Props) {
     setHydrated(true);
   }, [manifest.id]);
 
-  // Lazy-load engine the first time the user hits play.
   async function ensureEngine(): Promise<StemEngine> {
     if (engineRef.current) return engineRef.current;
     const engine = new StemEngine();
@@ -67,7 +64,6 @@ export function SelectView({ manifest, aligned }: Props) {
 
   useEffect(() => () => engineRef.current?.dispose(), []);
 
-  // Watch the currently-playing chunk and advance the play-all sequence at boundary.
   useEffect(() => {
     if (!activeChunkId) return;
     let raf = 0;
@@ -87,7 +83,6 @@ export function SelectView({ manifest, aligned }: Props) {
             e.setLoop({ from: nextChunk.from, to: nextChunk.to });
             setActiveChunkId(nextId);
           } else {
-            // Sequence complete.
             playAllRef.current = null;
             e.pause();
             setActiveChunkId(null);
@@ -141,7 +136,6 @@ export function SelectView({ manifest, aligned }: Props) {
   const selFrom = selectedWords.length > 0 ? Math.min(...selectedWords.map((w) => w.start)) : 0;
   const selTo = selectedWords.length > 0 ? Math.max(...selectedWords.map((w) => w.end)) : 0;
 
-  /** Translate a pointer coordinate to the word index under it. */
   function wordIdxAt(x: number, y: number): number | null {
     const el = document.elementFromPoint(x, y);
     if (!el) return null;
@@ -166,7 +160,7 @@ export function SelectView({ manifest, aligned }: Props) {
   }
 
   function onPointerUp() {
-    // Selection stays visible after pointer-up so the user can press "drill".
+    /* selection stays visible so user can press save/drill */
   }
 
   function clearSelection() {
@@ -195,44 +189,37 @@ export function SelectView({ manifest, aligned }: Props) {
     setChunks((xs) => xs.filter((c) => c.id !== id));
   }
 
+  const drillHref = sel.active
+    ? `/drill/${manifest.id}?from=${selFrom.toFixed(2)}&to=${selTo.toFixed(2)}`
+    : null;
+
   return (
-    <div className="bg-paper rounded-[28px] border border-[var(--color-border-soft)] overflow-hidden font-serif w-[min(560px,100%)] flex flex-col">
-      {/* Header */}
-      <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-[var(--color-border-soft)]">
-        <Link href={`/play/${manifest.id}`} className="text-ink">
-          <IconX size={22} />
-        </Link>
-        <div className="text-center">
-          <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-[var(--color-accent-plan)]">
-            — pick what to learn —
-          </div>
-          <div className="text-[18px] text-ink leading-none mt-1 truncate max-w-[300px]">
-            {manifest.title}
-          </div>
-        </div>
-        <div className="w-[22px]" />
+    <ScreenShell variant="flow" compact>
+      <div className="relative">
+        <ScreenHeader
+          eyebrow={t.select.eyebrow}
+          title={t.select.titleA}
+          emphasis={t.select.titleB}
+        />
+        <BackLink href={`/play/${manifest.id}`} />
       </div>
 
-      {/* Hint about drag selection — fades after first use */}
-      {!sel.active && chunks.length === 0 && (
-        <div className="px-6 pt-4 pb-1 font-mono text-[10px] text-[var(--color-accent-vocal)] tracking-[0.05em] flex items-center gap-2">
-          <span className="inline-block w-4 h-px bg-[var(--color-accent-vocal)]" />
-          tap & drag across words to pick a phrase to drill
-          <span className="inline-block flex-1 h-px bg-[var(--color-accent-vocal)] opacity-30" />
-        </div>
-      )}
-
-      {/* Lyrics with drag selection */}
+      {/* Scrollable lyrics with drag-selection. Side scrollbar visible. */}
       <div
         ref={containerRef}
-        className="px-6 py-6 select-none cursor-pointer"
+        className="flex-1 min-h-0 overflow-y-auto pr-3 -mr-2 select-none cursor-pointer select-scroll"
         style={{ touchAction: "pan-y", userSelect: "none", WebkitUserSelect: "none" }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
+        {!sel.active && chunks.length === 0 && (
+          <div className="pb-3 font-mono text-[10px] text-[var(--color-accent-vocal)] tracking-[0.05em]">
+            {t.select.hint}
+          </div>
+        )}
         {linesData.map((line, lineIdx) => (
-          <div key={lineIdx} className="text-[20px] leading-[1.6] text-ink mb-1.5 italic">
+          <div key={lineIdx} className="text-[19px] leading-[1.55] text-ink mb-1.5 italic">
             {line.empty ? (
               <span className="text-[var(--color-ink-faint)]">—</span>
             ) : (
@@ -258,123 +245,135 @@ export function SelectView({ manifest, aligned }: Props) {
         ))}
       </div>
 
-      {/* Selection toolbar */}
-      {sel.active && selectedWords.length > 0 && (
-        <div className="border-t border-[var(--color-border-soft)] bg-white px-5 py-3 flex items-center gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="font-mono text-[10px] text-[var(--color-ink-muted)] tracking-[0.05em]">
-              {selectedWords.length} {selectedWords.length === 1 ? "word" : "words"} ·
-              {" "}{(selTo - selFrom).toFixed(1)}s · {fmtTime(selFrom)}–{fmtTime(selTo)}
-            </div>
-            <div className="text-[14px] text-ink truncate font-serif italic">
-              {selectedWords.map((w) => w.word).join(" ")}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={clearSelection}
-            className="font-mono text-[11px] text-[var(--color-ink-muted)] underline"
-          >
-            clear
-          </button>
-          <Link
-            href={`/drill/${manifest.id}?from=${selFrom.toFixed(2)}&to=${selTo.toFixed(2)}`}
-            className="bg-[var(--color-accent-vocal)] text-paper rounded-[var(--radius-pill)] px-4 py-2 font-mono text-[11px] tracking-[0.05em] flex items-center gap-1.5"
-          >
-            drill <IconArrowRight size={14} />
-          </Link>
-          <button
-            type="button"
-            onClick={commitChunk}
-            className="bg-ink text-paper rounded-[var(--radius-pill)] px-4 py-2 font-mono text-[11px] tracking-[0.05em]"
-          >
-            save chunk
-          </button>
-        </div>
-      )}
-
-      {/* Saved chunks */}
+      {/* Saved chunks — compact, always visible if any */}
       {hydrated && chunks.length > 0 && (
-        <div className="border-t border-[var(--color-border-soft)] px-5 py-4">
-          <div className="flex items-center justify-between mb-3">
+        <div className="shrink-0 border-t border-[var(--color-border-soft)] pt-2.5">
+          <div className="flex items-center justify-between mb-2">
             <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-[var(--color-ink-muted)]">
-              — my chunks ({chunks.length})
+              — {t.select.myChunks} ({chunks.length})
             </div>
             <button
               type="button"
               onClick={playAll}
-              className="bg-ink text-paper rounded-[var(--radius-pill)] px-3 py-1 font-mono text-[10px] tracking-[0.05em] flex items-center gap-1.5"
+              className="bg-ink text-paper rounded-pill px-3 py-1 font-mono text-[10px] tracking-[0.05em] flex items-center gap-1.5"
             >
               {playAllRef.current ? (
                 <>
-                  <IconPlayerPauseFilled size={12} /> stop
+                  <IconPlayerPauseFilled size={12} /> {t.select.stop}
                 </>
               ) : (
                 <>
-                  <IconPlayerPlayFilled size={12} /> play all
+                  <IconPlayerPlayFilled size={12} /> {t.select.playAll}
                 </>
               )}
             </button>
           </div>
-          {chunks
-            .slice()
-            .sort((a, b) => a.from - b.from)
-            .map((c) => {
-              const isActive = activeChunkId === c.id;
-              return (
-                <div
-                  key={c.id}
-                  className={`flex items-center gap-3 py-2.5 border-t border-[var(--color-border-soft)] ${
-                    isActive ? "bg-[var(--color-surface-muted)] -mx-5 px-5" : ""
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => playChunk(c)}
-                    className="w-7 h-7 flex items-center justify-center text-ink"
-                    title={isActive ? "stop" : "preview"}
+          <div
+            className="overflow-y-auto pr-1 -mr-1 select-scroll"
+            style={{ maxHeight: 110 }}
+          >
+            {chunks
+              .slice()
+              .sort((a, b) => a.from - b.from)
+              .map((c) => {
+                const isActive = activeChunkId === c.id;
+                return (
+                  <div
+                    key={c.id}
+                    className={`flex items-center gap-2 py-1.5 border-t border-[var(--color-border-soft)] first:border-t-0 ${
+                      isActive ? "bg-[var(--color-surface-muted)] -mx-2 px-2 rounded-md" : ""
+                    }`}
                   >
-                    {isActive ? (
-                      <IconPlayerPauseFilled size={16} />
-                    ) : (
-                      <IconPlayerPlayFilled size={16} />
-                    )}
-                  </button>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[15px] text-ink truncate font-serif italic">{c.label}</div>
-                    <div className="font-mono text-[10px] text-[var(--color-ink-muted)]">
-                      {fmtTime(c.from)}–{fmtTime(c.to)} · {(c.to - c.from).toFixed(1)}s
-                      {c.mastered ? " · ✓ mastered" : c.attempts > 0 ? ` · ${c.attempts}×` : ""}
-                      {typeof c.bestScore === "number" && c.bestScore > 0 ? (
-                        <span className="text-[var(--color-accent-vocal)]"> · best {Math.round(c.bestScore)}%</span>
-                      ) : null}
+                    <button
+                      type="button"
+                      onClick={() => playChunk(c)}
+                      className="w-6 h-6 flex items-center justify-center text-ink shrink-0"
+                      title={isActive ? t.select.stop : t.select.previewTitle}
+                    >
+                      {isActive ? <IconPlayerPauseFilled size={14} /> : <IconPlayerPlayFilled size={14} />}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[14px] text-ink truncate font-serif italic leading-tight">{c.label}</div>
+                      <div className="font-mono text-[10px] text-[var(--color-ink-muted)]">
+                        {fmtTime(c.from)}–{fmtTime(c.to)} · {(c.to - c.from).toFixed(1)}s
+                        {c.mastered ? ` · ${t.select.mastered}` : c.attempts > 0 ? ` · ${c.attempts}×` : ""}
+                        {typeof c.bestScore === "number" && c.bestScore > 0 ? (
+                          <span className="text-[var(--color-accent-vocal)]"> · {t.select.best} {Math.round(c.bestScore)}%</span>
+                        ) : null}
+                      </div>
                     </div>
+                    <Link
+                      href={`/drill/${manifest.id}?chunk=${c.id}&from=${c.from.toFixed(2)}&to=${c.to.toFixed(2)}`}
+                      className="font-mono text-[11px] text-[var(--color-accent-vocal)] px-1.5 shrink-0"
+                    >
+                      {t.select.drillArrow}
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => removeChunk(c.id)}
+                      className="text-[var(--color-ink-faint)] hover:text-[var(--color-accent-warn)] shrink-0"
+                    >
+                      <IconTrash size={14} />
+                    </button>
                   </div>
-                  <Link
-                    href={`/drill/${manifest.id}?chunk=${c.id}&from=${c.from.toFixed(2)}&to=${c.to.toFixed(2)}`}
-                    className="font-mono text-[11px] text-[var(--color-accent-vocal)] px-2 py-1"
-                  >
-                    drill →
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => removeChunk(c.id)}
-                    className="text-[var(--color-ink-faint)] hover:text-[var(--color-accent-warn)]"
-                  >
-                    <IconTrash size={16} />
-                  </button>
-                </div>
-              );
-            })}
+                );
+              })}
+          </div>
+          {!audioReady && (
+            <div className="pt-1.5 font-mono text-[9px] text-[var(--color-ink-muted)] text-center">
+              {t.select.loadStemsHint}
+            </div>
+          )}
         </div>
       )}
 
-      {!audioReady && hydrated && chunks.length > 0 && (
-        <div className="px-5 pb-3 font-mono text-[9px] text-[var(--color-ink-muted)] text-center">
-          tap ▶ to load stems for preview
+      {/* Selection metadata (only when active). Above the action row. */}
+      {sel.active && selectedWords.length > 0 && (
+        <div className="shrink-0 flex items-baseline gap-3">
+          <div className="font-mono text-[10px] text-[var(--color-ink-muted)] shrink-0">
+            {selectedWords.length} {selectedWords.length === 1 ? t.select.word : t.select.words} · {(selTo - selFrom).toFixed(1)}s
+          </div>
+          <div className="flex-1 min-w-0 text-[12px] text-ink truncate font-serif italic">
+            {selectedWords.map((w) => w.word).join(" ")}
+          </div>
+          <button
+            type="button"
+            onClick={clearSelection}
+            className="font-mono text-[10px] text-[var(--color-ink-muted)] underline shrink-0"
+          >
+            {t.select.clear}
+          </button>
         </div>
       )}
-    </div>
+
+      {/* Always-visible action row directly above the BottomNav. */}
+      <div className="shrink-0 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={commitChunk}
+          disabled={!sel.active || selectedWords.length === 0}
+          className="flex-1 bg-[var(--color-ink)] text-[var(--color-paper)] rounded-pill py-3 font-mono text-[12px] tracking-[0.05em] disabled:opacity-40"
+        >
+          {t.select.saveChunk}
+        </button>
+        {drillHref ? (
+          <Link
+            href={drillHref}
+            className="flex-1 bg-[var(--color-accent-vocal)] text-[var(--color-paper)] rounded-pill py-3 font-mono text-[12px] tracking-[0.05em] flex items-center justify-center gap-1.5"
+          >
+            {t.select.drill} <IconArrowRight size={14} />
+          </Link>
+        ) : (
+          <button
+            type="button"
+            disabled
+            className="flex-1 bg-[var(--color-accent-vocal)] text-[var(--color-paper)] rounded-pill py-3 font-mono text-[12px] tracking-[0.05em] flex items-center justify-center gap-1.5 opacity-40"
+          >
+            {t.select.drill} <IconArrowRight size={14} />
+          </button>
+        )}
+      </div>
+    </ScreenShell>
   );
 }
 

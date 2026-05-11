@@ -50,6 +50,23 @@ button, a, [role="button"] {
   --bottom-reserve: calc(env(safe-area-inset-bottom, 0px) + 56px);
 }
 
+/* Thin always-visible scrollbar for selectable scroll regions (Select screen).
+   WKWebView hides default scrollbars on mobile, so we draw a slim one. */
+.select-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.select-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.select-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-ink-faint);
+  border-radius: 2px;
+}
+.select-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-ink-faint) transparent;
+}
+
 /* Thin range slider for stem volume */
 .thin-range {
   -webkit-appearance: none;
