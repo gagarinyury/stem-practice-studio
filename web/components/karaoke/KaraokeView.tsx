@@ -251,7 +251,7 @@ export function KaraokeView({ manifest, aligned }: Props) {
   if (mode === "phone-portrait" || mode === "phone-landscape") {
     const isLandscape = mode === "phone-landscape";
     return (
-      <div className={`fixed inset-0 select-none ${isLandscape ? "bg-black text-[var(--color-paper)]" : "bg-paper text-ink flex flex-col"}`}>
+      <div className={`fixed inset-0 select-none ${isLandscape ? "z-50 bg-black text-[var(--color-paper)]" : "bg-paper text-ink flex flex-col"}`}>
         {/* Stable YouTube mount — same tree position for both orientations.
             In portrait it's just a positioned block (offset by the header below
             via order; in landscape it's absolutely positioned full-screen. */}

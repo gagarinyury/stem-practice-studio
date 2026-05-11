@@ -18,7 +18,8 @@ export function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-3 left-1/2 -translate-x-1/2 w-[min(360px,calc(100%-24px))] bg-white border border-[var(--color-border-soft)] rounded-pill p-2 flex justify-around z-40"
+      className="fixed bottom-0 left-0 right-0 z-40 bg-[var(--color-paper)] border-t border-[var(--color-border-soft)] flex justify-around items-stretch"
+      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       aria-label="Primary"
     >
       {TABS.map(({ key, path, Icon, label }) => {
@@ -29,13 +30,11 @@ export function BottomNav() {
             onClick={() => router.push(path)}
             aria-label={label}
             aria-current={active ? "page" : undefined}
-            className={`flex flex-col items-center gap-[2px] px-3 py-[6px] rounded-pill transition-colors ${
-              active
-                ? "bg-[var(--color-surface-muted)] text-[var(--color-ink)]"
-                : "text-[var(--color-ink-muted)]"
+            className={`flex-1 flex items-center justify-center py-3 transition-colors ${
+              active ? "text-[var(--color-ink)]" : "text-[var(--color-ink-faint)]"
             }`}
           >
-            <Icon size={18} stroke={1.6} />
+            <Icon size={20} stroke={1.6} />
           </button>
         );
       })}

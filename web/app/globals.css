@@ -39,17 +39,15 @@ button, a, [role="button"] {
   cursor: pointer;
 }
 
-/* Unified bottom reserve. On screens with the floating BottomNav, we
-   carve out 72px (52px bar + 12px float + 8px breathing room) on top of
-   the iOS home-indicator safe-area. Screens without the bar reserve only
-   the safe-area itself. ScreenShell + karaoke phone overlay both consume
-   this var so nothing ever slides under the nav and bottom rhythm stays
-   identical between screens. */
+/* Unified bottom reserve. BottomNav is now a flat bottom strip with its
+   own safe-area padding, so screens with the nav reserve `nav body height +
+   safe-area`. Screens without the nav reserve only the safe-area itself.
+   ScreenShell and karaoke phone overlay both consume this var. */
 :root {
   --bottom-reserve: env(safe-area-inset-bottom, 0px);
 }
 [data-bottomnav="true"] {
-  --bottom-reserve: calc(env(safe-area-inset-bottom, 0px) + 72px);
+  --bottom-reserve: calc(env(safe-area-inset-bottom, 0px) + 56px);
 }
 
 /* Thin range slider for stem volume */
