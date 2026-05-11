@@ -1,98 +1,107 @@
 "use client";
 
-import { Capacitor } from "@capacitor/core";
-import { Filesystem, Directory } from "@capacitor/filesystem";
+// Local video storage via IndexedDB. Keeps the original upload Blob
+// in the WebView's own storage so karaoke can play it as a background
+// without a server round-trip. Why IndexedDB and not @capacitor/filesystem:
+// the Capacitor bridge serialises file contents as a base64 JSON string
+// and shipping ~100 MB across the bridge crashes WKWebView's web content
+// process. IndexedDB stores Blobs natively in-process — no copy, no IPC.
+//
+// Trade-off: iOS may evict IndexedDB if the device is low on disk
+// (data is considered transient). Acceptable for MVP — if it's gone,
+// karaoke just falls back to no-background.
 
-const STORAGE_PREFIX = "local-video:";
+const DB_NAME = "stem-practice";
+const DB_VERSION = 1;
+const STORE = "local-videos";
 
-export function isVideoFile(file: File): boolean {
+interface LocalVideoRecord {
+  blob: Blob;
+  mime: string;
+}
+
+function isVideoMimeOrName(file: File): boolean {
   if (file.type && file.type.startsWith("video/")) return true;
   return /\.(mp4|mov|webm|mkv|m4v)$/i.test(file.name);
 }
 
-export function isNative(): boolean {
-  return typeof window !== "undefined" && Capacitor.isNativePlatform();
-}
+export const isVideoFile = isVideoMimeOrName;
 
-interface LocalVideoInfo {
-  path: string;
-  webPath: string;
-  mime: string;
-}
-
-export async function readLocalVideoAsBlobUrl(path: string, mime: string): Promise<string> {
-  const r = await Filesystem.readFile({ path, directory: Directory.Data });
-  const base64 = typeof r.data === "string" ? r.data : await blobToBase64(r.data as Blob);
-  const bin = atob(base64);
-  const len = bin.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
-  const blob = new Blob([bytes], { type: mime });
-  return URL.createObjectURL(blob);
-}
-
-async function blobToBase64(b: Blob): Promise<string> {
+function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => {
-      const s = r.result as string;
-      const i = s.indexOf("base64,");
-      resolve(i >= 0 ? s.slice(i + 7) : s);
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
     };
-    r.onerror = () => reject(r.error);
-    r.readAsDataURL(b);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
   });
 }
 
-async function fileToBase64(file: File): Promise<string> {
+function txPromise<T>(tx: IDBTransaction, value: T): Promise<T> {
   return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => {
-      const result = r.result as string;
-      const idx = result.indexOf("base64,");
-      resolve(idx >= 0 ? result.slice(idx + 7) : result);
-    };
-    r.onerror = () => reject(r.error);
-    r.readAsDataURL(file);
+    tx.oncomplete = () => resolve(value);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
   });
 }
 
-export async function saveLocalVideo(trackId: string, file: File): Promise<LocalVideoInfo | null> {
-  if (!isNative()) return null;
-  const ext = (file.name.split(".").pop() || "mp4").toLowerCase();
-  const path = `tracks/${trackId}/source.${ext}`;
-  const base64 = await fileToBase64(file);
-  await Filesystem.writeFile({
-    path,
-    directory: Directory.Data,
-    data: base64,
-    recursive: true,
-  });
-  const { uri } = await Filesystem.getUri({ path, directory: Directory.Data });
-  const webPath = Capacitor.convertFileSrc(uri);
-  const mime = file.type || `video/${ext === "mov" ? "quicktime" : ext}`;
-  const info: LocalVideoInfo = { path, webPath, mime };
-  try { localStorage.setItem(STORAGE_PREFIX + trackId, JSON.stringify(info)); } catch {}
-  return info;
+export async function saveLocalVideo(trackId: string, file: File): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
+  const t0 = performance.now();
+  console.log("[lv] save:start", { trackId, sizeMB: (file.size / 1048576).toFixed(1), mime: file.type });
+  const db = openDb ? await openDb() : null;
+  if (!db) return;
+  const mime = file.type || "video/mp4";
+  // Snapshot the File into a Blob so the IDB store keeps a stable copy
+  // (some browsers detach the underlying File when the input changes).
+  const blob = file.slice(0, file.size, mime);
+  const tx = db.transaction(STORE, "readwrite");
+  tx.objectStore(STORE).put({ blob, mime } satisfies LocalVideoRecord, trackId);
+  await txPromise(tx, undefined);
+  db.close();
+  console.log("[lv] save:done", { ms: (performance.now() - t0).toFixed(0) });
 }
 
-export function getLocalVideo(trackId: string): LocalVideoInfo | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(STORAGE_PREFIX + trackId);
-    if (!raw) return null;
-    return JSON.parse(raw) as LocalVideoInfo;
-  } catch {
+export async function getLocalVideoBlobUrl(trackId: string): Promise<{ url: string; mime: string } | null> {
+  if (typeof indexedDB === "undefined") return null;
+  const t0 = performance.now();
+  const db = await openDb();
+  const tx = db.transaction(STORE, "readonly");
+  const req = tx.objectStore(STORE).get(trackId);
+  const rec = await new Promise<LocalVideoRecord | undefined>((resolve, reject) => {
+    req.onsuccess = () => resolve(req.result as LocalVideoRecord | undefined);
+    req.onerror = () => reject(req.error);
+  });
+  db.close();
+  if (!rec) {
+    console.log("[lv] read:miss", { trackId });
     return null;
   }
+  const url = URL.createObjectURL(rec.blob);
+  console.log("[lv] read:done", { ms: (performance.now() - t0).toFixed(0), sizeMB: (rec.blob.size / 1048576).toFixed(1), mime: rec.mime });
+  return { url, mime: rec.mime };
 }
 
 export async function deleteLocalVideo(trackId: string): Promise<void> {
-  const info = getLocalVideo(trackId);
-  if (info && isNative()) {
-    try {
-      await Filesystem.deleteFile({ path: info.path, directory: Directory.Data });
-    } catch {}
-  }
-  try { localStorage.removeItem(STORAGE_PREFIX + trackId); } catch {}
+  if (typeof indexedDB === "undefined") return;
+  const db = await openDb();
+  const tx = db.transaction(STORE, "readwrite");
+  tx.objectStore(STORE).delete(trackId);
+  await txPromise(tx, undefined);
+  db.close();
+}
+
+export async function hasLocalVideo(trackId: string): Promise<boolean> {
+  if (typeof indexedDB === "undefined") return false;
+  const db = await openDb();
+  const tx = db.transaction(STORE, "readonly");
+  const req = tx.objectStore(STORE).getKey(trackId);
+  const key = await new Promise<IDBValidKey | undefined>((resolve, reject) => {
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  db.close();
+  return key !== undefined;
 }

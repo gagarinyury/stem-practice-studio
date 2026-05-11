@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
   IconChevronDown,
+  IconChevronLeft,
   IconMicrophone,
   IconMicrophone2,
   IconMusic,
@@ -215,7 +216,7 @@ export function MultiStemPlayer({ manifest, aligned }: Props) {
 
   return (
     <ScreenShell variant="flow" compact>
-      <div className="shrink-0">
+      <div className="relative shrink-0">
       <ScreenHeader
         eyebrow={t.play.eyebrow}
         title={t.play.titleA}
@@ -227,6 +228,14 @@ export function MultiStemPlayer({ manifest, aligned }: Props) {
           </>
         }
       />
+      <Link
+        href="/library"
+        aria-label={t.common.back}
+        className="absolute right-0 top-0 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.15em] text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] transition-colors"
+      >
+        <IconChevronLeft size={14} stroke={1.6} />
+        {t.common.back}
+      </Link>
       </div>
 
       <div className="shrink-0 overflow-hidden rounded-[12px] border border-[var(--color-border-soft)] bg-[var(--color-surface)]">

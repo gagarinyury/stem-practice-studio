@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   IconArrowLeft,
   IconChevronDown,
+  IconChevronLeft,
   IconChevronRight,
   IconLayoutSidebarRightCollapse,
   IconLayoutSidebarRightExpand,
@@ -27,7 +28,7 @@ import { StemRow } from "@/components/player/StemRow";
 import { useViewportMode } from "@/lib/useViewportMode";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { t } from "@/lib/strings";
-import { getLocalVideo } from "@/lib/local-video";
+import { hasLocalVideo } from "@/lib/local-video";
 
 function ytIdFromUrl(url: string | null | undefined): string | null {
   if (!url) return null;
@@ -89,8 +90,13 @@ export function KaraokeView({ manifest, aligned }: Props) {
   const [showVideo, setShowVideo] = useState(true);
   const [cursorVisible, setCursorVisible] = useState(true);
   const ytId = useMemo(() => ytIdFromUrl(manifest.url), [manifest.url]);
-  const localVideo = useMemo(() => getLocalVideo(manifest.id), [manifest.id]);
-  const hasVideo = !!localVideo || !!ytId;
+  const [hasLocal, setHasLocal] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    hasLocalVideo(manifest.id).then((v) => { if (alive) setHasLocal(v); }).catch(() => {});
+    return () => { alive = false; };
+  }, [manifest.id]);
+  const hasVideo = hasLocal || !!ytId;
   const cursorTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -272,8 +278,8 @@ export function KaraokeView({ manifest, aligned }: Props) {
             role={!isLandscape ? "button" : undefined}
             aria-label={!isLandscape ? t.karaoke.ariaPlayPause : undefined}
           >
-            {localVideo ? (
-              <LocalVideoBackground path={localVideo.path} mime={localVideo.mime} currentTime={currentTime} playing={playing} />
+            {hasLocal ? (
+              <LocalVideoBackground trackId={manifest.id} currentTime={currentTime} playing={playing} />
             ) : ytId ? (
               <YouTubeBackground videoId={ytId} currentTime={currentTime} playing={playing} />
             ) : null}
@@ -387,7 +393,7 @@ export function KaraokeView({ manifest, aligned }: Props) {
           // Portrait overlay: canonical ScreenHeader + video + lyrics + controls
           <>
             <div
-              className="px-7"
+              className="relative px-7"
               style={{ order: 0, paddingTop: "max(56px, env(safe-area-inset-top, 0px))", paddingBottom: "12px" }}
             >
               <ScreenHeader
@@ -396,6 +402,15 @@ export function KaraokeView({ manifest, aligned }: Props) {
                 emphasis={t.karaoke.titleB}
                 subtitle={`${fmt(currentTime)} / ${fmt(dur)}`}
               />
+              <Link
+                href={`/play/${manifest.id}`}
+                aria-label={t.common.back}
+                className="absolute right-7 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.15em] text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] transition-colors"
+                style={{ top: "max(56px, env(safe-area-inset-top, 0px))" }}
+              >
+                <IconChevronLeft size={14} stroke={1.6} />
+                {t.common.back}
+              </Link>
             </div>
 
             <div className="flex-1 min-h-0 overflow-hidden flex items-center justify-center px-4" style={{ order: 2 }}>
@@ -514,8 +529,8 @@ export function KaraokeView({ manifest, aligned }: Props) {
       >
         {showVideo && hasVideo && (
           <>
-            {localVideo ? (
-              <LocalVideoBackground path={localVideo.path} mime={localVideo.mime} currentTime={currentTime} playing={playing} />
+            {hasLocal ? (
+              <LocalVideoBackground trackId={manifest.id} currentTime={currentTime} playing={playing} />
             ) : ytId ? (
               <YouTubeBackground videoId={ytId} currentTime={currentTime} playing={playing} />
             ) : null}

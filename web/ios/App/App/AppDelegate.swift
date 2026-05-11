@@ -26,17 +26,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
-        // Enable native swipe-from-edge back gesture on the WKWebView so users
-        // can return to the previous route the same way they would in any
-        // standard iOS app. By this lifecycle moment the bridge view
-        // controller's webView is fully loaded.
-        if let bridge = window?.rootViewController as? CAPBridgeViewController {
-            bridge.webView?.allowsBackForwardNavigationGestures = true
-        }
+        // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
         // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
+    }
+
+    func applicationDidReceiveMemoryWarning(_ application: UIApplication) {
+        NSLog("[mem] applicationDidReceiveMemoryWarning")
     }
 
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
