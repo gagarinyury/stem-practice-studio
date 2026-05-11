@@ -27,16 +27,14 @@ html, body {
   background: var(--color-paper);
   color: var(--color-ink);
   font-family: var(--font-serif);
-  /* Disable iOS Safari/WKWebView double-tap zoom and 300ms tap delay so
-     buttons feel native inside Capacitor. */
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  -webkit-touch-callout: none;
-  overscroll-behavior: none;
 }
+/* `touch-action: manipulation` on body breaks both nested-scroll and React's
+   synthetic click pipeline in WKWebView on iOS 18+/26 (capacitor-plugins#2290,
+   WebKit bug #153852). Apply it ONLY to interactive elements. */
 button, a, [role="button"] {
   touch-action: manipulation;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Unified bottom reserve. On screens with the floating BottomNav, we
