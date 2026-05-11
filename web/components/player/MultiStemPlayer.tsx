@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
   IconChevronDown,
+  IconMicrophone,
   IconMicrophone2,
   IconMusic,
   IconPlayerPause,
@@ -321,7 +322,10 @@ export function MultiStemPlayer({ manifest, aligned }: Props) {
       </div>
 
       <div className="shrink-0 flex items-center justify-between">
-        <span className="w-[44px]" aria-hidden />
+        <Link href={`/karaoke/${manifest.id}`} className="text-ink flex flex-col items-center gap-0.5" aria-label={t.play.karaokeHint}>
+          <IconMicrophone size={22} stroke={1.5} />
+          <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-[var(--color-ink-muted)]">{t.play.karaokeHint}</span>
+        </Link>
         <div className="flex items-center gap-3.5">
           <button onClick={() => seek(Math.max(0, currentTime - 15))} aria-label={t.play.ariaBack15}>
             <IconRewindBackward15 size={22} stroke={1.5} className="text-ink" />

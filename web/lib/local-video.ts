@@ -20,6 +20,30 @@ interface LocalVideoInfo {
   mime: string;
 }
 
+export async function readLocalVideoAsBlobUrl(path: string, mime: string): Promise<string> {
+  const r = await Filesystem.readFile({ path, directory: Directory.Data });
+  const base64 = typeof r.data === "string" ? r.data : await blobToBase64(r.data as Blob);
+  const bin = atob(base64);
+  const len = bin.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+  const blob = new Blob([bytes], { type: mime });
+  return URL.createObjectURL(blob);
+}
+
+async function blobToBase64(b: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const s = r.result as string;
+      const i = s.indexOf("base64,");
+      resolve(i >= 0 ? s.slice(i + 7) : s);
+    };
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(b);
+  });
+}
+
 async function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();

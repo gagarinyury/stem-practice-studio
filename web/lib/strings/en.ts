@@ -81,6 +81,7 @@ export const en = {
     showExtras: "+ drums / bass",
     hideExtras: "− hide extras",
     learnHint: "learn",
+    karaokeHint: "karaoke",
     ariaPlayPause: "play/pause",
     ariaBack15: "back 15s",
     ariaForward15: "forward 15s",

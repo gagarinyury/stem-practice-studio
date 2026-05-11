@@ -29,7 +29,8 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { t } from "@/lib/strings";
 import { getLocalVideo } from "@/lib/local-video";
 
-function ytIdFromUrl(url: string): string | null {
+function ytIdFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
   const m = url.match(/[?&]v=([\w-]{6,})/);
   if (m) return m[1];
   const short = url.match(/youtu\.be\/([\w-]{6,})/);
@@ -272,7 +273,7 @@ export function KaraokeView({ manifest, aligned }: Props) {
             aria-label={!isLandscape ? t.karaoke.ariaPlayPause : undefined}
           >
             {localVideo ? (
-              <LocalVideoBackground src={localVideo.webPath} mime={localVideo.mime} currentTime={currentTime} playing={playing} />
+              <LocalVideoBackground path={localVideo.path} mime={localVideo.mime} currentTime={currentTime} playing={playing} />
             ) : ytId ? (
               <YouTubeBackground videoId={ytId} currentTime={currentTime} playing={playing} />
             ) : null}
@@ -514,7 +515,7 @@ export function KaraokeView({ manifest, aligned }: Props) {
         {showVideo && hasVideo && (
           <>
             {localVideo ? (
-              <LocalVideoBackground src={localVideo.webPath} mime={localVideo.mime} currentTime={currentTime} playing={playing} />
+              <LocalVideoBackground path={localVideo.path} mime={localVideo.mime} currentTime={currentTime} playing={playing} />
             ) : ytId ? (
               <YouTubeBackground videoId={ytId} currentTime={currentTime} playing={playing} />
             ) : null}
