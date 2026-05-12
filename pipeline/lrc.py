@@ -49,20 +49,28 @@ _TITLE_NOISE = re.compile(
 _TITLE_PIPE = re.compile(r"\s*[\|\-—–]\s*")
 
 
-def _clean_title(title: str) -> str:
-    """Strip YouTube-y noise from a title for LRClib lookup.
+def _clean_title(title: str) -> list[str]:
+    """Extract title variants from a YouTube-style title for LRClib lookup.
 
-    Removes parenthesised modifiers ("(Live)", "(Official Video)", "(песня
-    СашБаш)") and trims everything past a bullet/em-dash separator
-    (channel names appended after "—" or "|"). Returns the trimmed,
-    whitespace-collapsed string.
+    Handles "Artist - Title (Live)" format: returns both the full cleaned
+    string AND the part after the dash (which is usually the actual song
+    name). Also strips parenthesised noise like "(Official Video)".
     """
     s = _TITLE_NOISE.sub(" ", title)
-    # Cut after a separator if the part before it looks like a real title
-    parts = _TITLE_PIPE.split(s, maxsplit=1)
-    if parts and parts[0].strip():
-        s = parts[0]
-    return " ".join(s.split())
+    s = " ".join(s.split())
+    variants: list[str] = []
+    if s:
+        variants.append(s)
+    # Split on " - " / " — " etc. and collect meaningful parts
+    parts = _TITLE_PIPE.split(s)
+    parts = [p.strip() for p in parts if p.strip()]
+    if len(parts) >= 2:
+        # "Artist - Title" → add just "Title" as the best variant (first!)
+        variants.insert(0, parts[-1])
+        # Also add just the first part in case roles are reversed
+        if parts[0] not in variants:
+            variants.append(parts[0])
+    return variants
 
 
 def fetch(
@@ -97,8 +105,10 @@ def fetch(
                 continue
             seen[hid] = h
 
-    cleaned = _clean_title(title) if title else ""
-    title_variants = [t for t in (title, cleaned) if t and t.strip()]
+    # Build title variants: original, cleaned parts, etc.
+    title_variants = _clean_title(title) if title else []
+    if title and title.strip() and title.strip() not in title_variants:
+        title_variants.insert(0, title.strip())
     # Dedupe while preserving order
     seen_titles: set[str] = set()
     title_variants = [t for t in title_variants if not (t in seen_titles or seen_titles.add(t))]
@@ -192,8 +202,9 @@ def fetch(
     # one failing kills the candidate — caller falls back to Genius
     # identification or pure ASR.
     #
-    #   1. combined_rate ≥ 0.30 — minimum bag-of-tokens overlap. Catches
-    #      junk LRC with almost no word coincidence.
+    #   1. combined_rate ≥ 0.55 — minimum bag-of-tokens overlap. Catches
+    #      junk LRC with insufficient word coincidence.
+    #      (previously 0.30 — too loose, allowed 59% garbage matches)
     #   2. run_quality ≥ 0.40 — fraction of matched words sitting in
     #      consecutive runs of length ≥ 3. A real song match has long
     #      phrase-level streaks; a noise match is scattered singletons.
@@ -204,7 +215,7 @@ def fetch(
     #      the LRC. False matches cluster in a narrow window.
     if asr_combined:
         best_stats = asr_stats.get(best_idx, {})
-        if asr_combined.get(best_idx, 0.0) < 0.30:
+        if asr_combined.get(best_idx, 0.0) < 0.55:
             return None
         if best_stats.get("run_quality", 0.0) < 0.40:
             return None
