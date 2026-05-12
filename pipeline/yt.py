@@ -71,10 +71,15 @@ def download(url: str, out_dir: Path) -> tuple[Path, dict]:
     info = json.loads(info_path.read_text())
     meta = {
         "id": info.get("id"),
-        "title": info.get("title"),
-        "uploader": info.get("uploader"),
+        "title": info.get("track") or info.get("title"),
+        "uploader": info.get("artist") or info.get("creator") or info.get("uploader"),
         "channel": info.get("channel"),
         "duration": info.get("duration"),
         "url": url,
+        # Keep raw yt-dlp fields for debugging / fallback
+        "yt_title": info.get("title"),
+        "yt_track": info.get("track"),
+        "yt_artist": info.get("artist"),
+        "yt_creator": info.get("creator"),
     }
     return audio_path, meta
