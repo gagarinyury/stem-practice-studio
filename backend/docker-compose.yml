@@ -54,6 +54,10 @@ services:
       PYTHONPATH: /srv/apps/stem-practice-studio
       ACOUSTID_API_KEY: ${ACOUSTID_API_KEY:-}
       GENIUS_API_TOKEN: ${GENIUS_API_TOKEN:-}
+      # Local LLM for song identification (llama-swap on host)
+      LLM_BASE_URL: "http://host.docker.internal:8080/v1"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     # docker-out-of-docker: pipeline modules shell out to `docker run` on the
     # host (htdemucs_6s, gigaam, parakeet, yt-dlp). Mount the socket so
     # sibling containers can be created. Repo and runs are mounted RW at the

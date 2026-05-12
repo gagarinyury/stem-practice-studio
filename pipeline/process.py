@@ -124,40 +124,29 @@ def run(opts: RunOpts, on_progress: Optional[ProgressCb] = None) -> dict:
           file=sys.stderr)
     _emit(on_progress, "resolve_input")
 
-    # 1.5 Audio fingerprint identification (AcoustID + MusicBrainz).
-    # Tags meta with a higher-quality artist/title when the source is
-    # missing them or has junk (channel name, filename). Best-effort —
-    # silently skips if no API key or fpcalc binary.
+    # 1.5 Song identification via local LLM.
+    # Sends YouTube title + channel + ASR snippet to Qwen3 running on
+    # llama-swap. Returns correct artist/title in ~300ms — far more
+    # reliable than regex title-parsing or AcoustID fingerprinting.
+    # The LLM result is used for LRCLib lookup downstream.
+    # Falls back gracefully if LLM is unavailable.
     t = time.perf_counter()
+    llm_id = None
     try:
-        from . import identify as identify_mod
-        ident = identify_mod.identify(audio_path)
+        from . import identify_llm
+        yt_title = meta.get("yt_title") or meta.get("title") or ""
+        channel = meta.get("channel") or meta.get("uploader") or ""
+        if yt_title:
+            llm_id = identify_llm.identify(yt_title, channel=channel)
     except Exception as e:
-        print(f"[pipeline] identify error: {e}", file=sys.stderr)
-        ident = None
-    timings["identify"] = round(time.perf_counter() - t, 2)
-    if ident:
-        print(
-            f"[pipeline] acoustid: {ident.get('artist')!r} / {ident.get('title')!r} "
-            f"(score={ident.get('score')}, mbid={ident.get('mbid')})",
-            file=sys.stderr,
-        )
-        meta["acoustid"] = ident
-        # AcoustID is the most reliable source — audio fingerprint is
-        # content-based, unlike yt-dlp metadata which can be junk.
-        # Override yt-dlp title/artist when score is confident (≥0.7).
-        score = float(ident.get("score") or 0)
-        if score >= 0.7:
-            if ident.get("artist"):
-                meta["uploader"] = ident["artist"]
-            if ident.get("title"):
-                meta["title"] = ident["title"]
-        else:
-            # Low-confidence: only fill missing fields
-            if not meta.get("uploader") and not meta.get("channel") and ident.get("artist"):
-                meta["uploader"] = ident["artist"]
-            if not meta.get("title") and ident.get("title"):
-                meta["title"] = ident["title"]
+        print(f"[pipeline] identify_llm error: {e}", file=sys.stderr)
+    timings["identify_llm"] = round(time.perf_counter() - t, 2)
+
+    if llm_id:
+        meta["llm_id"] = llm_id
+        # LLM identification is authoritative — override yt-dlp junk
+        meta["title"] = llm_id["title"]
+        meta["uploader"] = llm_id["artist"]
     _emit(on_progress, "identify")
 
     # 2. Stems
@@ -208,35 +197,9 @@ def run(opts: RunOpts, on_progress: Optional[ProgressCb] = None) -> dict:
             print(f"[pipeline] lrclib error: {e}", file=sys.stderr)
         timings["lrclib"] = round(time.perf_counter() - t, 2)
 
-    # Fallback: if LRCLib didn't find a confident match using the metadata
-    # we have, identify the song by searching Genius with snippets of the
-    # ASR transcript. This catches cases where the source has no usable
-    # title (uploaded mp3 with no tags, junk YouTube playlist names) AND
-    # AcoustID missed (live recordings, covers, unreleased material).
-    if not lrc_entry:
-        try:
-            from . import genius as genius_mod
-            asr_for_search = asr_data.get("words") or []
-            gen_hit = genius_mod.identify_from_asr(asr_for_search, language=opts.language)
-        except Exception as e:
-            print(f"[pipeline] genius error: {e}", file=sys.stderr)
-            gen_hit = None
-        if gen_hit:
-            meta["genius"] = gen_hit
-            # Store Genius result for LRC retry, but do NOT overwrite
-            # meta.title blindly — Genius voting can give false positives.
-            # Only update meta.title if we had no usable title at all.
-            if not title or title == "source":
-                meta["title"] = gen_hit["title"]
-            if not meta.get("uploader"):
-                meta["uploader"] = gen_hit["artist"]
-            try:
-                lrc_entry = lrc_mod.fetch(
-                    gen_hit["artist"], gen_hit["title"], duration,
-                    asr_words=asr_data.get("words") or None,
-                )
-            except Exception as e:
-                print(f"[pipeline] lrclib retry error: {e}", file=sys.stderr)
+    # Note: Genius fallback removed — local LLM identification (step 1.5)
+    # now provides clean artist/title. If LRCLib still misses, we fall
+    # through to ASR-only alignment below.
 
     if lrc_entry:
         lrc_raw = lrc_entry.get("syncedLyrics") or lrc_entry.get("plainLyrics") or ""
