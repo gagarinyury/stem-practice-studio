@@ -8,26 +8,29 @@ RENDER_GID = "991"
 VIDEO_GID = "44"
 
 
-def transcribe(vocal_stem: Path, out_path: Path, *, language: str, code_dir: Path) -> Path:
+def transcribe(vocal_stem: Path, out_path: Path, *, language: str) -> Path:
     """Pick the engine by language, write lyrics.json next to (or at) `out_path`."""
-    script = "transcribe_gigaam.py" if language == "ru" else "transcribe.py"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     vocal_abs = vocal_stem.resolve()
     out_abs = out_path.resolve()
-    code_abs = code_dir.resolve()
 
-    cmd = [
-        "docker", "run", "--rm",
-        "--device", "/dev/kfd", "--device", "/dev/dri",
-        "--group-add", RENDER_GID, "--group-add", VIDEO_GID,
-        "-v", f"{vocal_abs.parent}:/in:ro",
-        "-v", f"{out_abs.parent}:/out",
-        "-v", f"{code_abs}:/code:ro",
-        "-v", f"{MODELS_HOST}:/asr-models",
-        ASR_IMAGE,
-        "python", f"/code/{script}",
-        f"/in/{vocal_abs.name}",
-        "--out", f"/out/{out_abs.name}",
-    ]
-    subprocess.run(cmd, check=True)
+    import urllib.request
+    import json
+    
+    # We call the warmed-up ASR HTTP server running in docker-compose
+    url = "http://172.17.0.1:8091/transcribe"
+    data = json.dumps({
+        "audio": str(vocal_abs),
+        "out": str(out_abs),
+        "language": language
+    }).encode("utf-8")
+    
+    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=300) as r:
+            r.read()
+    except Exception as e:
+        # Fallback to docker run? No, just raise. The ASR server should be running!
+        raise RuntimeError(f"ASR server failed: {e}")
+        
     return out_path

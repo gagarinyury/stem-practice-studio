@@ -2,6 +2,7 @@
 
 import { ReactNode } from "react";
 import { Waveform } from "./Waveform";
+import { t } from "@/lib/strings";
 
 interface Props {
   icon: ReactNode;
@@ -47,7 +48,7 @@ export function StemRow({
     >
       <button
         onClick={onToggleMute}
-        title={muted ? "unmute" : "mute"}
+        title={muted ? t.player.unmute : t.player.mute}
         className="flex w-[14px] items-center justify-center"
       >
         {icon}
@@ -60,7 +61,7 @@ export function StemRow({
       </div>
       <button
         onClick={onToggleSolo}
-        title="solo"
+        title={t.player.solo}
         className={`font-mono text-[9px] uppercase tracking-[0.1em] ${
           soloed ? "text-accent-vocal" : "text-ink-muted hover:text-ink"
         }`}
@@ -69,7 +70,7 @@ export function StemRow({
       </button>
       <button
         onClick={onToggleMute}
-        title={muted ? "unmute" : "mute"}
+        title={muted ? t.player.unmute : t.player.mute}
         className={`font-mono text-[9px] uppercase tracking-[0.1em] ${
           muted ? "text-accent-warn" : "text-ink-muted hover:text-ink"
         }`}

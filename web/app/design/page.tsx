@@ -5,6 +5,7 @@ import { MonoLabel } from "@/components/ui/MonoLabel";
 import { SerifTitle } from "@/components/ui/SerifTitle";
 import { MonoText } from "@/components/ui/MonoText";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { BackLink } from "@/components/ui/BackLink";
 import { tokens } from "@/lib/design/tokens";
 
 const colors: Array<[string, string]> = Object.entries(tokens.color);
@@ -78,13 +79,15 @@ export default function DesignCatalog() {
             />
           </Card>
           <Card className="p-5">
-            <ScreenHeader
-              back="/design"
-              eyebrow="finding your range"
-              title="Now go"
-              emphasis="up."
-              subtitle="slide your voice up on 'ah' — stop the moment it strains"
-            />
+            <div className="relative">
+              <ScreenHeader
+                eyebrow="finding your range"
+                title="Now go"
+                emphasis="up."
+                subtitle="slide your voice up on 'ah' — stop the moment it strains"
+              />
+              <BackLink href="/design" />
+            </div>
           </Card>
           <div className="flex items-center gap-3 pt-2">
             <Link href="/design/tour" className="font-mono text-[11px] text-[var(--color-accent-vocal)] underline">

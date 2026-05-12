@@ -9,6 +9,11 @@
   --color-ink-faint: #B4B2A9;
   --color-border-soft: rgba(0, 0, 0, 0.08);
   --color-accent-vocal: #534AB7;
+  --color-accent-vocal-50: #EEEDFE;
+  --color-accent-vocal-100: #CECBF6;
+  --color-accent-vocal-200: #AFA9EC;
+  --color-accent-vocal-300: #7F77DD;
+  --color-accent-vocal-700: #3C3489;
   --color-accent-drill: #C66857;
   --color-accent-plan: #BA7517;
   --color-accent-success: #1D9E75;
@@ -21,6 +26,16 @@
 
   --font-serif: var(--font-cormorant), Georgia, serif;
   --font-mono: var(--font-dm-mono), ui-monospace, monospace;
+}
+
+/* Tailwind v4 @theme tokens with numeric shade suffixes don't always end up
+   on :root — re-declare the vocal tints so inline `var(...)` resolves. */
+:root {
+  --color-accent-vocal-50: #EEEDFE;
+  --color-accent-vocal-100: #CECBF6;
+  --color-accent-vocal-200: #AFA9EC;
+  --color-accent-vocal-300: #7F77DD;
+  --color-accent-vocal-700: #3C3489;
 }
 
 html, body {

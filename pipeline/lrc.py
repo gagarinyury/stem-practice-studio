@@ -113,10 +113,16 @@ def fetch(
     seen_titles: set[str] = set()
     title_variants = [t for t in title_variants if not (t in seen_titles or seen_titles.add(t))]
 
+    queries = []
+
     for tv in title_variants:
         if artist:
-            _add_hits({"artist_name": artist, "track_name": tv})
-        _add_hits({"track_name": tv})
+            queries.append({"artist_name": artist, "track_name": tv})
+        queries.append({"track_name": tv})
+
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(queries)) as executor:
+        list(executor.map(_add_hits, queries))
 
     hits = list(seen.values())
     if not hits:

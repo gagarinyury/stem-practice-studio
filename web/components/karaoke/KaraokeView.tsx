@@ -863,18 +863,15 @@ export function KaraokeView({ manifest, aligned }: Props) {
               — {t.karaoke.tempo}
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              <span className="rounded-full border-[0.5px] border-border-soft bg-surface px-[11px] py-[5px] font-mono text-[11px] text-ink-faint" title="Phase 4: rubberband-wasm">
+              <span className="rounded-full border-[0.5px] border-border-soft bg-surface px-[11px] py-[5px] font-mono text-[11px] text-ink-faint">
                 ×1.00
               </span>
-              <span className="rounded-full border-[0.5px] border-border-soft bg-surface px-[11px] py-[5px] font-mono text-[11px] text-ink-faint" title="Phase 4: rubberband-wasm">
+              <span className="rounded-full border-[0.5px] border-border-soft bg-surface px-[11px] py-[5px] font-mono text-[11px] text-ink-faint">
                 0 st
               </span>
-              <span className="rounded-full border-[0.5px] border-border-soft bg-surface px-[11px] py-[5px] font-mono text-[10px] uppercase tracking-[0.1em] text-ink-faint" title="Phase 4">
-                drill A–B
+              <span className="rounded-full border-[0.5px] border-border-soft bg-surface px-[11px] py-[5px] font-mono text-[10px] uppercase tracking-[0.1em] text-ink-faint">
+                {t.karaoke.drillAB}
               </span>
-            </div>
-            <div className="mt-2 font-mono text-[9px] uppercase tracking-[0.15em] text-ink-faint">
-              phase 4 · rubberband-wasm
             </div>
           </div>
 
@@ -900,7 +897,7 @@ export function KaraokeView({ manifest, aligned }: Props) {
               <button onClick={() => seek(Math.min(dur, currentTime + 15))} className="text-ink hover:opacity-80">
                 <IconRewindForward15 size={20} stroke={1.5} />
               </button>
-              <button className="text-ink-muted hover:text-ink" title="repeat (Phase 4)">
+              <button className="text-ink-muted hover:text-ink">
                 <IconRepeat size={20} stroke={1.5} />
               </button>
             </div>

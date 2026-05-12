@@ -1,5 +1,5 @@
 import { ProcessingScreen } from "@/components/ProcessingScreen";
-import { API_BASE } from "@/lib/config";
+import { API_BASE_SERVER as API_BASE } from "@/lib/config";
 import type { TrackSummary } from "@/lib/api";
 
 export const dynamic = "force-dynamic";

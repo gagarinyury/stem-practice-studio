@@ -1,13 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { IconArrowRight, IconMusic } from "@tabler/icons-react";
 import { listTracks, postWarmupSession, type TrackSummary } from "@/lib/api";
 import { getUser } from "@/lib/auth";
 import { RangeStrip } from "@/components/warmup/RangeStrip";
+import { ScreenShell } from "@/components/ui/ScreenShell";
+import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { BackLink } from "@/components/ui/BackLink";
+import { Eyebrow, MonoSmall, ErrorText } from "@/components/ui/text";
+import { t } from "@/lib/strings";
 
-const LLM_URL = "http://100.86.227.110:8083/v1/chat/completions";
+const LLM_URL = "/llm/v1/chat/completions";
 
 interface SessionResult {
   startedAt: string;
@@ -18,14 +23,30 @@ interface SessionResult {
   language: string;
 }
 
+const PREVIEW_RESULT: SessionResult = {
+  startedAt: new Date(Date.now() - 8 * 60_000).toISOString(),
+  finishedAt: new Date().toISOString(),
+  durationSec: 8 * 60,
+  stepsCompleted: 7,
+  stepsSkipped: 0,
+  language: "English",
+};
+
 export default function DonePage() {
   const router = useRouter();
+  const search = useSearchParams();
+  const preview = search?.get("preview") === "1";
   const [result, setResult] = useState<SessionResult | null>(null);
-  const [observation, setObservation] = useState<string>("thinking…");
+  const [observation, setObservation] = useState<string>(t.warmupDone.thinking);
   const [continueTrack, setContinueTrack] = useState<TrackSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (preview) {
+      setResult(PREVIEW_RESULT);
+      setObservation(t.warmupDone.previewObservation);
+      return;
+    }
     const raw = typeof window !== "undefined" ? window.sessionStorage.getItem("warmup.lastResult") : null;
     if (!raw) {
       router.replace("/warmup");
@@ -40,10 +61,9 @@ export default function DonePage() {
     }
     setResult(parsed);
 
-    // Persist the session and run LLM in parallel.
     void persistAndObserve(parsed);
     void loadLastTrack();
-  }, [router]);
+  }, [router, preview]);
 
   async function persistAndObserve(r: SessionResult) {
     try {
@@ -56,21 +76,21 @@ export default function DonePage() {
       });
     } catch (e) {
       console.error("postWarmupSession failed", e);
-      setError("could not save session");
+      setError(t.warmupDone.saveFail);
     }
     try {
       const text = await fetchObservation(r);
       setObservation(text);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      setObservation(`(could not reach LLM — ${msg})`);
+      setObservation(`${t.warmupDone.llmFail} — ${msg}`);
     }
   }
 
   async function loadLastTrack() {
     try {
       const tracks = await listTracks();
-      const done = tracks.filter((t) => t.status === "done");
+      const done = tracks.filter((tr) => tr.status === "done");
       if (done.length) setContinueTrack(done[done.length - 1]);
     } catch {
       // not critical
@@ -78,83 +98,91 @@ export default function DonePage() {
   }
 
   if (!result) {
-    return <main className="flex-1 flex items-center justify-center font-mono text-[11px] text-[var(--color-ink-muted)]">…</main>;
+    return (
+      <ScreenShell variant="flow">
+        <MonoSmall>{t.common.loading}</MonoSmall>
+      </ScreenShell>
+    );
   }
 
   const user = getUser();
   const minutes = Math.round(result.durationSec / 60);
   return (
-    <main className="flex-1 flex flex-col items-center px-5 pt-10 pb-8 max-w-sm mx-auto w-full">
-      <div className="w-full">
-        <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-accent-success)]">— done · {minutes} min —</div>
-        <h1 className="mt-3 text-[38px] leading-none">Voice is <em className="text-[var(--color-ink-muted)]">ready.</em></h1>
-        <div className="mt-3 font-mono text-[12px] text-[var(--color-ink-muted)]">
-          {user ? `streak day ${user.streak_count + (user.last_session_at ? 0 : 1)}` : ""}
-        </div>
-
-        {/* Range card */}
-        {user?.voice_low && user?.voice_high && (
-          <section className="mt-6 bg-white border border-[var(--color-border-soft)] rounded-[12px] p-4">
-            <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-[var(--color-ink-muted)]">— your range</div>
-            <RangeStrip scaleLow="A2" scaleHigh="A4" low={user.voice_low} high={user.voice_high} />
-          </section>
-        )}
-
-        {/* Metrics */}
-        <section className="mt-4 grid grid-cols-2 gap-2">
-          <div className="bg-white border border-[var(--color-border-soft)] rounded-[10px] p-3">
-            <div className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-ink-muted)]">steps</div>
-            <div className="text-[26px] tabular-nums mt-1">{result.stepsCompleted}<span className="text-[14px] text-[var(--color-ink-muted)]"> / {result.stepsCompleted + result.stepsSkipped}</span></div>
-          </div>
-          <div className="bg-white border border-[var(--color-border-soft)] rounded-[10px] p-3">
-            <div className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-ink-muted)]">time</div>
-            <div className="text-[26px] tabular-nums mt-1">{minutes}<span className="text-[14px] text-[var(--color-ink-muted)]"> min</span></div>
-          </div>
-        </section>
-
-        {/* Observation */}
-        <section className="mt-5 border-t border-[var(--color-border-soft)] pt-4">
-          <div className="font-mono text-[9px] uppercase tracking-[0.15em] text-[var(--color-ink-muted)]">— one thing</div>
-          <p className="mt-2 text-[17px] italic leading-relaxed text-[var(--color-ink)]">{observation}</p>
-          {error && <div className="mt-2 font-mono text-[10px] text-[var(--color-accent-warn)]">{error}</div>}
-        </section>
-
-        {/* Continue track CTA */}
-        {continueTrack && (
-          <button
-            type="button"
-            onClick={() => router.push(`/play/${continueTrack.id}`)}
-            className="mt-6 w-full bg-[var(--color-ink)] text-[var(--color-paper)] rounded-[12px] p-4 flex items-center gap-3 text-left"
-          >
-            <div className="w-9 h-9 rounded-md bg-[var(--color-accent-vocal)] flex items-center justify-center">
-              <IconMusic size={18} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-[17px] italic truncate">Continue {continueTrack.title}</div>
-              <div className="font-mono text-[10px] opacity-70 mt-1">pick up where you left off</div>
-            </div>
-            <IconArrowRight size={18} />
-          </button>
-        )}
-
-        <div className="mt-3 flex gap-2">
-          <button
-            type="button"
-            onClick={() => router.push("/progress")}
-            className="flex-1 bg-white border border-[var(--color-border-soft)] rounded-[10px] py-3 font-mono text-[11px]"
-          >
-            see stats
-          </button>
-          <button
-            type="button"
-            onClick={() => router.replace("/warmup")}
-            className="flex-1 bg-white border border-[var(--color-border-soft)] rounded-[10px] py-3 font-mono text-[11px]"
-          >
-            i&apos;m done
-          </button>
-        </div>
+    <ScreenShell variant="flow">
+      <div className="relative">
+        <ScreenHeader
+          eyebrow={`${t.warmupDone.eyebrowDone} · ${minutes} ${t.warmupDone.minSuffix}`}
+          title={t.warmupDone.titleA}
+          emphasis={t.warmupDone.titleB}
+          subtitle={user ? `${t.warmupDone.streakDay} ${user.streak_count + (user.last_session_at ? 0 : 1)}` : undefined}
+        />
+        <BackLink href="/warmup" />
       </div>
-    </main>
+
+      {user?.voice_low && user?.voice_high && (
+        <section className="bg-[var(--color-surface)] border border-[var(--color-border-soft)] rounded-[12px] p-4">
+          <Eyebrow withDashes>{t.warmupDone.yourRange}</Eyebrow>
+          <RangeStrip scaleLow="A2" scaleHigh="A4" low={user.voice_low} high={user.voice_high} />
+        </section>
+      )}
+
+      <section className="grid grid-cols-2 gap-2">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border-soft)] rounded-[10px] p-3">
+          <Eyebrow>{t.warmupDone.steps}</Eyebrow>
+          <div className="text-[26px] tabular-nums mt-1">
+            {result.stepsCompleted}
+            <span className="text-[14px] text-[var(--color-ink-muted)]"> / {result.stepsCompleted + result.stepsSkipped}</span>
+          </div>
+        </div>
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border-soft)] rounded-[10px] p-3">
+          <Eyebrow>{t.warmupDone.time}</Eyebrow>
+          <div className="text-[26px] tabular-nums mt-1">
+            {minutes}
+            <span className="text-[14px] text-[var(--color-ink-muted)]"> {t.warmupDone.minSuffix}</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-t border-[var(--color-border-soft)] pt-4">
+        <Eyebrow withDashes>{t.warmupDone.oneThing}</Eyebrow>
+        <p className="mt-2 text-[17px] italic leading-relaxed text-[var(--color-ink)]">{observation}</p>
+        {error && <ErrorText className="mt-2 text-[10px]">{error}</ErrorText>}
+      </section>
+
+      {continueTrack && (
+        <button
+          type="button"
+          onClick={() => router.push(`/play/${continueTrack.id}`)}
+          className="w-full bg-[var(--color-ink)] text-[var(--color-paper)] rounded-[12px] p-4 flex items-center gap-3 text-left"
+        >
+          <div className="w-9 h-9 rounded-md bg-[var(--color-accent-vocal)] flex items-center justify-center">
+            <IconMusic size={18} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[17px] italic truncate">{t.warmupDone.continuePrefix} {continueTrack.title}</div>
+            <div className="font-mono text-[10px] opacity-70 mt-1">{t.warmupDone.continueHint}</div>
+          </div>
+          <IconArrowRight size={18} />
+        </button>
+      )}
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => router.push("/progress")}
+          className="flex-1 bg-[var(--color-surface)] border border-[var(--color-border-soft)] rounded-[10px] py-3 font-mono text-[11px]"
+        >
+          {t.warmupDone.seeStats}
+        </button>
+        <button
+          type="button"
+          onClick={() => router.replace("/library")}
+          className="flex-1 bg-[var(--color-surface)] border border-[var(--color-border-soft)] rounded-[10px] py-3 font-mono text-[11px]"
+        >
+          {t.warmupDone.iAmDone}
+        </button>
+      </div>
+    </ScreenShell>
   );
 }
 

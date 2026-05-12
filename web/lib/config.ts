@@ -1,10 +1,16 @@
 /**
- * Backend base URL. Works on both server (Node) and client (browser) because
- * NEXT_PUBLIC_* env vars are inlined at build time.
+ * Backend base URLs.
  *
- * Default points at evo (where the API is deployed). Override locally with:
- *   NEXT_PUBLIC_API_BASE=http://localhost:8090 npm run dev
+ * `API_BASE` is for browser/client code. Set to `/be` so requests go through
+ * the same-origin proxy declared in `next.config.ts`. That avoids mixed-content
+ * blocking (https → http) and CORS on iPhone via Capacitor.
+ *
+ * `API_BASE_SERVER` is for Server Components and other Node-side fetches.
+ * Those can talk to the backend directly over HTTP — no browser security model.
+ * Set via `NEXT_PUBLIC_BACKEND_ORIGIN` env if you want to override.
  */
-export const API_BASE = (
-  process.env.NEXT_PUBLIC_API_BASE || "http://100.86.227.110:8090"
+export const API_BASE = "/be";
+
+export const API_BASE_SERVER = (
+  process.env.NEXT_PUBLIC_BACKEND_ORIGIN || "http://100.86.227.110:8093"
 ).replace(/\/+$/, "");

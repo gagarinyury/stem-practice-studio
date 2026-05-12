@@ -591,22 +591,21 @@ function DrillInner({
         <EqualizerBars getEngine={() => engineRef.current} bars={28} height={70} />
       </div>
 
-      {/* Bottom row: restart / repeats / play / got it
-          Every slot is the same height (h-14 = 56px). */}
-      <div className="shrink-0 flex items-end justify-center gap-4 pt-1">
+      {/* Bottom row: PLAY visually centered by balancing left (restart + loops)
+          with a same-width invisible spacer on the right of the mastered button. */}
+      <div className="shrink-0 flex items-center justify-center gap-4 pt-1">
         <button
           type="button"
           disabled={!audioReady}
           onClick={() => engineRef.current?.seekToLoopStart()}
-          className="h-14 w-12 flex flex-col items-center justify-center gap-1 text-ink disabled:opacity-30"
+          className="h-14 w-12 flex items-center justify-center text-ink disabled:opacity-30"
           title={t.drill.restartLoop}
         >
           <IconPlayerSkipBackFilled size={22} />
-          <span className="font-mono text-[8px] text-[var(--color-ink-muted)] leading-none">A</span>
         </button>
 
         <div
-          className="h-14 w-12 flex flex-col items-center justify-center gap-1"
+          className="h-14 w-12 flex items-center justify-center"
           title={t.drill.loops}
           data-testid="repeats-counter"
         >
@@ -614,7 +613,6 @@ function DrillInner({
             {repeats}
             <span className="text-[12px] text-[var(--color-ink-muted)]">×</span>
           </span>
-          <span className="font-mono text-[8px] text-[var(--color-ink-muted)] leading-none">{t.drill.loops}</span>
         </div>
 
         <button
@@ -626,7 +624,7 @@ function DrillInner({
             e.unlock();
             e.toggle();
           }}
-          className="w-14 h-14 rounded-full bg-ink flex items-center justify-center text-paper disabled:opacity-50 shrink-0"
+          className="w-14 h-14 rounded-full bg-ink flex items-center justify-center text-paper disabled:opacity-50"
         >
           {processing ? (
             <span className="font-mono text-[9px] text-paper">{t.drill.processing}</span>
@@ -637,11 +635,15 @@ function DrillInner({
           )}
         </button>
 
+        {/* Invisible spacer keeps PLAY visually centred between the left
+            (restart + loops) and the right-pushed mastered button. */}
+        <div className="h-14 w-12" aria-hidden />
+
         <button
           type="button"
           onClick={onMastered}
           disabled={!currentChunkId}
-          className="h-14 w-12 flex flex-col items-center justify-center gap-1 disabled:opacity-30"
+          className="h-14 w-12 flex items-center justify-center disabled:opacity-30"
           title={
             !currentChunkId
               ? t.drill.masteryNeedChunk
@@ -654,9 +656,6 @@ function DrillInner({
             size={22}
             className={mastered ? "text-[var(--color-accent-success)]" : "text-ink"}
           />
-          <span className="font-mono text-[8px] text-[var(--color-ink-muted)] leading-none">
-            {mastered ? t.drill.mastered : t.drill.gotIt}
-          </span>
         </button>
       </div>
     </ScreenShell>

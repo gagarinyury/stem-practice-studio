@@ -20,8 +20,8 @@ const SCREENS: Array<{ label: string; path: string | ((id: string | null) => str
   { label: "drill",              path: (id) => id ? `/drill/${id}` : "/drill/demo", needsTrack: true },
   { label: "warmup hub",         path: "/warmup" },
   { label: "warmup onboarding",  path: "/warmup/onboarding" },
-  { label: "warmup session",     path: "/warmup/session/daily8" },
-  { label: "warmup done",        path: "/warmup/session/daily8/done" },
+  { label: "warmup session",     path: "/warmup/session/daily8?preview=1" },
+  { label: "warmup done",        path: "/warmup/session/daily8/done?preview=1" },
   { label: "profile",            path: "/profile" },
   { label: "progress",           path: "/progress" },
 ];
@@ -58,10 +58,21 @@ export function DevTourBar() {
   }
 
   // Match by URL prefix so /play/<id> still highlights "play" entry.
-  const currentIdx = SCREENS.findIndex((s) => {
-    const url = resolve(s).split("?")[0];
-    return pathname === url || pathname.startsWith(url + "/");
-  });
+  // Prefer the most-specific (longest) match so /warmup/onboarding doesn't
+  // collapse to /warmup just because /warmup appears earlier in the list.
+  const currentIdx = (() => {
+    let bestIdx = -1;
+    let bestLen = -1;
+    SCREENS.forEach((s, i) => {
+      const url = resolve(s).split("?")[0];
+      const hit = pathname === url || pathname.startsWith(url + "/");
+      if (hit && url.length > bestLen) {
+        bestIdx = i;
+        bestLen = url.length;
+      }
+    });
+    return bestIdx;
+  })();
 
   function goto(i: number) {
     const next = SCREENS[Math.max(0, Math.min(SCREENS.length - 1, i))];

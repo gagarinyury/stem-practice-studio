@@ -1,6 +1,7 @@
 "use client";
 
 import { midiOf, nameOf } from "@/lib/notes";
+import { t } from "@/lib/strings";
 
 interface Props {
   /** Lowest note to render on the strip (e.g. "A2"). */
@@ -74,14 +75,14 @@ export function RangeStrip({
         <g>
           <line x1={xLow} y1="40" x2={xLow} y2="68" stroke="#3C3489" strokeWidth="2" />
           <text x={xLow} y="32" textAnchor="middle" fontFamily="DM Mono, monospace" fontSize="10" fontWeight="500" fill="#3C3489">{low}</text>
-          <text x={xLow} y="22" textAnchor="middle" fontFamily="DM Mono, monospace" fontSize="8" fill="#888780" letterSpacing="0.05em">low</text>
+          <text x={xLow} y="22" textAnchor="middle" fontFamily="DM Mono, monospace" fontSize="8" fill="#888780" letterSpacing="0.05em">{t.range.low}</text>
         </g>
       )}
       {xHigh != null && (
         <g>
           <line x1={xHigh} y1="40" x2={xHigh} y2="68" stroke="#3C3489" strokeWidth="2" />
           <text x={xHigh} y="32" textAnchor="middle" fontFamily="DM Mono, monospace" fontSize="10" fontWeight="500" fill="#3C3489">{high}</text>
-          <text x={xHigh} y="22" textAnchor="middle" fontFamily="DM Mono, monospace" fontSize="8" fill="#888780" letterSpacing="0.05em">high</text>
+          <text x={xHigh} y="22" textAnchor="middle" fontFamily="DM Mono, monospace" fontSize="8" fill="#888780" letterSpacing="0.05em">{t.range.high}</text>
         </g>
       )}
       {xCur != null && (
@@ -91,7 +92,7 @@ export function RangeStrip({
           </circle>
           <circle cx={xCur} cy="60" r="4" fill="#1D9E75" />
           <text x={xCur} y="32" textAnchor="middle" fontFamily="DM Mono, monospace" fontSize="10" fontWeight="500" fill="#085041">{current}</text>
-          <text x={xCur} y="22" textAnchor="middle" fontFamily="DM Mono, monospace" fontSize="8" fill="#1D9E75" letterSpacing="0.05em">now</text>
+          <text x={xCur} y="22" textAnchor="middle" fontFamily="DM Mono, monospace" fontSize="8" fill="#1D9E75" letterSpacing="0.05em">{t.range.now}</text>
         </g>
       )}
     </svg>

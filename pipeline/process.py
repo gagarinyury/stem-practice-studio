@@ -104,12 +104,8 @@ def _resolve_input(opts: RunOpts, out_dir: Path) -> tuple[Path, dict]:
 
 
 def run(opts: RunOpts, on_progress: Optional[ProgressCb] = None) -> dict:
-    """Execute the full pipeline. Returns the manifest dict.
-
-    `on_progress(stage, pct)` is called after each completed stage, where
-    `stage` ∈ {resolve_input, separate, asr, lrclib, align, manifest} and
-    `pct` is cumulative percentage of total work done.
-    """
+    """Execute the full pipeline concurrently. Returns the manifest dict."""
+    import concurrent.futures
     out_dir = Path(opts.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -120,232 +116,173 @@ def run(opts: RunOpts, on_progress: Optional[ProgressCb] = None) -> dict:
     t = time.perf_counter()
     audio_path, meta = _resolve_input(opts, out_dir)
     timings["resolve_input"] = round(time.perf_counter() - t, 2)
-    print(f"[pipeline] source: {audio_path.name}  meta.title={meta.get('title')!r}",
-          file=sys.stderr)
+    print(f"[pipeline] source: {audio_path.name}  meta.title={meta.get('title')!r}", file=sys.stderr)
     _emit(on_progress, "resolve_input")
 
-    # 1.5 Song identification via local LLM.
-    # Sends YouTube title + channel + ASR snippet to Qwen3 running on
-    # llama-swap. Returns correct artist/title in ~300ms — far more
-    # reliable than regex title-parsing or AcoustID fingerprinting.
-    # The LLM result is used for LRCLib lookup downstream.
-    # Falls back gracefully if LLM is unavailable.
-    t = time.perf_counter()
-    llm_id = None
-    try:
-        from . import identify_llm
-        yt_title = meta.get("yt_title") or meta.get("title") or ""
-        channel = meta.get("channel") or meta.get("uploader") or ""
-        if yt_title:
-            llm_id = identify_llm.identify(yt_title, channel=channel)
-    except Exception as e:
-        print(f"[pipeline] identify_llm error: {e}", file=sys.stderr)
-    timings["identify_llm"] = round(time.perf_counter() - t, 2)
-
-    if llm_id:
-        meta["llm_id"] = llm_id
-        # LLM identification is authoritative — override yt-dlp junk
-        meta["title"] = llm_id["title"]
-        meta["uploader"] = llm_id["artist"]
-    _emit(on_progress, "identify")
-
-    # 2. Stems
-    if opts.skip_separation and (out_dir / "stems").exists():
-        print("[pipeline] skipping separation, reusing stems/", file=sys.stderr)
-        stems = {}
-        base = audio_path.stem
-        for name in sep_mod.STEM_NAMES:
-            p = out_dir / "stems" / f"{base}_({name})_htdemucs_6s.flac"
-            if p.exists():
-                stems[name.lower()] = p
-    else:
-        t = time.perf_counter()
-        stems = sep_mod.separate(audio_path, out_dir)
-        timings["separate"] = round(time.perf_counter() - t, 2)
-    print(f"[pipeline] stems: {sorted(stems.keys())}", file=sys.stderr)
-    _emit(on_progress, "separate")
-
-    vocals = stems.get("vocals")
-    if not vocals:
-        raise RuntimeError("no vocals stem produced; aborting")
-
-    # 3. ASR on vocals
-    t = time.perf_counter()
+    stems = {}
+    asr_data = {}
     lyrics_path = out_dir / "lyrics.json"
-    asr_mod.transcribe(vocals, lyrics_path, language=opts.language, code_dir=ASR_CODE_DIR)
-    timings["asr"] = round(time.perf_counter() - t, 2)
-    asr_data = json.loads(lyrics_path.read_text())
-    print(f"[pipeline] asr: {len(asr_data.get('words', []))} words, "
-          f"RTF={asr_data.get('rtf', 0):.3f}", file=sys.stderr)
-    _emit(on_progress, "asr")
-
-    # 4. LRCLib lookup
-    artist = opts.artist or meta.get("uploader") or meta.get("channel") or ""
-    title = opts.title or meta.get("title") or ""
-    duration = meta.get("duration") or asr_data.get("duration")
-
-    lrc_entry = None
-    lrc_words: list[dict] = []
-    if title:
-        t = time.perf_counter()
-        try:
-            lrc_entry = lrc_mod.fetch(
-                artist, title, duration,
-                asr_words=asr_data.get("words") or None,
-            )
-        except Exception as e:
-            print(f"[pipeline] lrclib error: {e}", file=sys.stderr)
-        timings["lrclib"] = round(time.perf_counter() - t, 2)
-
-    # Note: Genius fallback removed — local LLM identification (step 1.5)
-    # now provides clean artist/title. If LRCLib still misses, we fall
-    # through to ASR-only alignment below.
-
-    if lrc_entry:
-        lrc_raw = lrc_entry.get("syncedLyrics") or lrc_entry.get("plainLyrics") or ""
-        lines = lrc_mod.parse(lrc_raw)
-        lrc_words = lrc_mod.words_from_lines(lines)
-        (out_dir / "lrc.txt").write_text("\n".join(lines), encoding="utf-8")
-        (out_dir / "lrc_words.json").write_text(
-            json.dumps({
-                "source": "lrclib",
-                "artist": lrc_entry.get("artistName"),
-                "title": lrc_entry.get("trackName"),
-                "duration": lrc_entry.get("duration"),
-                "synced": bool(lrc_entry.get("syncedLyrics")),
-                "lines": lines,
-                "words": lrc_words,
-            }, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        print(f"[pipeline] lrclib: hit {lrc_entry.get('artistName')!r} — "
-              f"{lrc_entry.get('trackName')!r} ({len(lines)} lines, {len(lrc_words)} words)",
-              file=sys.stderr)
-    else:
-        print(f"[pipeline] lrclib: no match for {artist!r} / {title!r}", file=sys.stderr)
-    _emit(on_progress, "lrclib")
-
-    # 5. Alignment
     aligned_path = None
     align_stats = None
-    asr_words = asr_data.get("words") or []
-    if lrc_words and asr_words:
-        t = time.perf_counter()
-        aligned_words, align_stats = align_mod.align(
-            asr_words, lrc_words, asr_data.get("duration", 0.0))
-        timings["align"] = round(time.perf_counter() - t, 2)
-        aligned_path = out_dir / "lyrics_aligned.json"
-        aligned_path.write_text(json.dumps({
-            "model": "lrc-aligned-via-asr",
-            "engine": "lrclib+" + asr_data.get("engine", "asr") + "+nw",
-            "device": asr_data.get("device"),
-            "audio": asr_data.get("audio"),
-            "duration": asr_data.get("duration"),
-            "lrc_source": {
-                "artist": lrc_entry.get("artistName"),
-                "title": lrc_entry.get("trackName"),
-                "synced_in_lrclib": bool(lrc_entry.get("syncedLyrics")),
-            },
-            "alignment": align_stats,
-            "lines": json.loads((out_dir / "lrc_words.json").read_text())["lines"],
-            "text": " ".join(w["word"] for w in aligned_words),
-            "words": aligned_words,
-        }, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"[pipeline] align: {align_stats['matched']}/{align_stats['lrc_words']} matched "
-              f"({align_stats['match_rate']*100:.1f}%), "
-              f"{align_stats['interpolated']} interpolated", file=sys.stderr)
+    lrc_entry = None
+    artist = opts.artist or meta.get("uploader") or meta.get("channel") or ""
+    title = opts.title or meta.get("title") or ""
 
-        # Final quality gate: if alignment is poor, discard the LRC result
-        # and fall through to ASR-only. This catches cases where lrc.py's
-        # threshold (0.55) let a marginal match through but the full
-        # alignment reveals it's garbage.
-        if align_stats["match_rate"] < 0.60:
-            print(f"[pipeline] align: match_rate {align_stats['match_rate']*100:.1f}% < 60% — "
-                  f"discarding LRC, falling back to ASR-only", file=sys.stderr)
-            aligned_path.unlink(missing_ok=True)
-            aligned_words, lines = align_mod.asr_to_aligned(asr_words)
-            aligned_path = out_dir / "lyrics_aligned.json"
-            aligned_path.write_text(json.dumps({
-                "model": "asr-only",
-                "engine": asr_data.get("engine", "asr"),
-                "device": asr_data.get("device"),
-                "audio": asr_data.get("audio"),
-                "duration": asr_data.get("duration"),
-                "lrc_source": None,
-                "alignment": None,
-                "lines": lines,
-                "text": " ".join(w["word"] for w in aligned_words),
-                "words": aligned_words,
+    def run_stems():
+        nonlocal stems
+        if opts.skip_separation and (out_dir / "stems").exists():
+            print("[pipeline] skipping separation, reusing stems/", file=sys.stderr)
+            base = audio_path.stem
+            for name in sep_mod.STEM_NAMES:
+                p = out_dir / "stems" / f"{base}_({name})_htdemucs_6s.flac"
+                if p.exists():
+                    stems[name.lower()] = p
+        else:
+            t_sep = time.perf_counter()
+            stems = sep_mod.separate(audio_path, out_dir)
+            timings["separate"] = round(time.perf_counter() - t_sep, 2)
+        print(f"[pipeline] stems: {sorted(stems.keys())}", file=sys.stderr)
+        _emit(on_progress, "separate")
+
+    def run_fast_track():
+        nonlocal asr_data, aligned_path, align_stats, lrc_entry, artist, title
+        # 1. ASR on raw audio
+        t_asr = time.perf_counter()
+        asr_mod.transcribe(audio_path, lyrics_path, language=opts.language)
+        timings["asr"] = round(time.perf_counter() - t_asr, 2)
+        try:
+            asr_data = json.loads(lyrics_path.read_text())
+        except Exception:
+            asr_data = {"words": []}
+        print(f"[pipeline] asr(raw): {len(asr_data.get('words', []))} words, RTF={asr_data.get('rtf', 0):.3f}", file=sys.stderr)
+        _emit(on_progress, "asr")
+
+        # 2. Search Grounding (DuckDuckGo + Qwen 0.5B)
+        t_id = time.perf_counter()
+        from . import identify_search
+        words = [w.get("word", "") for w in asr_data.get("words", [])]
+        asr_snippet = " ".join(words[len(words)//3 : len(words)//3 + 15]) if len(words) > 15 else " ".join(words)
+        
+        llm_id = None
+        if asr_snippet:
+            llm_id = identify_search.search_and_identify(asr_snippet)
+            
+        if llm_id:
+            meta["llm_id"] = llm_id
+            title = llm_id["title"]
+            artist = llm_id["artist"]
+        timings["identify_search"] = round(time.perf_counter() - t_id, 2)
+        _emit(on_progress, "identify")
+
+        # 3. LRCLib lookup
+        duration = meta.get("duration") or asr_data.get("duration")
+        lrc_words: list[dict] = []
+        if title:
+            t_lrc = time.perf_counter()
+            try:
+                lrc_entry = lrc_mod.fetch(artist, title, duration, asr_words=asr_data.get("words") or None)
+            except Exception as e:
+                print(f"[pipeline] lrclib error: {e}", file=sys.stderr)
+            timings["lrclib"] = round(time.perf_counter() - t_lrc, 2)
+        
+        if lrc_entry:
+            lrc_raw = lrc_entry.get("syncedLyrics") or lrc_entry.get("plainLyrics") or ""
+            lines = lrc_mod.parse(lrc_raw)
+            lrc_words = lrc_mod.words_from_lines(lines)
+            (out_dir / "lrc.txt").write_text("\n".join(lines), encoding="utf-8")
+            (out_dir / "lrc_words.json").write_text(json.dumps({
+                "source": "lrclib", "artist": lrc_entry.get("artistName"),
+                "title": lrc_entry.get("trackName"), "duration": lrc_entry.get("duration"),
+                "synced": bool(lrc_entry.get("syncedLyrics")), "lines": lines, "words": lrc_words
             }, ensure_ascii=False, indent=2), encoding="utf-8")
-            align_stats = {"asr_words": len(asr_words), "lrc_words": 0,
-                           "matched": 0, "match_rate": None, "interpolated": 0,
-                           "asr_only": True, "lrc_rejected": True}
-            print(f"[pipeline] align: ASR-only fallback ({len(aligned_words)} words, {len(lines)} lines)",
-                  file=sys.stderr)
-    elif asr_words:
-        # ASR-only fallback — no LRC found, but Parakeet/GigaAM still
-        # gave us word-level timing. Group by silence into pseudo-lines
-        # so /select and /drill still work, just with raw ASR text.
-        t = time.perf_counter()
-        aligned_words, lines = align_mod.asr_to_aligned(asr_words)
-        timings["align"] = round(time.perf_counter() - t, 2)
-        aligned_path = out_dir / "lyrics_aligned.json"
-        aligned_path.write_text(json.dumps({
-            "model": "asr-only",
-            "engine": asr_data.get("engine", "asr"),
-            "device": asr_data.get("device"),
-            "audio": asr_data.get("audio"),
-            "duration": asr_data.get("duration"),
-            "lrc_source": None,
-            "alignment": None,
-            "lines": lines,
-            "text": " ".join(w["word"] for w in aligned_words),
-            "words": aligned_words,
-        }, ensure_ascii=False, indent=2), encoding="utf-8")
-        align_stats = {"asr_words": len(asr_words), "lrc_words": 0,
-                       "matched": 0, "match_rate": None, "interpolated": 0,
-                       "asr_only": True}
-        print(f"[pipeline] align: ASR-only fallback ({len(aligned_words)} words, {len(lines)} lines)",
-              file=sys.stderr)
-    else:
-        print("[pipeline] align: skipped (no ASR words)", file=sys.stderr)
-    _emit(on_progress, "align")
+        _emit(on_progress, "lrclib")
 
-    # 6. Manifest
+        # 4. Alignment
+        asr_words_list = asr_data.get("words") or []
+        aligned_path_local = None
+        
+        if lrc_words and asr_words_list:
+            t_aln = time.perf_counter()
+            aligned_words, align_stats = align_mod.align(asr_words_list, lrc_words, asr_data.get("duration", 0.0))
+            timings["align"] = round(time.perf_counter() - t_aln, 2)
+            aligned_path_local = out_dir / "lyrics_aligned.json"
+            
+            if align_stats["match_rate"] >= 0.60:
+                aligned_path_local.write_text(json.dumps({
+                    "model": "lrc-aligned-via-asr-raw",
+                    "engine": "lrclib+" + str(asr_data.get("engine", "asr")) + "+nw",
+                    "duration": asr_data.get("duration"),
+                    "lrc_source": {"artist": lrc_entry.get("artistName"), "title": lrc_entry.get("trackName"), "synced": bool(lrc_entry.get("syncedLyrics"))},
+                    "alignment": align_stats,
+                    "lines": json.loads((out_dir / "lrc_words.json").read_text())["lines"],
+                    "text": " ".join(w.get("word", "") for w in aligned_words),
+                    "words": aligned_words,
+                }, ensure_ascii=False, indent=2), encoding="utf-8")
+            else:
+                print("[pipeline] align: poor match_rate, fallback to asr-only", file=sys.stderr)
+                aligned_words, lines = align_mod.asr_to_aligned(asr_words_list)
+                aligned_path_local.write_text(json.dumps({
+                    "model": "asr-only", "engine": str(asr_data.get("engine", "asr")), "duration": asr_data.get("duration"),
+                    "alignment": None, "lines": lines, "words": aligned_words,
+                }, ensure_ascii=False, indent=2), encoding="utf-8")
+                align_stats = {"asr_words": len(asr_words_list), "lrc_words": 0, "matched": 0, "match_rate": None, "interpolated": 0, "asr_only": True}
+        elif asr_words_list:
+            aligned_words, lines = align_mod.asr_to_aligned(asr_words_list)
+            aligned_path_local = out_dir / "lyrics_aligned.json"
+            aligned_path_local.write_text(json.dumps({
+                "model": "asr-only", "engine": str(asr_data.get("engine", "asr")), "duration": asr_data.get("duration"),
+                "alignment": None, "lines": lines, "words": aligned_words,
+            }, ensure_ascii=False, indent=2), encoding="utf-8")
+            align_stats = {"asr_words": len(asr_words_list), "lrc_words": 0, "matched": 0, "match_rate": None, "interpolated": 0, "asr_only": True}
+        
+        aligned_path = aligned_path_local
+        _emit(on_progress, "align")
+
+        # Emit EARLY manifest so frontend can load lyrics
+        early_manifest = {
+            "id": meta.get("id"),
+            "title": title or meta.get("title"),
+            "artist": artist or None,
+            "url": meta.get("url"),
+            "duration": asr_data.get("duration"),
+            "language": opts.language,
+            "stems": {},
+            "lyrics": {"raw_asr": str(lyrics_path.relative_to(out_dir)), "engine": asr_data.get("engine")},
+            "lrc": {"found": bool(lrc_entry), "artist": lrc_entry.get("artistName") if lrc_entry else None, "title": lrc_entry.get("trackName") if lrc_entry else None},
+            "aligned": {"path": str(aligned_path.relative_to(out_dir)), "match_rate": align_stats.get("match_rate") if align_stats else None} if aligned_path else None,
+            "timings_sec": timings,
+        }
+        (out_dir / "manifest.json").write_text(json.dumps(early_manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        _emit(on_progress, "lyrics_ready")
+
+    # Run concurrently
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        f_stems = executor.submit(run_stems)
+        f_fast = executor.submit(run_fast_track)
+        concurrent.futures.wait([f_stems, f_fast])
+        f_stems.result()
+        f_fast.result()
+
+    # Final manifest with stems
     timings["total"] = round(time.perf_counter() - t_start, 2)
     manifest = {
         "id": meta.get("id"),
-        "title": meta.get("title"),
+        "title": title or meta.get("title"),
         "artist": artist or None,
         "url": meta.get("url"),
         "duration": asr_data.get("duration"),
         "language": opts.language,
         "stems": {name: str(path.relative_to(out_dir)) for name, path in stems.items()},
-        "lyrics": {
-            "raw_asr": str(lyrics_path.relative_to(out_dir)),
-            "engine": asr_data.get("engine") or asr_data.get("model"),
-        },
-        "lrc": {
-            "found": bool(lrc_entry),
-            "artist": lrc_entry.get("artistName") if lrc_entry else None,
-            "title": lrc_entry.get("trackName") if lrc_entry else None,
-        },
-        "aligned": (
-            {
-                "path": str(aligned_path.relative_to(out_dir)),
-                "match_rate": align_stats["match_rate"] if align_stats else None,
-                "matched": align_stats["matched"] if align_stats else None,
-                "lrc_words": align_stats["lrc_words"] if align_stats else None,
-                "interpolated": align_stats["interpolated"] if align_stats else None,
-            } if aligned_path else None
-        ),
+        "lyrics": {"raw_asr": str(lyrics_path.relative_to(out_dir)), "engine": asr_data.get("engine")},
+        "lrc": {"found": bool(lrc_entry), "artist": lrc_entry.get("artistName") if lrc_entry else None, "title": lrc_entry.get("trackName") if lrc_entry else None},
+        "aligned": {"path": str(aligned_path.relative_to(out_dir)), "match_rate": align_stats.get("match_rate") if align_stats else None} if aligned_path else None,
         "timings_sec": timings,
     }
-    (out_dir / "manifest.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    (out_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[pipeline] done in {timings['total']}s → {out_dir / 'manifest.json'}", file=sys.stderr)
     _emit(on_progress, "manifest")
     return manifest
+
 
 
 def main() -> int:

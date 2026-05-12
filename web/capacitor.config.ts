@@ -11,8 +11,8 @@ const config: CapacitorConfig = {
     // Tailscale IP of the Mac — works over tailnet whether iPhone is on the
     // same Wi-Fi, on cellular, or elsewhere. Local 192.168.x stops working
     // the moment iPhone Tailscale is on, since tailnet intercepts routing.
-    url: "http://100.116.66.5:4323",
-    cleartext: true,
+    url: "https://100.116.66.5:4323",
+    cleartext: false,
   },
   plugins: {
     Keyboard: {

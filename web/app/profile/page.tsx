@@ -9,6 +9,7 @@ import { ScreenShell } from "@/components/ui/ScreenShell";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { Eyebrow, MonoSmall, Paragraph, ButtonText } from "@/components/ui/text";
 import { t, setLanguage, type LanguageCode } from "@/lib/strings";
+import { DEV, DEV_USER } from "@/lib/dev-user";
 
 const LANGUAGES: LanguageCode[] = ["English", "Russian", "Spanish", "German", "French", "Chinese"];
 
@@ -21,6 +22,10 @@ export default function ProfilePage() {
     getProfile()
       .then((u) => setUserState(u))
       .catch(() => {
+        if (DEV) {
+          setUserState(DEV_USER);
+          return;
+        }
         logout();
         router.replace("/login");
       });
@@ -70,7 +75,7 @@ export default function ProfilePage() {
               <span className="text-[var(--color-ink-muted)]">—</span>
               <span className="text-[28px]">{user.voice_high}</span>
             </div>
-            <div className="mt-1 font-mono text-[11px] text-[var(--color-ink-muted)] italic">{user.voice_type || "voice"}</div>
+            <div className="mt-1 font-mono text-[11px] text-[var(--color-ink-muted)] italic">{user.voice_type || t.profile.voiceFallback}</div>
           </>
         ) : (
           <div className="mt-2 font-mono text-[12px] text-[var(--color-ink-muted)] italic">{t.profile.notSet}</div>

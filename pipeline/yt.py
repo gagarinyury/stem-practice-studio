@@ -1,13 +1,8 @@
-"""yt-dlp wrapper: download audio + extract metadata.
-
-Runs inside the bench docker image so we don't need yt-dlp on the host.
-"""
+"""yt-dlp wrapper: download audio + extract metadata."""
 import json
 import subprocess
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
-
-BENCH_IMAGE = "stem-practice-bench:rocm"
 
 
 def _normalize_to_single_video(url: str) -> str:
@@ -36,32 +31,29 @@ def download(url: str, out_dir: Path) -> tuple[Path, dict]:
     out_dir.mkdir(parents=True, exist_ok=True)
     out_abs = out_dir.resolve()
     clean_url = _normalize_to_single_video(url)
+    video_path = out_abs / "video.mp4"
+    audio_path = out_abs / "source.wav"
+    opus_path = out_abs / "source.opus"
     
     # 1. Download video + audio to video.mp4
     cmd = [
-        "docker", "run", "--rm",
-        "-v", f"{out_abs}:/out",
-        BENCH_IMAGE,
         "yt-dlp",
         "-f", "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4]/best",
         "--write-info-json",
         "--no-write-playlist-metafiles",
         "--no-playlist",
         "--playlist-items", "1",
-        "-o", "/out/video.mp4",
+        "-o", str(video_path),
         clean_url,
     ]
     subprocess.run(cmd, check=True)
 
     # 2. Extract source.wav from video.mp4 using ffmpeg (needed by pipeline)
     cmd_ffmpeg = [
-        "docker", "run", "--rm",
-        "-v", f"{out_abs}:/out",
-        BENCH_IMAGE,
         "ffmpeg", "-y",
-        "-i", "/out/video.mp4",
+        "-i", str(video_path),
         "-vn", "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2",
-        "/out/source.wav",
+        str(audio_path),
     ]
     subprocess.run(cmd_ffmpeg, check=True)
 
@@ -69,13 +61,10 @@ def download(url: str, out_dir: Path) -> tuple[Path, dict]:
     #    The frontend loads this for instant playback while the pipeline is
     #    still processing stems. Opus is universally supported in modern browsers.
     cmd_opus = [
-        "docker", "run", "--rm",
-        "-v", f"{out_abs}:/out",
-        BENCH_IMAGE,
         "ffmpeg", "-y",
-        "-i", "/out/source.wav",
+        "-i", str(audio_path),
         "-c:a", "libopus", "-b:a", "128k",
-        "/out/source.opus",
+        str(opus_path),
     ]
     try:
         subprocess.run(cmd_opus, check=True)
@@ -85,7 +74,6 @@ def download(url: str, out_dir: Path) -> tuple[Path, dict]:
 
     # yt-dlp writes video.mp4 and video.info.json
     info_path = out_dir / "video.info.json"
-    audio_path = out_dir / "source.wav"
     info = json.loads(info_path.read_text())
     meta = {
         "id": info.get("id"),

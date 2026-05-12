@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useState } from "react";
-import { Capacitor } from "@capacitor/core";
 
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
@@ -11,11 +10,13 @@ function detect(): ViewportMode {
   if (typeof window === "undefined") return "desktop";
   const w = window.innerWidth;
   const h = window.innerHeight;
-  // In a Capacitor native shell we are always on a phone — no matter what
-  // the WebView reports for innerWidth (it can briefly spike past 1024px
-  // on reflow after video metadata loads, swapping us into desktop mode).
-  const native = Capacitor.isNativePlatform();
-  if (!native && w >= 1024) return "desktop";
+  // Touchscreens (Safari iPhone, Capacitor WKWebView, Android) always report
+  // `pointer: coarse`. Relying on Capacitor.isNativePlatform() was racy — the
+  // native bridge injects after first paint when running off a dev server,
+  // so innerWidth spikes past 1024 during video-metadata reflow swapped us
+  // into desktop mode. `pointer: fine` is set synchronously by the platform.
+  const fine = window.matchMedia?.("(pointer: fine)").matches ?? false;
+  if (fine && w >= 1024) return "desktop";
   if (h > w) return "phone-portrait";
   return "phone-landscape";
 }

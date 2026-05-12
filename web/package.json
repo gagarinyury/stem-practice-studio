@@ -3,14 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 4323 -H 0.0.0.0",
+    "dev": "next dev -p 4323 -H 0.0.0.0 --experimental-https --experimental-https-key ./certificates/dev-key.pem --experimental-https-cert ./certificates/dev-cert.pem",
     "ios": "cap run ios",
     "ios:open": "cap open ios",
     "ios:sync": "cap sync ios",
     "build": "next build",
     "start": "next start -p 4323",
     "lint": "eslint",
-    "test": "node scripts/test-rubberband.mjs && node scripts/test-engine-time.mjs && node scripts/test-drill-logic.mjs && node scripts/test-mix-buffers.mjs && node scripts/test-pitch.mjs",
+    "test": "node scripts/test-rubberband.mjs && node scripts/test-engine-time.mjs && node scripts/test-drill-logic.mjs && node scripts/test-mix-buffers.mjs && node scripts/test-pitch.mjs && node scripts/test-processing-progress.mjs",
     "postinstall": "cp -f node_modules/@echogarden/rubberband-wasm/rubberband.wasm public/rubberband.wasm && cp -f node_modules/@echogarden/rubberband-wasm/rubberband.js public/rubberband.js"
   },
   "dependencies": {

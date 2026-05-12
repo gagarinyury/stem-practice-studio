@@ -1,13 +1,32 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { IconX, IconVolume, IconPlayerPauseFilled, IconPlayerPlayFilled, IconPlayerSkipBack, IconPlayerSkipForward } from "@tabler/icons-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { IconPlayerPauseFilled, IconPlayerPlayFilled, IconPlayerSkipBack, IconPlayerSkipForward } from "@tabler/icons-react";
+import type { ReactNode } from "react";
 import { getProfile } from "@/lib/api";
 import { logout, type AuthUser } from "@/lib/auth";
 import { DAILY8 } from "@/lib/warmup/protocol";
 import { pickRange, notesFor, type VoiceRange } from "@/lib/warmup/transpose";
 import { ensureAudio, playStep, pianoNote, type AudioCleanup } from "@/lib/warmup/audio";
+import { DEV, DEV_USER } from "@/lib/dev-user";
+import { ScreenShell } from "@/components/ui/ScreenShell";
+import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { BackLink } from "@/components/ui/BackLink";
+import { MonoSmall } from "@/components/ui/text";
+import { TipBadge } from "@/components/ui/TipBadge";
+import { t } from "@/lib/strings";
+
+// Parse a step title like 'Slide <em>low</em> to high.' into ReactNode
+// with the em segment styled as not-italic muted ink.
+function parseStepTitle(html: string): ReactNode {
+  const parts = html.split(/<em>(.*?)<\/em>/);
+  return parts.map((p, i) =>
+    i % 2 === 0
+      ? p
+      : <em key={i} className="not-italic text-[var(--color-ink-muted)]">{p}</em>
+  );
+}
 
 interface SessionResult {
   startedAt: string;
@@ -18,8 +37,21 @@ interface SessionResult {
   language: string;
 }
 
+const PREVIEW_USER: AuthUser = {
+  id: 0,
+  email: "preview@local",
+  language: "English",
+  voice_low: "C3",
+  voice_high: "C5",
+  voice_type: "tenor",
+  streak_count: 0,
+  last_session_at: null,
+};
+
 export default function Daily8Page() {
   const router = useRouter();
+  const search = useSearchParams();
+  const preview = search?.get("preview") === "1";
   const [user, setUser] = useState<AuthUser | null>(null);
   const [range, setRange] = useState<VoiceRange | null>(null);
   const [stepIdx, setStepIdx] = useState(0);
@@ -33,8 +65,13 @@ export default function Daily8Page() {
   const cleanupRef = useRef<AudioCleanup | null>(null);
   const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Boot: fetch profile, init audio, start session.
   useEffect(() => {
+    if (preview) {
+      setUser(PREVIEW_USER);
+      setRange(pickRange(PREVIEW_USER));
+      setAudioReady(true);
+      return;
+    }
     getProfile()
       .then(async (u) => {
         if (!u.voice_low) {
@@ -48,21 +85,26 @@ export default function Daily8Page() {
           setAudioReady(true);
         } catch (e) {
           console.error("audio init failed", e);
-          setAudioReady(true); // still allow the session to run silently
+          setAudioReady(true);
         }
       })
       .catch(() => {
+        if (DEV) {
+          setUser(DEV_USER);
+          setRange(pickRange(DEV_USER));
+          setAudioReady(true);
+          return;
+        }
         logout();
         router.replace("/login");
       });
-  }, [router]);
+  }, [router, preview]);
 
-  // Auto-start when audio is ready.
   useEffect(() => {
     if (!audioReady || !range) return;
     startedAtRef.current = Date.now();
-    setPlaying(true);
-  }, [audioReady, range]);
+    if (!preview) setPlaying(true);
+  }, [audioReady, range, preview]);
 
   function clearAudio() {
     cleanupRef.current?.();
@@ -77,7 +119,6 @@ export default function Daily8Page() {
     cleanupRef.current = playStep(step.key, notes);
   }
 
-  // Drive timer + audio start/stop based on `playing`.
   useEffect(() => {
     if (!playing || !range) {
       if (tickerRef.current) {
@@ -112,6 +153,11 @@ export default function Daily8Page() {
 
   function finishSession() {
     if (!user) return;
+    if (preview) {
+      setPlaying(false);
+      clearAudio();
+      return;
+    }
     const durationSec = Math.round((Date.now() - startedAtRef.current) / 1000);
     const result: SessionResult = {
       startedAt: new Date(startedAtRef.current).toISOString(),
@@ -155,73 +201,82 @@ export default function Daily8Page() {
   }
 
   if (!user || !range) {
-    return <main className="flex-1 flex items-center justify-center font-mono text-[11px] text-[var(--color-ink-muted)]">…</main>;
+    return (
+      <ScreenShell variant="flow">
+        <MonoSmall>{t.common.loading}</MonoSmall>
+      </ScreenShell>
+    );
   }
   const step = DAILY8[stepIdx];
+  const copy = t.warmupSteps[step.key];
+  const stepEyebrow = copy.eyebrow.replace(/^—\s*|\s*—$/g, "");
   const mm = String(Math.floor(remaining / 60)).padStart(2, "0");
   const ss = String(remaining % 60).padStart(2, "0");
 
   return (
-    <main className="flex-1 flex flex-col items-center px-4 pt-7 pb-7 max-w-sm mx-auto w-full">
-      {/* Top bar */}
-      <div className="w-full flex items-center justify-between">
-        <button onClick={onClose} aria-label="close"><IconX size={22} /></button>
-        <div className="font-mono text-[10px] text-[var(--color-ink-muted)] tracking-[0.1em]">{stepIdx + 1} of {DAILY8.length}</div>
-        <IconVolume size={20} />
+    <ScreenShell variant="flow" compact>
+      <div className="relative min-h-[120px]">
+        <ScreenHeader
+          eyebrow={`${stepEyebrow} · ${stepIdx + 1}/${DAILY8.length}`}
+          title={parseStepTitle(copy.title)}
+          subtitle={copy.meta}
+        />
+        <BackLink onClick={onClose} />
       </div>
-      <div className="mt-4 w-full flex gap-1">
+
+      <div className="w-full flex gap-1 mt-2">
         {DAILY8.map((_, i) => (
-          <div key={i} className="flex-1 h-[3px] rounded" style={{ background: i < stepIdx ? "var(--color-accent-vocal)" : i === stepIdx ? "rgba(83,74,183,0.55)" : "#D3D1C7" }} />
+          <div
+            key={i}
+            className="flex-1 h-[3px] rounded"
+            style={{
+              background: i < stepIdx
+                ? "var(--color-accent-vocal)"
+                : i === stepIdx
+                ? "rgba(83,74,183,0.55)"
+                : "var(--color-ink-faint)",
+            }}
+          />
         ))}
       </div>
 
-      {/* Title */}
-      <div className="mt-7 text-center">
-        <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-[var(--color-accent-vocal)]">{step.eyebrow}</div>
-        <h1 className="mt-2 text-[30px] italic leading-tight" dangerouslySetInnerHTML={{ __html: step.title.replace(/<em>/g, '<em class="not-italic" style="color:var(--color-ink-muted)">') }} />
-        <div className="mt-2 font-mono text-[11px] text-[var(--color-ink-muted)] leading-relaxed">{step.meta}</div>
+      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border-soft)] rounded-[12px] px-4 py-5 min-h-[200px] flex flex-col items-center justify-center">
+          <Visual stepKey={step.key} range={range} active={playing} />
+        </div>
+
+        <TipBadge tone={step.tipTone === "warm" ? "warm" : "success"} align="left">
+          {copy.tip}
+        </TipBadge>
       </div>
 
-      {/* Visual */}
-      <div className="mt-6 w-full bg-white border border-[var(--color-border-soft)] rounded-[12px] px-4 py-5 min-h-[200px] flex flex-col items-center justify-center">
-        <Visual stepKey={step.key} range={range} active={playing} />
+      <div className="flex flex-col items-center gap-3">
+        <div className="font-mono text-[22px] tabular-nums tracking-wider">{mm}:{ss}</div>
+        <div className="w-full flex items-center justify-between">
+          {stepIdx > 0 ? (
+            <button onClick={onPrev} className="flex items-center justify-center w-10 h-10" aria-label={t.warmupSession.prev}>
+              <IconPlayerSkipBack size={22} />
+            </button>
+          ) : (
+            <span aria-hidden className="w-10 h-10" />
+          )}
+          <button
+            onClick={() => setPlaying((p) => !p)}
+            className="w-16 h-16 rounded-full bg-[var(--color-accent-drill)] text-[var(--color-paper)] flex items-center justify-center"
+            aria-label={playing ? t.warmupSession.pause : t.warmupSession.play}
+          >
+            {playing ? <IconPlayerPauseFilled size={26} /> : <IconPlayerPlayFilled size={26} />}
+          </button>
+          <button onClick={onNext} className="flex items-center justify-center w-10 h-10" aria-label={t.warmupSession.next}>
+            <IconPlayerSkipForward size={22} />
+          </button>
+        </div>
+        <MonoSmall>{t.warmupSession.skipHint}</MonoSmall>
       </div>
-
-      {/* Tip card */}
-      <div className={`mt-4 w-full rounded-[10px] p-3 flex gap-2 items-start text-left ${
-        step.tipTone === "warm" ? "bg-[#FAEEDA] text-[#633806]" : "bg-[#E1F5EE] text-[#04342C]"
-      }`}>
-        <span className="font-mono text-[9px] uppercase mt-1 opacity-70">i</span>
-        <p className="text-[13px] italic leading-snug">{step.tip}</p>
-      </div>
-
-      {/* Timer */}
-      <div className="mt-4 font-mono text-[22px] tabular-nums tracking-wider">{mm}:{ss}</div>
-
-      {/* Controls */}
-      <div className="mt-3 w-full flex items-center justify-between">
-        <button onClick={onPrev} className="text-center" aria-label="prev">
-          <IconPlayerSkipBack size={22} />
-          <div className="font-mono text-[9px] text-[var(--color-ink-muted)] mt-1">prev</div>
-        </button>
-        <button
-          onClick={() => setPlaying((p) => !p)}
-          className="w-16 h-16 rounded-full bg-[var(--color-ink)] text-[var(--color-paper)] flex items-center justify-center"
-          aria-label={playing ? "pause" : "play"}
-        >
-          {playing ? <IconPlayerPauseFilled size={26} /> : <IconPlayerPlayFilled size={26} />}
-        </button>
-        <button onClick={onNext} className="text-center" aria-label="next">
-          <IconPlayerSkipForward size={22} />
-          <div className="font-mono text-[9px] text-[var(--color-ink)] mt-1">next</div>
-        </button>
-      </div>
-      <div className="mt-3 font-mono text-[10px] text-[var(--color-ink-muted)] tracking-[0.05em]">— too much? tap &ldquo;next&rdquo; to skip</div>
-    </main>
+    </ScreenShell>
   );
 }
 
-/** Per-step visual. Inline for simplicity — each branch returns its own SVG/animation. */
 function Visual({ stepKey, range, active }: { stepKey: string; range: VoiceRange; active: boolean }) {
   const notes = notesFor(stepKey, range);
   switch (stepKey) {
@@ -250,12 +305,12 @@ function BreathVisual() {
       <div
         className="w-32 h-32 rounded-full"
         style={{
-          background: "radial-gradient(circle at 35% 30%, #EEEDFE, #CECBF6)",
-          border: "0.5px solid #AFA9EC",
+          background: "radial-gradient(circle at 35% 30%, var(--color-accent-vocal-50), var(--color-accent-vocal-100))",
+          border: "0.5px solid var(--color-accent-vocal-200)",
           animation: "warmupBreath 4.5s ease-in-out infinite",
         }}
       />
-      <div className="mt-3 font-mono text-[11px] text-[var(--color-ink-muted)] tracking-[0.1em]">— breathe · 4s in · 4s out —</div>
+      <div className="mt-3 font-mono text-[11px] text-[var(--color-ink-muted)] tracking-[0.1em]">— {t.warmupSession.breathe} —</div>
       <style>{`@keyframes warmupBreath { 0%,100%{transform:scale(0.78);opacity:0.55;} 50%{transform:scale(1);opacity:1;} }`}</style>
     </div>
   );
@@ -265,18 +320,18 @@ function SovtVisual({ note }: { note: string }) {
   return (
     <div className="flex flex-col items-center">
       <div className="flex gap-5">
-        <div className="w-16 h-16 rounded-[12px] bg-[#EEEDFE] border border-[#AFA9EC] flex items-center justify-center text-[#3C3489]">
+        <div className="w-16 h-16 rounded-[12px] bg-[var(--color-accent-vocal-50)] border border-[var(--color-accent-vocal-200)] flex items-center justify-center text-[var(--color-accent-vocal-700)]">
           <div className="text-center">
-            <div className="text-[10px] font-mono">lip</div><div className="text-[10px] font-mono">trill</div>
+            <div className="text-[10px] font-mono">{t.warmupSession.lip}</div><div className="text-[10px] font-mono">{t.warmupSession.trill}</div>
           </div>
         </div>
         <div className="w-16 h-16 rounded-[12px] bg-[var(--color-surface-muted)] border border-[var(--color-border-soft)] flex items-center justify-center">
           <div className="text-center">
-            <div className="text-[10px] font-mono">straw</div>
+            <div className="text-[10px] font-mono">{t.warmupSession.straw}</div>
           </div>
         </div>
       </div>
-      <div className="mt-4 font-mono text-[11px] text-[#3C3489] bg-[#EEEDFE] rounded-pill px-3 py-1">hold on {note} · steady</div>
+      <div className="mt-4 font-mono text-[11px] text-[var(--color-accent-vocal-700)] bg-[var(--color-accent-vocal-50)] rounded-pill px-3 py-1">{t.warmupSession.holdOn} {note} · {t.warmupSession.steady}</div>
     </div>
   );
 }
@@ -295,11 +350,11 @@ function SirenVisual({ low, high }: { low: string; high: string }) {
           <line x1="32" y1="100" x2="312" y2="100" />
           <line x1="32" y1="140" x2="312" y2="140" />
         </g>
-        <rect x="32" y="40" width="280" height="80" fill="#EEEDFE" opacity="0.5" rx="3" />
-        <path d="M 32,140 Q 172,10 312,140" stroke="#534AB7" strokeWidth="2.5" fill="none" strokeDasharray="4,4" opacity="0.55" />
+        <rect x="32" y="40" width="280" height="80" fill="var(--color-accent-vocal-50)" opacity="0.5" rx="3" />
+        <path d="M 32,140 Q 172,10 312,140" stroke="var(--color-accent-vocal)" strokeWidth="2.5" fill="none" strokeDasharray="4,4" opacity="0.55" />
         <path
           d="M 32,140 Q 172,10 312,140"
-          stroke="#1D9E75"
+          stroke="var(--color-accent-success)"
           strokeWidth="3"
           fill="none"
           strokeLinecap="round"
@@ -307,7 +362,7 @@ function SirenVisual({ low, high }: { low: string; high: string }) {
           style={{ animation: "warmupSiren 6s linear infinite" }}
         />
       </svg>
-      <div className="mt-2 font-mono text-[11px] text-center text-[#3C3489] bg-[#EEEDFE] rounded-pill inline-block px-3 py-1 mx-auto">{low} ↗ {high} ↘ {low}</div>
+      <div className="mt-2 font-mono text-[11px] text-center text-[var(--color-accent-vocal-700)] bg-[var(--color-accent-vocal-50)] rounded-pill inline-block px-3 py-1 mx-auto">{low} ↗ {high} ↘ {low}</div>
       <style>{`@keyframes warmupSiren { 0%{stroke-dashoffset:600;} 50%{stroke-dashoffset:0;} 100%{stroke-dashoffset:-600;} }`}</style>
     </div>
   );
@@ -352,11 +407,11 @@ function ScaleVisual({ notes, active }: { notes: string[]; active: boolean }) {
       <div className="flex flex-col gap-[6px] w-[80%]">
         {[4, 3, 2, 1, 0].map((idx) => (
           <div key={idx} className="flex items-center gap-2">
-            <span className={`font-mono text-[10px] w-7 text-right ${hitIdx === idx ? "text-[#3C3489]" : "text-[var(--color-ink-muted)]"}`}>{notes[idx] || ""}</span>
+            <span className={`font-mono text-[10px] w-7 text-right ${hitIdx === idx ? "text-[var(--color-accent-vocal-700)]" : "text-[var(--color-ink-muted)]"}`}>{notes[idx] || ""}</span>
             <div
               className="flex-1 h-[14px] rounded transition-all"
               style={{
-                background: hitIdx === idx ? "#534AB7" : "#EEEDFE",
+                background: hitIdx === idx ? "var(--color-accent-vocal)" : "var(--color-accent-vocal-50)",
                 opacity: hitIdx === idx ? 1 : 0.65,
                 transform: hitIdx === idx ? "scaleX(1.04)" : "scaleX(1)",
               }}
@@ -364,7 +419,7 @@ function ScaleVisual({ notes, active }: { notes: string[]; active: boolean }) {
           </div>
         ))}
       </div>
-      <div className="mt-3 font-mono text-[10px] text-[var(--color-ink-muted)] tracking-[0.1em] h-[14px]">{resting ? <span className="text-[var(--color-accent-success)]">— breathe —</span> : ""}</div>
+      <div className="mt-3 font-mono text-[10px] text-[var(--color-ink-muted)] tracking-[0.1em] h-[14px]">{resting ? <span className="text-[var(--color-accent-success)]">— {t.warmupSession.breatheShort} —</span> : ""}</div>
       <div className="mt-2 text-[36px] italic">{vowel}</div>
     </div>
   );
@@ -376,12 +431,12 @@ function SwellVisual({ note }: { note: string }) {
       <div
         className="w-14 h-32 rounded-full origin-bottom"
         style={{
-          background: "linear-gradient(180deg, #534AB7, #AFA9EC)",
+          background: "linear-gradient(180deg, var(--color-accent-vocal), var(--color-accent-vocal-200))",
           animation: "warmupSwell 6s ease-in-out infinite",
         }}
       />
-      <div className="mt-4 font-mono text-[11px] text-[var(--color-ink-muted)] tracking-[0.1em]">— soft → loud → soft —</div>
-      <div className="mt-2 font-mono text-[11px] text-[#3C3489] bg-[#EEEDFE] rounded-pill px-3 py-1">hold on {note}</div>
+      <div className="mt-4 font-mono text-[11px] text-[var(--color-ink-muted)] tracking-[0.1em]">— {t.warmupSession.softLoudSoft} —</div>
+      <div className="mt-2 font-mono text-[11px] text-[var(--color-accent-vocal-700)] bg-[var(--color-accent-vocal-50)] rounded-pill px-3 py-1">{t.warmupSession.holdOn} {note}</div>
       <style>{`@keyframes warmupSwell { 0%,100%{transform:scaleY(0.25);opacity:0.4;} 50%{transform:scaleY(1);opacity:1;} }`}</style>
     </div>
   );
@@ -416,8 +471,8 @@ function StaccatoVisual({ notes, active }: { notes: string[]; active: boolean })
             key={i}
             className="w-8 h-8 rounded-full transition-all"
             style={{
-              background: hitIdx === i ? "#1D9E75" : "#EEEDFE",
-              border: "0.5px solid #AFA9EC",
+              background: hitIdx === i ? "var(--color-accent-success)" : "var(--color-accent-vocal-50)",
+              border: "0.5px solid var(--color-accent-vocal-200)",
               transform: hitIdx === i ? "scale(1.25)" : "scale(1)",
               boxShadow: hitIdx === i ? "0 0 0 6px #E1F5EE" : "none",
             }}
@@ -438,10 +493,10 @@ function CoolVisual({ note }: { note: string }) {
   return (
     <div className="flex flex-col items-center w-full">
       <svg viewBox="0 0 280 60" className="w-[80%]">
-        <path d="M 4 30 Q 24 18, 44 30 T 84 30 T 124 30 T 164 30 T 204 30 T 244 30 T 276 30" stroke="#AFA9EC" strokeWidth="2" fill="none" strokeLinecap="round" />
+        <path d="M 4 30 Q 24 18, 44 30 T 84 30 T 124 30 T 164 30 T 204 30 T 244 30 T 276 30" stroke="var(--color-accent-vocal-200)" strokeWidth="2" fill="none" strokeLinecap="round" />
       </svg>
-      <div className="mt-3 font-mono text-[11px] text-[var(--color-ink-muted)] tracking-[0.1em]">— hum · let it settle —</div>
-      <div className="mt-2 font-mono text-[11px] text-[#3C3489] bg-[#EEEDFE] rounded-pill px-3 py-1">{note} · gentle</div>
+      <div className="mt-3 font-mono text-[11px] text-[var(--color-ink-muted)] tracking-[0.1em]">— {t.warmupSession.humSettle} —</div>
+      <div className="mt-2 font-mono text-[11px] text-[var(--color-accent-vocal-700)] bg-[var(--color-accent-vocal-50)] rounded-pill px-3 py-1">{note} · {t.warmupSession.gentle}</div>
     </div>
   );
 }

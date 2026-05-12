@@ -3,9 +3,6 @@ FROM python:3.12-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl ffmpeg libchromaprint-tools \
     && rm -rf /var/lib/apt/lists/* \
-    && curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-27.3.1.tgz \
-        | tar -xz -C /usr/local/bin --strip-components=1 docker/docker \
-    && docker --version \
     && fpcalc -version
 
 WORKDIR /app
@@ -16,7 +13,8 @@ RUN pip install --no-cache-dir \
         "fastapi>=0.115" "uvicorn[standard]>=0.32" "arq>=0.26" "redis>=5.0" \
         "python-multipart>=0.0.12" "pydantic>=2.9" \
         "python-slugify>=8.0" "nanoid>=2.0" "requests>=2.32" \
-        "sqlalchemy>=2.0" "bcrypt>=4.2" "pyjwt>=2.10"
+        "sqlalchemy>=2.0" "bcrypt>=4.2" "pyjwt>=2.10" \
+        "yt-dlp"
 
 # pipeline + backend live side-by-side; both are mounted at runtime via compose.
 ENV PYTHONPATH=/app

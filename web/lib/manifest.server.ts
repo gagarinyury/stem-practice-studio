@@ -1,5 +1,5 @@
 import "server-only";
-import { API_BASE } from "./config";
+import { API_BASE_SERVER as API_BASE } from "./config";
 import type { AlignedLyrics, Manifest } from "./manifest";
 
 /**

@@ -124,9 +124,6 @@ export function ProcessingScreen({ id, initial, preview = false }: { id: string;
         }
         if (e.stage === "error") setError(e.message || "pipeline error");
         if (e.stage && STAGES.find((s) => s.key === e.stage)) {
-          // Stage event arrives *after* completion. Defer the transition so the
-          // RAF loop can honour minSec — gives short stages (instant download)
-          // visible dwell time on screen.
           const idx = STAGES.findIndex((s) => s.key === e.stage);
           const next = (STAGES[idx + 1]?.key ?? STAGES[STAGES.length - 1].key) as StageKey;
           pendingStageRef.current = next;
@@ -142,8 +139,29 @@ export function ProcessingScreen({ id, initial, preview = false }: { id: string;
         }
       },
     );
-    return stop;
-  }, [id, initial, router]);
+
+    // Safety net: SSE has a race window in backend/app/api/events.py between
+    // get_last and pubsub.subscribe — intermediate publishes can be lost. Poll
+    // the track status every 5s so a stale UI still picks up completion.
+    const pollId = window.setInterval(async () => {
+      try {
+        const tr = await getTrack(id);
+        setTrack(tr);
+        if (tr.status === "done" && !preview) {
+          window.clearInterval(pollId);
+          router.replace(`/play/${id}`);
+        } else if (tr.status === "failed") {
+          window.clearInterval(pollId);
+          setError("pipeline error");
+        }
+      } catch { /* transient — keep polling */ }
+    }, 5000);
+
+    return () => {
+      stop();
+      window.clearInterval(pollId);
+    };
+  }, [id, initial, preview, router]);
 
   function stageStatus(key: StageKey): "done" | "active" | "pending" {
     const idx = STAGES.findIndex((s) => s.key === key);

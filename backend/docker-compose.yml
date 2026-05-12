@@ -68,3 +68,64 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     working_dir: /srv/apps/stem-practice-studio
     command: ["arq", "backend.app.jobs.WorkerSettings"]
+
+  asr:
+    image: stem-practice-asr:rocm
+    restart: unless-stopped
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "991"
+      - "44"
+    volumes:
+      - /srv/apps/stem-practice-studio:/srv/apps/stem-practice-studio
+      - /srv/models/stem-practice-asr:/asr-models
+    working_dir: /srv/apps/stem-practice-studio
+    ports:
+      - "0.0.0.0:8091:8091"
+    command: ["python", "-m", "uvicorn", "bench.asr.server:app", "--host", "0.0.0.0", "--port", "8091"]
+
+  separator:
+    image: stem-practice-bench:rocm
+    restart: unless-stopped
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "991"
+      - "44"
+    volumes:
+      - /srv/apps/stem-practice-studio:/srv/apps/stem-practice-studio
+      - /srv/models/stem-practice:/models:ro
+    working_dir: /srv/apps/stem-practice-studio
+    ports:
+      - "0.0.0.0:8092:8092"
+    command: ["python", "-m", "uvicorn", "bench.separate.server:app", "--host", "0.0.0.0", "--port", "8092"]
+
+  api-clean:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - asr
+      - separator
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      RUNS_DIR: /srv/apps/stem-practice-studio/runs
+      PYTHONPATH: /srv/apps/stem-practice-studio
+      ASR_URL: "http://host.docker.internal:8091"
+      SEPARATOR_URL: "http://host.docker.internal:8092"
+      LLM_BASE_URL: "http://host.docker.internal:8080/v1"
+      CORS_ORIGINS: "http://localhost:4323,http://localhost:4324,http://evox2:4323,http://evox2:4324,http://evo:4323,http://evo:4324"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - /srv/apps/stem-practice-studio:/srv/apps/stem-practice-studio
+    working_dir: /srv/apps/stem-practice-studio
+    ports:
+      - "0.0.0.0:8093:8093"
+    command: ["uvicorn", "backend_clean.app:app", "--host", "0.0.0.0", "--port", "8093"]

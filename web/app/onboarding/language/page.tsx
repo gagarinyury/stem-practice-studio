@@ -8,8 +8,7 @@ import { setUser, isAuthed } from "@/lib/auth";
 import { ScreenShell } from "@/components/ui/ScreenShell";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { ButtonText, ErrorText } from "@/components/ui/text";
-import { setLanguage, type LanguageCode } from "@/lib/strings";
-import { t } from "@/lib/strings";
+import { DICTS, setLanguage, type LanguageCode } from "@/lib/strings";
 
 const LANGUAGES: LanguageCode[] = ["English", "Russian", "Spanish", "German", "French", "Chinese"];
 
@@ -18,6 +17,8 @@ export default function LanguageOnboardingPage() {
   const [language, setLang] = useState<LanguageCode>("English");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Reactive translations — re-renders whenever the user picks a language.
+  const t = DICTS[language];
 
   async function commit() {
     setBusy(true);
