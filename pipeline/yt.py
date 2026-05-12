@@ -29,31 +29,44 @@ def _normalize_to_single_video(url: str) -> str:
 
 
 def download(url: str, out_dir: Path) -> tuple[Path, dict]:
-    """Download the best audio for `url` into `out_dir`. Returns (audio_path, metadata).
+    """Download the best video + audio for `url` into `out_dir`. Returns (audio_path, metadata).
 
     metadata keys: id, title, uploader, channel, duration, language (if present)
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     out_abs = out_dir.resolve()
     clean_url = _normalize_to_single_video(url)
+    
+    # 1. Download video + audio to video.mp4
     cmd = [
         "docker", "run", "--rm",
         "-v", f"{out_abs}:/out",
         BENCH_IMAGE,
         "yt-dlp",
-        "-f", "bestaudio",
-        "--extract-audio", "--audio-format", "wav", "--audio-quality", "0",
+        "-f", "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4]/best",
         "--write-info-json",
         "--no-write-playlist-metafiles",
         "--no-playlist",
         "--playlist-items", "1",
-        "-o", "/out/source.%(ext)s",
+        "-o", "/out/video.mp4",
         clean_url,
     ]
     subprocess.run(cmd, check=True)
 
-    # yt-dlp writes source.wav and source.info.json
-    info_path = out_dir / "source.info.json"
+    # 2. Extract source.wav from video.mp4 using ffmpeg
+    cmd_ffmpeg = [
+        "docker", "run", "--rm",
+        "-v", f"{out_abs}:/out",
+        BENCH_IMAGE,
+        "ffmpeg", "-y",
+        "-i", "/out/video.mp4",
+        "-vn", "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2",
+        "/out/source.wav",
+    ]
+    subprocess.run(cmd_ffmpeg, check=True)
+
+    # yt-dlp writes video.mp4 and video.info.json
+    info_path = out_dir / "video.info.json"
     audio_path = out_dir / "source.wav"
     info = json.loads(info_path.read_text())
     meta = {
