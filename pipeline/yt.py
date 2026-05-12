@@ -53,7 +53,7 @@ def download(url: str, out_dir: Path) -> tuple[Path, dict]:
     ]
     subprocess.run(cmd, check=True)
 
-    # 2. Extract source.wav from video.mp4 using ffmpeg
+    # 2. Extract source.wav from video.mp4 using ffmpeg (needed by pipeline)
     cmd_ffmpeg = [
         "docker", "run", "--rm",
         "-v", f"{out_abs}:/out",
@@ -64,6 +64,24 @@ def download(url: str, out_dir: Path) -> tuple[Path, dict]:
         "/out/source.wav",
     ]
     subprocess.run(cmd_ffmpeg, check=True)
+
+    # 3. Create lightweight source.opus for browser streaming (~5 MB vs 95 MB WAV).
+    #    The frontend loads this for instant playback while the pipeline is
+    #    still processing stems. Opus is universally supported in modern browsers.
+    cmd_opus = [
+        "docker", "run", "--rm",
+        "-v", f"{out_abs}:/out",
+        BENCH_IMAGE,
+        "ffmpeg", "-y",
+        "-i", "/out/source.wav",
+        "-c:a", "libopus", "-b:a", "128k",
+        "/out/source.opus",
+    ]
+    try:
+        subprocess.run(cmd_opus, check=True)
+    except subprocess.CalledProcessError:
+        # Not fatal — frontend will fall back to source.wav
+        pass
 
     # yt-dlp writes video.mp4 and video.info.json
     info_path = out_dir / "video.info.json"

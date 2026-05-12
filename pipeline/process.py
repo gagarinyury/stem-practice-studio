@@ -143,11 +143,21 @@ def run(opts: RunOpts, on_progress: Optional[ProgressCb] = None) -> dict:
             file=sys.stderr,
         )
         meta["acoustid"] = ident
-        # Fill in missing fields; never overwrite caller-provided values.
-        if not meta.get("uploader") and not meta.get("channel") and ident.get("artist"):
-            meta["uploader"] = ident["artist"]
-        if (not meta.get("title") or meta.get("title") == "source") and ident.get("title"):
-            meta["title"] = ident["title"]
+        # AcoustID is the most reliable source — audio fingerprint is
+        # content-based, unlike yt-dlp metadata which can be junk.
+        # Override yt-dlp title/artist when score is confident (≥0.7).
+        score = float(ident.get("score") or 0)
+        if score >= 0.7:
+            if ident.get("artist"):
+                meta["uploader"] = ident["artist"]
+            if ident.get("title"):
+                meta["title"] = ident["title"]
+        else:
+            # Low-confidence: only fill missing fields
+            if not meta.get("uploader") and not meta.get("channel") and ident.get("artist"):
+                meta["uploader"] = ident["artist"]
+            if not meta.get("title") and ident.get("title"):
+                meta["title"] = ident["title"]
     _emit(on_progress, "identify")
 
     # 2. Stems
@@ -213,9 +223,11 @@ def run(opts: RunOpts, on_progress: Optional[ProgressCb] = None) -> dict:
             gen_hit = None
         if gen_hit:
             meta["genius"] = gen_hit
-            # Overwrite title/artist with Genius result — it's content-based,
-            # so it's authoritative over any junk metadata we had.
-            meta["title"] = gen_hit["title"]
+            # Store Genius result for LRC retry, but do NOT overwrite
+            # meta.title blindly — Genius voting can give false positives.
+            # Only update meta.title if we had no usable title at all.
+            if not title or title == "source":
+                meta["title"] = gen_hit["title"]
             if not meta.get("uploader"):
                 meta["uploader"] = gen_hit["artist"]
             try:
@@ -279,6 +291,34 @@ def run(opts: RunOpts, on_progress: Optional[ProgressCb] = None) -> dict:
         print(f"[pipeline] align: {align_stats['matched']}/{align_stats['lrc_words']} matched "
               f"({align_stats['match_rate']*100:.1f}%), "
               f"{align_stats['interpolated']} interpolated", file=sys.stderr)
+
+        # Final quality gate: if alignment is poor, discard the LRC result
+        # and fall through to ASR-only. This catches cases where lrc.py's
+        # threshold (0.55) let a marginal match through but the full
+        # alignment reveals it's garbage.
+        if align_stats["match_rate"] < 0.60:
+            print(f"[pipeline] align: match_rate {align_stats['match_rate']*100:.1f}% < 60% — "
+                  f"discarding LRC, falling back to ASR-only", file=sys.stderr)
+            aligned_path.unlink(missing_ok=True)
+            aligned_words, lines = align_mod.asr_to_aligned(asr_words)
+            aligned_path = out_dir / "lyrics_aligned.json"
+            aligned_path.write_text(json.dumps({
+                "model": "asr-only",
+                "engine": asr_data.get("engine", "asr"),
+                "device": asr_data.get("device"),
+                "audio": asr_data.get("audio"),
+                "duration": asr_data.get("duration"),
+                "lrc_source": None,
+                "alignment": None,
+                "lines": lines,
+                "text": " ".join(w["word"] for w in aligned_words),
+                "words": aligned_words,
+            }, ensure_ascii=False, indent=2), encoding="utf-8")
+            align_stats = {"asr_words": len(asr_words), "lrc_words": 0,
+                           "matched": 0, "match_rate": None, "interpolated": 0,
+                           "asr_only": True, "lrc_rejected": True}
+            print(f"[pipeline] align: ASR-only fallback ({len(aligned_words)} words, {len(lines)} lines)",
+                  file=sys.stderr)
     elif asr_words:
         # ASR-only fallback — no LRC found, but Parakeet/GigaAM still
         # gave us word-level timing. Group by silence into pseudo-lines
