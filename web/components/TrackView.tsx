@@ -541,6 +541,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
                 dragRange={loop ? { from: loop.from, to: loop.to } : null}
                 onSelectWords={onSelectWords}
                 onSeekWord={(w) => seek(w.start)}
+                onClearSelection={clearLoop}
               />
             </>
           ) : (
@@ -587,6 +588,16 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
 
           <div className="mt-6 flex items-center justify-between">
             <div className="flex items-center gap-4">
+              {loop && (
+                <button
+                  type="button"
+                  onClick={jumpToLoopStart}
+                  className="text-[var(--color-ink-muted)] hover:text-[var(--color-accent-vocal)] transition-colors p-2"
+                  title="К началу loop"
+                >
+                  <IconPlayerTrackPrevFilled size={20} />
+                </button>
+              )}
               <button type="button" onClick={() => nudge(-15)} className="text-[var(--color-ink-muted)] hover:text-[var(--color-accent-vocal)] transition-colors p-2" disabled={!ready} title="−15s (←)">
                 <IconRewindBackward15 size={24} />
               </button>
@@ -613,16 +624,6 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
               <button type="button" onClick={() => nudge(15)} className="text-[var(--color-ink-muted)] hover:text-[var(--color-accent-vocal)] transition-colors p-2" disabled={!ready} title="+15s (→)">
                 <IconRewindForward15 size={24} />
               </button>
-              {loop && (
-                <button
-                  type="button"
-                  onClick={jumpToLoopStart}
-                  className="text-[var(--color-ink-muted)] hover:text-[var(--color-accent-vocal)] transition-colors p-2"
-                  title="К началу loop"
-                >
-                  <IconPlayerTrackPrevFilled size={20} />
-                </button>
-              )}
             </div>
 
             <div className="flex flex-col items-end gap-1">

@@ -10,6 +10,7 @@ interface Props {
   dragRange: { from: number; to: number } | null;
   onSelectWords: (fromIdx: number, toIdx: number) => void;
   onSeekWord: (w: AlignedWord) => void;
+  onClearSelection: () => void;
 }
 
 interface DragState {
@@ -24,10 +25,12 @@ export function LyricsPanel({
   dragRange,
   onSelectWords,
   onSeekWord,
+  onClearSelection,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragStartPos = useRef<{ x: number; y: number } | null>(null);
+  const pointerPos = useRef<{ x: number; y: number } | null>(null);
   const movedDuringDrag = useRef(false);
 
   const lines = useMemo(() => buildLines(aligned), [aligned]);
@@ -63,6 +66,39 @@ export function LyricsPanel({
     el.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [activeIdx, drag]);
 
+  useEffect(() => {
+    if (!drag) return;
+    let raf = 0;
+    const edge = 72;
+    const maxStep = 18;
+
+    const tick = () => {
+      const el = containerRef.current;
+      const pos = pointerPos.current;
+      if (el && pos) {
+        const r = el.getBoundingClientRect();
+        let step = 0;
+        if (pos.y < r.top + edge) {
+          step = -((r.top + edge - pos.y) / edge) * maxStep;
+        } else if (pos.y > r.bottom - edge) {
+          step = ((pos.y - (r.bottom - edge)) / edge) * maxStep;
+        }
+
+        if (step !== 0) {
+          el.scrollTop += step;
+          const idx = idxFromPoint(pos.x, pos.y);
+          if (idx != null) {
+            setDrag((d) => (d && d.focus !== idx ? { ...d, focus: idx } : d));
+          }
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [drag]);
+
   function idxFromPoint(x: number, y: number): number | null {
     const el = document.elementFromPoint(x, y);
     if (!el) return null;
@@ -76,13 +112,18 @@ export function LyricsPanel({
     const idx = idxFromPoint(e.clientX, e.clientY);
     if (idx == null) return;
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    if (selection && (idx < selection.from || idx > selection.to)) {
+      onClearSelection();
+    }
     setDrag({ anchor: idx, focus: idx });
     dragStartPos.current = { x: e.clientX, y: e.clientY };
+    pointerPos.current = { x: e.clientX, y: e.clientY };
     movedDuringDrag.current = false;
   }
 
   function onPointerMove(e: React.PointerEvent) {
     if (!drag) return;
+    pointerPos.current = { x: e.clientX, y: e.clientY };
     const start = dragStartPos.current;
     if (start) {
       const dx = e.clientX - start.x;
@@ -108,6 +149,13 @@ export function LyricsPanel({
     }
     setDrag(null);
     dragStartPos.current = null;
+    pointerPos.current = null;
+  }
+
+  function onPointerCancel() {
+    setDrag(null);
+    dragStartPos.current = null;
+    pointerPos.current = null;
   }
 
   const dragLo = drag ? Math.min(drag.anchor, drag.focus) : -1;
@@ -121,6 +169,7 @@ export function LyricsPanel({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
     >
       <div className="max-w-3xl mx-auto">
         {lines.map((line, li) => (
@@ -140,6 +189,7 @@ export function LyricsPanel({
                   w.wordObj.start < dragRange.to &&
                   w.wordObj.end > dragRange.from;
                 const isActive = w.globalIdx === activeIdx;
+                const isHighlighted = !!(inDrag || inSel || inDragRange);
 
                 let wrapperCls = "transition-colors";
                 if (inDrag || inSel) wrapperCls += " bg-[var(--color-accent-vocal-100)]";
@@ -154,7 +204,7 @@ export function LyricsPanel({
                   <span key={`${li}-${i}`} className={wrapperCls}>
                     <span
                       data-word-idx={w.globalIdx}
-                      className={`inline-block px-[1px] py-[2px] transition-all cursor-pointer hover:bg-[var(--color-surface-muted)] hover:rounded ${textCls}`}
+                      className={`inline-block px-[1px] py-[2px] transition-all cursor-pointer ${isHighlighted ? "" : "hover:bg-[var(--color-surface-muted)] hover:rounded"} ${textCls}`}
                       style={{ touchAction: "none" }}
                     >
                       {w.word}
