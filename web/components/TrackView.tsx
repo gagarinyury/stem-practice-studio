@@ -67,6 +67,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
   const [manualTitle, setManualTitle] = useState("");
   const [manualArtist, setManualArtist] = useState("");
   const [manualSearchBusy, setManualSearchBusy] = useState(false);
+  const [fallbackDemo, setFallbackDemo] = useState<"candidate" | "manual" | null>(null);
 
   useEffect(() => {
     setManifest(initialManifest);
@@ -77,6 +78,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
     setManualTitle("");
     setManualArtist("");
     setManualSearchBusy(false);
+    setFallbackDemo(null);
   }, [initialManifest.id]);
 
   // Timer for processing duration
@@ -366,6 +368,11 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
   }
 
   async function confirmLrcCandidate(candidateId: number) {
+    if (fallbackDemo) {
+      setAcceptingCandidate(candidateId);
+      window.setTimeout(() => setAcceptingCandidate(null), 700);
+      return;
+    }
     setAcceptingCandidate(candidateId);
     setLoadError(null);
     try {
@@ -387,6 +394,11 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
     const title = manualTitle.trim();
     const artist = manualArtist.trim();
     if (!title || manualSearchBusy) return;
+    if (fallbackDemo) {
+      setManualSearchBusy(true);
+      window.setTimeout(() => setManualSearchBusy(false), 700);
+      return;
+    }
     setManualSearchBusy(true);
     setLoadError(null);
     try {
@@ -405,6 +417,62 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
 
   function jumpToLoopStart() {
     if (loop) seek(loop.from);
+  }
+
+  function showFallbackDemo(kind: "candidate" | "manual") {
+    setFallbackDemo(kind);
+    setLoadError(null);
+    setAcceptingCandidate(null);
+    setManualSearchBusy(false);
+    setManifest((prev) => ({
+      ...prev,
+      lrc: kind === "candidate"
+        ? {
+            found: false,
+            reason: "unsupported_or_weak_asr_language",
+            candidates: [{
+              id: -1,
+              artist: "Nizkiz",
+              title: "Небяспечна",
+              duration: 284,
+              synced: true,
+              source: "demo",
+            }],
+          }
+        : {
+            found: false,
+            reason: "lrclib_not_found",
+            candidates: [],
+          },
+      aligned: {
+        ...(prev.aligned ?? {
+          path: "lyrics_aligned.json",
+          match_rate: null,
+          matched: 0,
+          lrc_words: 0,
+          interpolated: 0,
+        }),
+        asr_only: true,
+        partial: false,
+        reason: kind === "candidate" ? "unsupported_or_weak_asr_language" : "lrclib_not_found",
+        user_confirmed: false,
+      },
+    }));
+    if (kind === "manual") {
+      setManualTitle("");
+      setManualArtist("");
+    }
+  }
+
+  function resetFallbackDemo() {
+    setFallbackDemo(null);
+    setManifest(initialManifest);
+    setAligned(initialAligned);
+    setManualTitle("");
+    setManualArtist("");
+    setAcceptingCandidate(null);
+    setManualSearchBusy(false);
+    setLoadError(null);
   }
 
   // Keyboard shortcuts
@@ -445,6 +513,36 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
             )}
           </div>
           <div className="ml-auto flex items-center gap-3">
+            {aligned && (
+              <div className="flex items-center gap-1 rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-surface-muted)] p-1">
+                <button
+                  type="button"
+                  onClick={() => showFallbackDemo("candidate")}
+                  className={`rounded-md px-2.5 py-1.5 font-mono text-[10px] transition-colors ${fallbackDemo === "candidate" ? "bg-[var(--color-accent-vocal)] text-white" : "text-[var(--color-ink-muted)] hover:text-ink"}`}
+                  title="Временно показать fallback с найденным кандидатом"
+                >
+                  demo candidate
+                </button>
+                <button
+                  type="button"
+                  onClick={() => showFallbackDemo("manual")}
+                  className={`rounded-md px-2.5 py-1.5 font-mono text-[10px] transition-colors ${fallbackDemo === "manual" ? "bg-[var(--color-accent-vocal)] text-white" : "text-[var(--color-ink-muted)] hover:text-ink"}`}
+                  title="Временно показать fallback с ручным поиском"
+                >
+                  demo manual
+                </button>
+                {fallbackDemo && (
+                  <button
+                    type="button"
+                    onClick={resetFallbackDemo}
+                    className="rounded-md px-2.5 py-1.5 font-mono text-[10px] text-[var(--color-ink-muted)] hover:text-ink"
+                    title="Вернуть реальное состояние трека"
+                  >
+                    reset
+                  </button>
+                )}
+              </div>
+            )}
             {!ready && !loadError && (
               <div className="px-4 py-1.5 font-mono text-[11px] bg-[var(--color-surface-muted)] text-[var(--color-ink-muted)] rounded-md animate-pulse flex items-center gap-2 border border-[var(--color-border-soft)]">
                 <IconLoader2 size={14} className="animate-spin" />
