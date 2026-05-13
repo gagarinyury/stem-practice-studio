@@ -2,7 +2,7 @@ FROM node:22-bookworm-slim AS deps
 
 WORKDIR /app
 COPY web/package.json web/package-lock.json ./
-RUN npm ci
+RUN mkdir -p public && npm ci
 
 FROM node:22-bookworm-slim AS build
 
