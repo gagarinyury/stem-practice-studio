@@ -2,10 +2,9 @@ import os
 import time
 import json
 import traceback
-import tempfile
 from pathlib import Path
-from typing import Optional
 
+import numpy as np
 import torch
 import soundfile as sf
 import torchaudio.functional as taF
@@ -15,6 +14,9 @@ from pydantic import BaseModel
 app = FastAPI()
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
+READY = False
+WARMUP_ERROR: str | None = None
+WARMUP_ELAPSED: float | None = None
 
 print(f"[server] loading nvidia/parakeet-tdt-0.6b-v3 on {device}...")
 from nemo.collections.asr.parts.submodules.transducer_decoding import tdt_label_looping, rnnt_label_looping
@@ -27,13 +29,7 @@ for _mod in (tdt_label_looping, rnnt_label_looping):
 from nemo.collections.asr.models import EncDecRNNTBPEModel
 parakeet_model = EncDecRNNTBPEModel.from_pretrained("nvidia/parakeet-tdt-0.6b-v3").to(device).eval()
 
-print(f"[server] loading gigaam v3_rnnt and silero-vad on {device}...")
-import gigaam
-from silero_vad import load_silero_vad, get_speech_timestamps
-gigaam_model = gigaam.load_model("v3_rnnt").to(device)
-silero_vad_model = load_silero_vad()
-
-print("[server] All models loaded. Ready to serve.")
+print("[server] Parakeet loaded. Waiting for startup warmup.")
 
 
 class TranscribeRequest(BaseModel):
@@ -43,35 +39,50 @@ class TranscribeRequest(BaseModel):
     engine: str = "parakeet"
 
 
+def warmup_parakeet() -> None:
+    global READY, WARMUP_ERROR, WARMUP_ELAPSED
+    t0 = time.perf_counter()
+    try:
+        sr = 16000
+        seconds = int(os.environ.get("PARAKEET_WARMUP_SECONDS", "8"))
+        audio = np.zeros(sr * seconds, dtype=np.float32)
+        parakeet_model.transcribe([audio], timestamps=True)
+        if device == "cuda":
+            torch.cuda.synchronize()
+        WARMUP_ELAPSED = time.perf_counter() - t0
+        READY = True
+        print(f"[server] Parakeet warmup complete in {WARMUP_ELAPSED:.2f}s.")
+    except Exception as e:
+        WARMUP_ERROR = f"{type(e).__name__}: {e}"
+        WARMUP_ELAPSED = time.perf_counter() - t0
+        READY = False
+        print(f"[server] Parakeet warmup failed: {WARMUP_ERROR}")
+
+
+@app.on_event("startup")
+def startup() -> None:
+    warmup_parakeet()
+
+
 @app.get("/health")
 def health():
     return {
-        "status": "ok",
-        "ready": True,
+        "status": "ok" if READY else "warming",
+        "ready": READY,
         "device": device,
-        "engines": ["parakeet", "gigaam"],
+        "engines": ["parakeet"],
         "default_engine": "parakeet",
+        "warmup_seconds": int(os.environ.get("PARAKEET_WARMUP_SECONDS", "8")),
+        "warmup_elapsed": WARMUP_ELAPSED,
+        "warmup_error": WARMUP_ERROR,
     }
 
 
-def chunk_via_silero(audio, sr, MAX_CHUNK_SEC=25.0, MIN_CHUNK_SEC=0.4):
-    wav = torch.from_numpy(audio)
-    raw = get_speech_timestamps(wav, silero_vad_model, sampling_rate=sr, return_seconds=True)
-    chunks = []
-    for seg in raw:
-        s, e = float(seg["start"]), float(seg["end"])
-        while e - s > MAX_CHUNK_SEC:
-            chunks.append((s, s + MAX_CHUNK_SEC))
-            s += MAX_CHUNK_SEC
-        if e - s >= MIN_CHUNK_SEC:
-            chunks.append((s, e))
-    return chunks
-
-def _g(obj, key, default=None):
-    return obj.get(key, default) if isinstance(obj, dict) else getattr(obj, key, default)
-
 @app.post("/transcribe")
 def transcribe_audio(req: TranscribeRequest):
+    if not READY:
+        raise HTTPException(503, f"ASR is not ready: {WARMUP_ERROR or 'warming'}")
+
     audio_path = Path(req.audio)
     out_path = Path(req.out)
     
@@ -92,67 +103,32 @@ def transcribe_audio(req: TranscribeRequest):
         t0 = time.perf_counter()
         
         engine = (req.engine or "").lower().strip()
-        if engine not in {"parakeet", "gigaam"}:
+        if engine != "parakeet":
             engine = "parakeet"
 
-        if engine == "gigaam":
-            chunks = chunk_via_silero(audio, sr)
-            words = []
-            text_parts = []
-            with tempfile.TemporaryDirectory() as td:
-                for idx, (cs, ce) in enumerate(chunks):
-                    chunk_audio = audio[int(cs * sr): int(ce * sr)]
-                    chunk_path = Path(td) / f"chunk_{idx:03d}.wav"
-                    sf.write(str(chunk_path), chunk_audio, sr, subtype="PCM_16")
-                    
-                    res = gigaam_model.transcribe(str(chunk_path), word_timestamps=True)
-                    seg_text = _g(res, "text") or ""
-                    if seg_text:
-                        text_parts.append(seg_text)
-                    for w in (_g(res, "words") or []):
-                        words.append({
-                            "word": _g(w, "text") or _g(w, "word") or "",
-                            "start": float(_g(w, "start") or 0.0) + cs,
-                            "end": float(_g(w, "end") or 0.0) + cs,
-                        })
-                        
-            elapsed = time.perf_counter() - t0
-            rtf = elapsed / duration if duration else 0.0
-            
-            out_data = {
-                "model": "gigaam-v3_rnnt",
-                "engine": "gigaam",
-                "device": device,
-                "audio": audio_path.name,
-                "duration": duration,
-                "elapsed": elapsed,
-                "rtf": rtf,
-                "text": " ".join(text_parts),
-                "words": words,
-            }
-            
-        else:
-            output = parakeet_model.transcribe([audio], timestamps=True)
-            elapsed = time.perf_counter() - t0
-            rtf = elapsed / duration if duration else 0.0
-            
-            hyp = output[0]
-            text = getattr(hyp, "text", "") or ""
-            timestamp = getattr(hyp, "timestamp", None) or {}
-            word_stamps = timestamp.get("word", []) if isinstance(timestamp, dict) else []
-            words = [{"word": w["word"], "start": float(w["start"]), "end": float(w["end"])} for w in word_stamps]
+        output = parakeet_model.transcribe([audio], timestamps=True)
+        if device == "cuda":
+            torch.cuda.synchronize()
+        elapsed = time.perf_counter() - t0
+        rtf = elapsed / duration if duration else 0.0
+        
+        hyp = output[0]
+        text = getattr(hyp, "text", "") or ""
+        timestamp = getattr(hyp, "timestamp", None) or {}
+        word_stamps = timestamp.get("word", []) if isinstance(timestamp, dict) else []
+        words = [{"word": w["word"], "start": float(w["start"]), "end": float(w["end"])} for w in word_stamps]
 
-            out_data = {
-                "model": "nvidia/parakeet-tdt-0.6b-v3",
-                "engine": "parakeet",
-                "device": device,
-                "audio": audio_path.name,
-                "duration": duration,
-                "elapsed": elapsed,
-                "rtf": rtf,
-                "text": text,
-                "words": words,
-            }
+        out_data = {
+            "model": "nvidia/parakeet-tdt-0.6b-v3",
+            "engine": engine,
+            "device": device,
+            "audio": audio_path.name,
+            "duration": duration,
+            "elapsed": elapsed,
+            "rtf": rtf,
+            "text": text,
+            "words": words,
+        }
 
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(json.dumps(out_data, ensure_ascii=False, indent=2))

@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import time
+import urllib.request
 from pathlib import Path
 from typing import Optional
 
@@ -38,6 +39,9 @@ app.add_middleware(
 )
 
 tasks: dict[str, asyncio.Task] = {}
+llm_ready = False
+llm_warmup_error: str | None = None
+llm_warmup_elapsed: float | None = None
 
 
 def now() -> float:
@@ -87,6 +91,43 @@ def list_tracks() -> list[dict]:
     return out
 
 
+def warmup_identify_llm() -> None:
+    global llm_ready, llm_warmup_error, llm_warmup_elapsed
+    base_url = os.environ.get("LLM_BASE_URL", "").rstrip("/")
+    model = os.environ.get("LLM_MODEL", "")
+    if not base_url or not model:
+        llm_ready = False
+        llm_warmup_error = "LLM_BASE_URL or LLM_MODEL is not configured"
+        return
+
+    body = json.dumps({
+        "model": model,
+        "messages": [
+            {"role": "system", "content": "Return only JSON."},
+            {"role": "user", "content": 'Return {"ok":true}'},
+        ],
+        "temperature": 0,
+        "max_tokens": 8,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"{base_url}/chat/completions",
+        data=body,
+        headers={"Content-Type": "application/json"},
+    )
+
+    t0 = time.perf_counter()
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            resp.read()
+        llm_ready = True
+        llm_warmup_error = None
+    except Exception as e:
+        llm_ready = False
+        llm_warmup_error = f"{type(e).__name__}: {e}"
+    finally:
+        llm_warmup_elapsed = round(time.perf_counter() - t0, 2)
+
+
 async def start_job(track_id: str, opts: RunOpts) -> None:
     try:
         await asyncio.to_thread(run_pipeline, opts)
@@ -102,11 +143,21 @@ async def start_job(track_id: str, opts: RunOpts) -> None:
 @app.on_event("startup")
 def startup() -> None:
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    warmup_identify_llm()
 
 
 @app.get("/healthz")
 def healthz() -> dict:
-    return {"ok": True, "runs_dir": str(RUNS_DIR)}
+    return {
+        "ok": True,
+        "runs_dir": str(RUNS_DIR),
+        "identify_llm": {
+            "ready": llm_ready,
+            "elapsed": llm_warmup_elapsed,
+            "error": llm_warmup_error,
+            "model": os.environ.get("LLM_MODEL"),
+        },
+    }
 
 
 @app.post("/tracks", status_code=202)
@@ -122,8 +173,8 @@ async def submit_track(
         raise HTTPException(400, "either file or url is required")
     if file and url:
         raise HTTPException(400, "provide only file or url")
-    if asr_engine not in {"parakeet", "gigaam"}:
-        raise HTTPException(400, "asr_engine must be parakeet or gigaam")
+    if asr_engine != "parakeet":
+        raise HTTPException(400, "asr_engine must be parakeet")
 
     upload_stem = (file.filename or "").rsplit(".", 1)[0] if file else None
     display_title = title or upload_stem or url or "track"

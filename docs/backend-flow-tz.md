@@ -31,6 +31,7 @@ Long-running services:
 | `api` | 8093 | HTTP API, tracks, files, SSE events |
 | `asr` | 8091 | Warmed ASR service |
 | `separator` | 8092 | Warmed Demucs separator service |
+| `identify-llm` | 8083 | Dedicated warmed local LLM for DuckDuckGo result extraction |
 
 Ports are configured from the repository root `.env` file:
 
@@ -39,8 +40,12 @@ WEB_PORT=4324
 API_PORT=8093
 ASR_PORT=8091
 SEPARATOR_PORT=8092
-LLM_PORT=8080
-LLM_MODEL="Qwen3-30B-Instruct (Q4_K_XL, 17gb)"
+PARAKEET_WARMUP_SECONDS=8
+IDENTIFY_LLM_PORT=8083
+IDENTIFY_LLM_MODEL_DIR=/srv/models/stem-practice-llm
+IDENTIFY_LLM_MODEL_FILE=Qwen3.5-2B-UD-Q5_K_XL.gguf
+IDENTIFY_LLM_MODEL=qwen3.5-2b
+IDENTIFY_LLM_CTX=4096
 ```
 
 ## Pipeline
@@ -139,16 +144,16 @@ Output file schema:
 }
 ```
 
-### Parakeet/GigaAM Policy
+### Parakeet Policy
 
 Target policy:
 
-- use Parakeet for raw full-track ASR when it gives acceptable Russian output;
-- keep GigaAM available as fallback or A/B path;
-- do not silently route Russian to GigaAM if the product decision is Parakeet.
+- use Parakeet for raw full-track ASR;
+- warm Parakeet during ASR service startup before reporting healthy;
+- do not load GigaAM in the production ASR service.
 
-Implementation must make this explicit in `bench/asr/server.py`, for example by
-using an engine field or config flag rather than hidden language branching.
+GigaAM can remain in benchmark scripts for historical A/B tests, but it must not
+be imported or loaded by `bench/asr/server.py` in the production compose stack.
 
 Required logging:
 

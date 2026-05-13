@@ -1,8 +1,8 @@
-"""Identify song artist/title using DuckDuckGo + local Qwen 0.5B LLM.
+"""Identify song artist/title using DuckDuckGo + a dedicated small local LLM.
 
 1. Takes a snippet of raw ASR text.
 2. Searches DuckDuckGo for `lyrics <snippet>`.
-3. Passes the search results to a tiny 0.5B LLM (via Ollama) to extract JSON {artist, title}.
+3. Passes the search results to a small warmed LLM to extract JSON {artist, title}.
 
 Extremely fast (~1s total) and reliable without any API keys.
 """
@@ -15,8 +15,8 @@ import sys
 import urllib.parse
 import urllib.request
 
-LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://172.17.0.1:8080/v1")
-LLM_MODEL = os.environ.get("LLM_MODEL", "Qwen3-30B-Instruct (Q4_K_XL, 17gb)")
+LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://172.17.0.1:8083/v1")
+LLM_MODEL = os.environ.get("LLM_MODEL", "qwen3.5-2b")
 
 SYSTEM_PROMPT = (
     "Extract artist and song title from these search results. "
@@ -95,7 +95,7 @@ def search_and_identify(asr_snippet: str) -> dict | None:
         artist = (data.get("artist") or "").strip()
         title = (data.get("title") or "").strip()
         
-        # 0.5B LLM often fails to clean brackets, so do it mechanically
+        # Small LLMs often fail to clean brackets, so do it mechanically.
         title = re.sub(r"\(.*?\)", "", title)
         title = re.sub(r"\[.*?\]", "", title)
         title = title.replace(artist + " - ", "").replace(artist + " — ", "")

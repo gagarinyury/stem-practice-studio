@@ -12,9 +12,17 @@ services:
       - /srv/apps/stem-practice-studio:/srv/apps/stem-practice-studio
       - /srv/models/stem-practice-asr:/asr-models
     working_dir: /srv/apps/stem-practice-studio
+    environment:
+      PARAKEET_WARMUP_SECONDS: "${PARAKEET_WARMUP_SECONDS:-8}"
     ports:
       - "0.0.0.0:${ASR_PORT:-8091}:${ASR_PORT:-8091}"
     command: ["python", "-m", "uvicorn", "bench.asr.server:app", "--host", "0.0.0.0", "--port", "${ASR_PORT:-8091}"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import json, urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:${ASR_PORT:-8091}/health', timeout=5)); raise SystemExit(0 if d.get('ready') else 1)\""]
+      interval: 10s
+      timeout: 6s
+      retries: 60
+      start_period: 15s
 
   separator:
     image: stem-practice-bench:rocm
@@ -32,6 +40,49 @@ services:
     ports:
       - "0.0.0.0:${SEPARATOR_PORT:-8092}:${SEPARATOR_PORT:-8092}"
     command: ["python", "-m", "uvicorn", "bench.separate.server:app", "--host", "0.0.0.0", "--port", "${SEPARATOR_PORT:-8092}"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import json, urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:${SEPARATOR_PORT:-8092}/health', timeout=5)); raise SystemExit(0 if d.get('ready') else 1)\""]
+      interval: 10s
+      timeout: 6s
+      retries: 60
+      start_period: 20s
+
+  identify-llm:
+    image: ghcr.io/ggml-org/llama.cpp:server-vulkan
+    restart: unless-stopped
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "991"
+      - "44"
+    volumes:
+      - ${IDENTIFY_LLM_MODEL_DIR:-/srv/models/stem-practice-llm}:/models:ro
+    ports:
+      - "0.0.0.0:${IDENTIFY_LLM_PORT:-8083}:${IDENTIFY_LLM_PORT:-8083}"
+    command:
+      - "-m"
+      - "/models/${IDENTIFY_LLM_MODEL_FILE:-Qwen3.5-2B-UD-Q5_K_XL.gguf}"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "${IDENTIFY_LLM_PORT:-8083}"
+      - "-ngl"
+      - "999"
+      - "-fa"
+      - "1"
+      - "--no-mmap"
+      - "-c"
+      - "${IDENTIFY_LLM_CTX:-4096}"
+      - "--jinja"
+      - "--alias"
+      - "${IDENTIFY_LLM_MODEL:-qwen3.5-2b}"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:${IDENTIFY_LLM_PORT:-8083}/v1/models >/dev/null"]
+      interval: 10s
+      timeout: 6s
+      retries: 60
+      start_period: 10s
 
   api:
     build:
@@ -39,24 +90,32 @@ services:
       dockerfile: backend/Dockerfile
     restart: unless-stopped
     depends_on:
-      - asr
-      - separator
+      asr:
+        condition: service_healthy
+      separator:
+        condition: service_healthy
+      identify-llm:
+        condition: service_healthy
     environment:
       RUNS_DIR: "${RUNS_DIR:-/srv/apps/stem-practice-studio/runs}"
       PYTHONPATH: /srv/apps/stem-practice-studio
       ASR_URL: "http://asr:${ASR_PORT:-8091}"
       SEPARATOR_URL: "http://separator:${SEPARATOR_PORT:-8092}"
-      LLM_BASE_URL: "http://host.docker.internal:${LLM_PORT:-8080}/v1"
-      LLM_MODEL: "${LLM_MODEL:-Qwen3-30B-Instruct (Q4_K_XL, 17gb)}"
+      LLM_BASE_URL: "http://identify-llm:${IDENTIFY_LLM_PORT:-8083}/v1"
+      LLM_MODEL: "${IDENTIFY_LLM_MODEL:-qwen3.5-2b}"
       CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:4324,http://evox2:4324,http://evo:4324}"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     volumes:
       - /srv/apps/stem-practice-studio:/srv/apps/stem-practice-studio
     working_dir: /srv/apps/stem-practice-studio
     ports:
       - "0.0.0.0:${API_PORT:-8093}:${API_PORT:-8093}"
     command: ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "${API_PORT:-8093}"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:${API_PORT:-8093}/healthz', timeout=5).read()\""]
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 5s
 
   web:
     build:
@@ -64,7 +123,8 @@ services:
       dockerfile: web/Dockerfile
     restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     environment:
       NEXT_PUBLIC_BACKEND_ORIGIN: "http://api:${API_PORT:-8093}"
     ports:

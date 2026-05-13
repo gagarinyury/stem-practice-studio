@@ -212,7 +212,7 @@ def main() -> int:
     src.add_argument("--url")
     ap.add_argument("-o", "--out", required=True, type=Path)
     ap.add_argument("--language", default="ru")
-    ap.add_argument("--asr-engine", default="parakeet", choices=["parakeet", "gigaam"])
+    ap.add_argument("--asr-engine", default="parakeet", choices=["parakeet"])
     ap.add_argument("--artist")
     ap.add_argument("--title")
     args = ap.parse_args()

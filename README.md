@@ -12,7 +12,7 @@ web (:4324)
       -> yt-dlp/ffmpeg for URL input
       -> ASR service (:8091)
       -> separator service (:8092)
-      -> DuckDuckGo + local LLM (:8080)
+      -> DuckDuckGo + identify LLM (:8083)
       -> LRCLib + local alignment
 ```
 
@@ -31,7 +31,7 @@ web (:4324)
   - `identify_search.py` - DuckDuckGo + local LLM song identification;
   - `lrc.py` - LRC parsing helpers;
   - `align.py` - ASR/LRC word alignment.
-- `bench/asr/server.py` - warmed Parakeet/GigaAM ASR HTTP service.
+- `bench/asr/server.py` - warmed Parakeet ASR HTTP service.
 - `bench/separate/server.py` - warmed Demucs separator HTTP service.
 - `backend/docker-compose.yml` - active services only.
 - `docs/backend-flow-tz.md` - operational backend flow notes.
@@ -44,9 +44,9 @@ Historical benchmark artifacts remain under `bench/`.
 | --- | ---: | --- |
 | `web` | 4324 | Desktop Next.js frontend |
 | `api` | 8093 | HTTP API, runs, status files, SSE |
-| `asr` | 8091 | Warmed Parakeet/GigaAM transcription |
+| `asr` | 8091 | Warmed Parakeet transcription |
 | `separator` | 8092 | Warmed `htdemucs_6s` stem separation |
-| `llama-swap` | 8080 | External local LLM used by identification |
+| `identify-llm` | 8083 | Dedicated warmed local LLM for song identification |
 
 The old Redis/arq worker backend has been removed from the active tree.
 
@@ -65,8 +65,12 @@ WEB_PORT=4324
 API_PORT=8093
 ASR_PORT=8091
 SEPARATOR_PORT=8092
-LLM_PORT=8080
-LLM_MODEL="Qwen3-30B-Instruct (Q4_K_XL, 17gb)"
+PARAKEET_WARMUP_SECONDS=8
+IDENTIFY_LLM_PORT=8083
+IDENTIFY_LLM_MODEL_DIR=/srv/models/stem-practice-llm
+IDENTIFY_LLM_MODEL_FILE=Qwen3.5-2B-UD-Q5_K_XL.gguf
+IDENTIFY_LLM_MODEL=qwen3.5-2b
+IDENTIFY_LLM_CTX=4096
 ```
 
 ## Run
