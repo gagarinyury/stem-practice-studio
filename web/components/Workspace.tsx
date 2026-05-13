@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { TrackView } from "./TrackView";
-import { ProcessingScreen } from "./ProcessingScreen";
-import { getTrack, getAligned, listTracks, type TrackSummary } from "@/lib/api";
+import { AuthScreen } from "./AuthScreen";
+import { getMe, getTrack, getAligned, listTracks, logout, type TrackSummary, type User } from "@/lib/api";
 import type { AlignedLyrics, Manifest } from "@/lib/manifest";
 
 export function Workspace() {
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [tracks, setTracks] = useState<TrackSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [manifest, setManifest] = useState<Manifest | null>(null);
@@ -19,21 +21,32 @@ export function Workspace() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refreshTracks = useCallback(async () => {
+    if (!user) return;
     try {
       const list = await listTracks();
       setTracks(list.slice().reverse());
-    } catch {
-      // ignore — backend may be down
+    } catch (err) {
+      if ((err as Error).message.includes("401")) setUser(null);
     }
+  }, [user]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getMe()
+      .then(({ user }) => { if (!cancelled) setUser(user); })
+      .catch(() => { if (!cancelled) setUser(null); })
+      .finally(() => { if (!cancelled) setAuthLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
+    if (!user) return;
     refreshTracks();
     pollRef.current = setInterval(refreshTracks, 4000);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [refreshTracks]);
+  }, [refreshTracks, user]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -76,6 +89,24 @@ export function Workspace() {
     };
   }, [selectedId]);
 
+  async function handleLogout() {
+    await logout().catch(() => {});
+    setUser(null);
+    setTracks([]);
+    setSelectedId(null);
+    setManifest(null);
+    setAligned(null);
+    setProcessingTrack(null);
+  }
+
+  if (authLoading) {
+    return <CenterMsg text="Проверяем вход…" />;
+  }
+
+  if (!user) {
+    return <AuthScreen onAuth={setUser} />;
+  }
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[var(--color-paper)] relative">
       {/* Sidebar Overlay/Slide */}
@@ -84,11 +115,13 @@ export function Workspace() {
       >
         <div className="w-[240px] h-full">
           <Sidebar
+            user={user}
             tracks={tracks}
             selectedId={selectedId}
             onSelect={setSelectedId}
             onRefresh={refreshTracks}
             onClose={() => setSidebarOpen(false)}
+            onLogout={handleLogout}
           />
         </div>
       </div>

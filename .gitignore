@@ -60,6 +60,7 @@ Thumbs.db
 # --- Runtime data dirs (synced via rsync, not committed) ---
 runs/
 cache/
+data/
 bench/listen/
 
 # --- ML weights (do not commit) ---

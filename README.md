@@ -75,6 +75,7 @@ IDENTIFY_LLM_MODEL=qwen3.5-2b
 IDENTIFY_LLM_CTX=4096
 RUNS_DIR=/srv/apps/stem-practice-studio/runs
 CACHE_DIR=/srv/apps/stem-practice-studio/cache
+DB_PATH=/srv/apps/stem-practice-studio/data/app.db
 ```
 
 `IDENTIFY_LLM_MODEL_FILE` must exist inside `IDENTIFY_LLM_MODEL_DIR` as a real
@@ -103,7 +104,11 @@ http://evox2:4324
 Submit a URL:
 
 ```bash
-curl -F url='https://www.youtube.com/watch?v=...' \
+curl -c /tmp/stem.cookies -H 'Content-Type: application/json' \
+     -d '{"email":"you@example.com","password":"change-me-123"}' \
+     http://127.0.0.1:8093/auth/register
+
+curl -b /tmp/stem.cookies -F url='https://www.youtube.com/watch?v=...' \
      -F language=ru \
      -F asr_engine=parakeet \
      http://127.0.0.1:8093/tracks
@@ -112,8 +117,44 @@ curl -F url='https://www.youtube.com/watch?v=...' \
 Events:
 
 ```bash
-curl -N http://127.0.0.1:8093/tracks/<track-id>/events
+curl -b /tmp/stem.cookies -N http://127.0.0.1:8093/tracks/<track-id>/events
 ```
+
+## Auth
+
+The desktop app uses local email/password auth with an HttpOnly cookie. Users
+and sessions live in SQLite at `DB_PATH`. Passwords are stored as PBKDF2 hashes,
+not plaintext.
+
+Endpoints:
+
+- `POST /auth/register` - creates a user and logs in. The first registered user
+  becomes `admin`; later users become `student`.
+- `POST /auth/login`
+- `POST /auth/logout`
+- `GET /auth/me`
+
+Tracks are owner-scoped. New runs get `user_id` in `status.json` and
+`manifest.json`; `/tracks`, `/tracks/:id`, `/runs/:id/*`, SSE, delete, and
+lyrics confirmation/search all require the current user. Admin can access
+ownerless legacy runs, but for the MVP test legacy runs can simply be deleted.
+
+Password reset is intentionally manual for this MVP. The login screen tells
+users to write to WhatsApp. To reset a password on the server:
+
+```bash
+cd /srv/apps/stem-practice-studio
+NEW_HASH=$(python - <<'PY'
+from backend.auth import manual_password_hash
+print(manual_password_hash("new-password-123"))
+PY
+)
+sqlite3 /srv/apps/stem-practice-studio/data/app.db \
+  "UPDATE users SET password_hash='$NEW_HASH' WHERE email='user@example.com';"
+```
+
+Use a one-time temporary password and ask the user to change it when we add a
+profile screen.
 
 ## Output
 

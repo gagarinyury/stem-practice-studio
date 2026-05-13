@@ -8,22 +8,25 @@ import {
   IconMoon,
   IconMusic,
   IconRefresh,
+  IconLogout,
   IconSun,
   IconTrash,
   IconUpload,
   IconVideo,
 } from "@tabler/icons-react";
-import { deleteTrack, submitYouTube, uploadTrack, type TrackSummary } from "@/lib/api";
+import { deleteTrack, submitYouTube, uploadTrack, type TrackSummary, type User } from "@/lib/api";
 
 interface Props {
+  user: User;
   tracks: TrackSummary[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onRefresh: () => void;
   onClose: () => void;
+  onLogout: () => void;
 }
 
-export function Sidebar({ tracks, selectedId, onSelect, onRefresh, onClose }: Props) {
+export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose, onLogout }: Props) {
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +88,7 @@ export function Sidebar({ tracks, selectedId, onSelect, onRefresh, onClose }: Pr
   return (
     <aside className="w-[240px] shrink-0 flex flex-col h-full bg-[var(--color-surface)] shadow-[4px_0_24px_rgba(0,0,0,0.02)] relative z-50">
       <div className="px-4 py-3 border-b border-[var(--color-border-soft)] flex items-center justify-between">
-        <div>
+        <div className="min-w-0">
           <div className="text-[18px] font-serif italic leading-none flex items-center gap-2">
             stem studio
             <button
@@ -100,14 +103,26 @@ export function Sidebar({ tracks, selectedId, onSelect, onRefresh, onClose }: Pr
           <div className="font-mono text-[9px] text-[var(--color-ink-muted)] tracking-[0.06em] mt-1">
             STEMS · LOOPS · KARAOKE
           </div>
+          <div className="font-mono text-[9px] text-[var(--color-ink-faint)] mt-1 truncate" title={user.email}>
+            {user.email}
+          </div>
         </div>
-        <button
-          onClick={onClose}
-          className="p-1 rounded-md text-[var(--color-ink-muted)] hover:text-ink hover:bg-[var(--color-surface-muted)] transition-colors"
-          title="Скрыть боковую панель"
-        >
-          <IconChevronLeft size={20} />
-        </button>
+        <div className="flex items-center">
+          <button
+            onClick={onLogout}
+            className="p-1 rounded-md text-[var(--color-ink-muted)] hover:text-[var(--color-accent-warn)] hover:bg-[var(--color-surface-muted)] transition-colors"
+            title="Выйти"
+          >
+            <IconLogout size={17} />
+          </button>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-md text-[var(--color-ink-muted)] hover:text-ink hover:bg-[var(--color-surface-muted)] transition-colors"
+            title="Скрыть боковую панель"
+          >
+            <IconChevronLeft size={20} />
+          </button>
+        </div>
       </div>
 
       {/* Upload */}

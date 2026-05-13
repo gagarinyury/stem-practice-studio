@@ -1,0 +1,182 @@
+from __future__ import annotations
+
+import base64
+import hashlib
+import hmac
+import os
+import secrets
+import sqlite3
+import time
+from pathlib import Path
+from typing import Any
+
+from fastapi import HTTPException, Request, Response
+
+
+SESSION_COOKIE = "stem_session"
+SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
+PBKDF2_ITERATIONS = 210_000
+DB_PATH = Path(os.environ.get("DB_PATH", "/srv/apps/stem-practice-studio/data/app.db"))
+
+
+def connect() -> sqlite3.Connection:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    return con
+
+
+def init_db() -> None:
+    with connect() as con:
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'student',
+                created_at REAL NOT NULL
+            )
+        """)
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                created_at REAL NOT NULL,
+                expires_at REAL NOT NULL
+            )
+        """)
+        con.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)")
+
+
+def public_user(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "email": row["email"],
+        "role": row["role"],
+        "created_at": row["created_at"],
+    }
+
+
+def normalize_email(email: str) -> str:
+    email = " ".join(str(email or "").split()).lower()
+    if "@" not in email or "." not in email.rsplit("@", 1)[-1]:
+        raise HTTPException(400, "invalid email")
+    return email
+
+
+def validate_password(password: str) -> None:
+    if len(password or "") < 8:
+        raise HTTPException(400, "password must be at least 8 characters")
+
+
+def hash_password(password: str, salt: bytes | None = None) -> str:
+    salt = salt or secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PBKDF2_ITERATIONS)
+    return "pbkdf2_sha256${}${}${}".format(
+        PBKDF2_ITERATIONS,
+        base64.b64encode(salt).decode("ascii"),
+        base64.b64encode(digest).decode("ascii"),
+    )
+
+
+def verify_password(password: str, encoded: str) -> bool:
+    try:
+        algo, iterations, salt_b64, digest_b64 = encoded.split("$", 3)
+        if algo != "pbkdf2_sha256":
+            return False
+        salt = base64.b64decode(salt_b64)
+        expected = base64.b64decode(digest_b64)
+        actual = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, int(iterations))
+        return hmac.compare_digest(actual, expected)
+    except Exception:
+        return False
+
+
+def create_user(email: str, password: str) -> dict[str, Any]:
+    email = normalize_email(email)
+    validate_password(password)
+    user_id = secrets.token_urlsafe(12)
+    created_at = time.time()
+    with connect() as con:
+        existing = con.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"]
+        role = "admin" if existing == 0 else "student"
+        try:
+            con.execute(
+                "INSERT INTO users (id, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)",
+                (user_id, email, hash_password(password), role, created_at),
+            )
+        except sqlite3.IntegrityError as e:
+            raise HTTPException(409, "email already registered") from e
+        row = con.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        return public_user(row)
+
+
+def authenticate(email: str, password: str) -> dict[str, Any]:
+    email = normalize_email(email)
+    with connect() as con:
+        row = con.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+    if not row or not verify_password(password, row["password_hash"]):
+        raise HTTPException(401, "invalid email or password")
+    return public_user(row)
+
+
+def create_session(user_id: str) -> str:
+    token = secrets.token_urlsafe(32)
+    created_at = time.time()
+    expires_at = created_at + SESSION_TTL_SECONDS
+    with connect() as con:
+        con.execute(
+            "INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
+            (token, user_id, created_at, expires_at),
+        )
+    return token
+
+
+def get_user_by_session(token: str | None) -> dict[str, Any] | None:
+    if not token:
+        return None
+    with connect() as con:
+        row = con.execute(
+            """
+            SELECT users.* FROM sessions
+            JOIN users ON users.id = sessions.user_id
+            WHERE sessions.token = ? AND sessions.expires_at > ?
+            """,
+            (token, time.time()),
+        ).fetchone()
+    return public_user(row) if row else None
+
+
+def delete_session(token: str | None) -> None:
+    if not token:
+        return
+    with connect() as con:
+        con.execute("DELETE FROM sessions WHERE token = ?", (token,))
+
+
+def set_session_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        SESSION_COOKIE,
+        token,
+        max_age=SESSION_TTL_SECONDS,
+        httponly=True,
+        samesite="lax",
+        path="/",
+    )
+
+
+def clear_session_cookie(response: Response) -> None:
+    response.delete_cookie(SESSION_COOKIE, path="/")
+
+
+def require_user(request: Request) -> dict[str, Any]:
+    user = get_user_by_session(request.cookies.get(SESSION_COOKIE))
+    if not user:
+        raise HTTPException(401, "authentication required")
+    return user
+
+
+def manual_password_hash(password: str) -> str:
+    validate_password(password)
+    return hash_password(password)

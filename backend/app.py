@@ -7,15 +7,16 @@ import shutil
 import time
 import urllib.request
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, StreamingResponse
 from nanoid import generate as nanoid_generate
+from pydantic import BaseModel
 from slugify import slugify
 
+from backend import auth
 from pipeline.identify import title_candidates
 from pipeline.process import RunOpts, run as run_pipeline
 from pipeline.lyrics import choose as choose_lyrics, confirmed_pick, fetch_candidate_entry, public_candidates
@@ -34,7 +35,7 @@ app = FastAPI(title="Stem Practice Studio API", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
@@ -44,6 +45,11 @@ tasks: dict[str, asyncio.Task] = {}
 llm_ready = False
 llm_warmup_error: str | None = None
 llm_warmup_elapsed: float | None = None
+
+
+class AuthPayload(BaseModel):
+    email: str
+    password: str
 
 
 def now() -> float:
@@ -83,10 +89,35 @@ def status_for(track_id: str) -> dict:
     return merged
 
 
-def list_tracks() -> list[dict]:
+def track_owner_id(track_id: str) -> str | None:
+    d = safe_track_dir(track_id)
+    status = read_json(d / "status.json", {})
+    manifest = read_json(d / "manifest.json", {})
+    return status.get("user_id") or manifest.get("user_id")
+
+
+def can_access_track(user: dict[str, Any], track_id: str) -> bool:
+    owner_id = track_owner_id(track_id)
+    if not owner_id:
+        return user.get("role") == "admin"
+    return owner_id == user.get("id") or user.get("role") == "admin"
+
+
+def require_track_access(track_id: str, user: dict[str, Any]) -> Path:
+    d = safe_track_dir(track_id)
+    if not d.exists():
+        raise HTTPException(404, f"track not found: {track_id}")
+    if not can_access_track(user, track_id):
+        raise HTTPException(404, f"track not found: {track_id}")
+    return d
+
+
+def list_tracks(user: dict[str, Any]) -> list[dict]:
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
     out = []
     for d in sorted([p for p in RUNS_DIR.iterdir() if p.is_dir()], key=lambda p: p.stat().st_mtime, reverse=True):
+        if not can_access_track(user, d.name):
+            continue
         item = status_for(d.name)
         item.setdefault("id", d.name)
         out.append(item)
@@ -350,12 +381,20 @@ def warmup_identify_llm() -> None:
         llm_warmup_elapsed = round(time.perf_counter() - t0, 2)
 
 
-async def start_job(track_id: str, opts: RunOpts) -> None:
+async def start_job(track_id: str, opts: RunOpts, user_id: str) -> None:
     try:
         await asyncio.to_thread(run_pipeline, opts)
+        d = track_dir(track_id)
+        for name in ("status.json", "manifest.json"):
+            path = d / name
+            data = read_json(path, {})
+            if data:
+                data["user_id"] = user_id
+                atomic_write_json(path, data)
     except Exception as e:
         atomic_write_json(track_dir(track_id) / "status.json", {
             "id": track_id,
+            "user_id": user_id,
             "stage": "error",
             "message": f"{type(e).__name__}: {e}",
             "updated_at": now(),
@@ -365,6 +404,7 @@ async def start_job(track_id: str, opts: RunOpts) -> None:
 @app.on_event("startup")
 def startup() -> None:
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    auth.init_db()
     warmup_identify_llm()
 
 
@@ -382,8 +422,37 @@ def healthz() -> dict:
     }
 
 
+@app.post("/auth/register")
+def register(payload: AuthPayload, response: Response) -> dict:
+    user = auth.create_user(payload.email, payload.password)
+    token = auth.create_session(user["id"])
+    auth.set_session_cookie(response, token)
+    return {"user": user}
+
+
+@app.post("/auth/login")
+def login(payload: AuthPayload, response: Response) -> dict:
+    user = auth.authenticate(payload.email, payload.password)
+    token = auth.create_session(user["id"])
+    auth.set_session_cookie(response, token)
+    return {"user": user}
+
+
+@app.post("/auth/logout")
+def logout(request: Request, response: Response) -> dict:
+    auth.delete_session(request.cookies.get(auth.SESSION_COOKIE))
+    auth.clear_session_cookie(response)
+    return {"ok": True}
+
+
+@app.get("/auth/me")
+def me(user: dict = Depends(auth.require_user)) -> dict:
+    return {"user": user}
+
+
 @app.post("/tracks", status_code=202)
 async def submit_track(
+    user: dict = Depends(auth.require_user),
     file: Optional[UploadFile] = File(None),
     url: Optional[str] = Form(None),
     language: str = Form("ru"),
@@ -414,6 +483,7 @@ async def submit_track(
 
     atomic_write_json(out_dir / "status.json", {
         "id": track_id,
+        "user_id": user["id"],
         "stage": "queued",
         "title": display_title,
         "artist": artist,
@@ -431,25 +501,28 @@ async def submit_track(
         artist=artist,
         title=title,
     )
-    tasks[track_id] = asyncio.create_task(start_job(track_id, opts))
+    tasks[track_id] = asyncio.create_task(start_job(track_id, opts, user["id"]))
     return {"id": track_id, "status": "queued"}
 
 
 @app.get("/tracks")
-def tracks() -> list[dict]:
-    return list_tracks()
+def tracks(user: dict = Depends(auth.require_user)) -> list[dict]:
+    return list_tracks(user)
 
 
 @app.get("/tracks/{track_id}")
-def track(track_id: str) -> dict:
-    d = safe_track_dir(track_id)
-    if not d.exists():
-        raise HTTPException(404, f"track not found: {track_id}")
+def track(track_id: str, user: dict = Depends(auth.require_user)) -> dict:
+    require_track_access(track_id, user)
     return status_for(track_id)
 
 
 @app.post("/tracks/{track_id}/lyrics/accept")
-async def accept_lyrics_candidate(track_id: str, candidate_id: int = Form(...)) -> dict:
+async def accept_lyrics_candidate(
+    track_id: str,
+    candidate_id: int = Form(...),
+    user: dict = Depends(auth.require_user),
+) -> dict:
+    require_track_access(track_id, user)
     return await asyncio.to_thread(write_confirmed_lrc, track_id, candidate_id)
 
 
@@ -458,13 +531,15 @@ async def search_lyrics_manually(
     track_id: str,
     title: str = Form(...),
     artist: Optional[str] = Form(None),
+    user: dict = Depends(auth.require_user),
 ) -> dict:
+    require_track_access(track_id, user)
     return await asyncio.to_thread(write_manual_lrc_search, track_id, title, artist)
 
 
 @app.delete("/tracks/{track_id}", status_code=204)
-async def delete_track(track_id: str) -> Response:
-    d = safe_track_dir(track_id)
+async def delete_track(track_id: str, user: dict = Depends(auth.require_user)) -> Response:
+    d = require_track_access(track_id, user)
     task = tasks.pop(track_id, None)
     if task and not task.done():
         task.cancel()
@@ -476,9 +551,10 @@ async def delete_track(track_id: str) -> Response:
     return Response(status_code=204)
 
 
-async def event_stream(request: Request, track_id: str):
-    d = safe_track_dir(track_id)
-    if not d.exists():
+async def event_stream(request: Request, track_id: str, user: dict):
+    try:
+        d = require_track_access(track_id, user)
+    except HTTPException:
         yield f"data: {json.dumps({'stage': 'error', 'message': 'track not found'}, ensure_ascii=False)}\n\n"
         return
     last = None
@@ -496,12 +572,18 @@ async def event_stream(request: Request, track_id: str):
 
 
 @app.get("/tracks/{track_id}/events")
-async def track_events(track_id: str, request: Request):
+async def track_events(track_id: str, request: Request, user: dict = Depends(auth.require_user)):
     return StreamingResponse(
-        event_stream(request, track_id),
+        event_stream(request, track_id, user),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
-app.mount("/runs", StaticFiles(directory=str(RUNS_DIR), check_dir=False), name="runs")
+@app.api_route("/runs/{track_id}/{rel_path:path}", methods=["GET", "HEAD"])
+def run_file(track_id: str, rel_path: str, user: dict = Depends(auth.require_user)) -> FileResponse:
+    d = require_track_access(track_id, user)
+    path = (d / rel_path).resolve()
+    if d.resolve() not in path.parents or not path.is_file():
+        raise HTTPException(404, "file not found")
+    return FileResponse(path)
