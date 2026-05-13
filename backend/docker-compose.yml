@@ -1,5 +1,8 @@
 services:
   asr:
+    build:
+      context: ..
+      dockerfile: bench/asr/Dockerfile
     image: stem-practice-asr:rocm
     restart: unless-stopped
     devices:
@@ -25,6 +28,9 @@ services:
       start_period: 15s
 
   separator:
+    build:
+      context: ..
+      dockerfile: bench/Dockerfile
     image: stem-practice-bench:rocm
     restart: unless-stopped
     devices:
