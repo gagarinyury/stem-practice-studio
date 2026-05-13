@@ -181,39 +181,28 @@ def accepted(stats: dict[str, Any]) -> bool:
 
 def choose(candidates: list[dict], asr_words: list[dict], duration: float | None) -> LyricsPick:
     seen_ids: set[int] = set()
-    entries: list[tuple[dict, str]] = []
     debug: list[dict[str, Any]] = []
-
-    for c in candidates:
-        artist = c.get("artist") or ""
-        title = c.get("title") or ""
-        exact = lrclib_get(artist, title, duration)
-        if exact and exact.get("id") not in seen_ids:
-            seen_ids.add(exact.get("id"))
-            entries.append((exact, f"exact:{c.get('source')}"))
-        if exact:
-            # Exact hit is still alignment-gated below. Avoid broad search unless needed.
-            continue
-        for hit in lrclib_search(artist, title)[:5]:
-            if hit.get("id") in seen_ids:
-                continue
-            seen_ids.add(hit.get("id"))
-            entries.append((hit, f"search:{c.get('source')}"))
-
     best = None
     best_tuple = (-1.0, -1.0, -1.0, 0.0)
-    for entry, source in entries[:20]:
+
+    def consider(entry: dict, source: str) -> LyricsPick | None:
+        nonlocal best, best_tuple
+        entry_id = entry.get("id")
+        if entry_id in seen_ids:
+            return None
+        seen_ids.add(entry_id)
         lines, words, aligned, stats = score_entry(entry, asr_words, duration)
-        item = {
+        debug.append({
             "source": source,
-            "id": entry.get("id"),
+            "id": entry_id,
             "artist": entry.get("artistName"),
             "title": entry.get("trackName"),
             "duration": entry.get("duration"),
             "synced": bool(entry.get("syncedLyrics")),
             "stats": stats,
-        }
-        debug.append(item)
+        })
+        if accepted(stats):
+            return LyricsPick(entry, lines, words, aligned, stats, debug)
         rank = (
             float(stats.get("combined_rate") or 0.0),
             float(stats.get("run_quality") or 0.0),
@@ -223,10 +212,44 @@ def choose(candidates: list[dict], asr_words: list[dict], duration: float | None
         if rank > best_tuple:
             best_tuple = rank
             best = (entry, lines, words, aligned, stats)
+        return None
 
-    if best and accepted(best[4]):
-        entry, lines, words, aligned, stats = best
-        return LyricsPick(entry, lines, words, aligned, stats, debug)
+    for c in candidates:
+        artist = c.get("artist") or ""
+        title = c.get("title") or ""
+        source = c.get("source") or "candidate"
+        score = float(c.get("score") or 0.0)
+        if not title:
+            continue
+
+        had_lrclib_hit = False
+        exact = lrclib_get(artist, title, duration)
+        if exact:
+            had_lrclib_hit = True
+            pick = consider(exact, f"exact:{source}")
+            if pick:
+                return pick
+            # Exact hit was already alignment-gated. A broad search for the
+            # same candidate usually just adds duplicate versions, so move on.
+            if source in {"metadata-split", "metadata-title-part"} and score >= 80:
+                break
+            continue
+
+        # Broad search is the expensive part. Keep it only for candidates that
+        # we ranked as plausible, and stop as soon as a candidate passes ASR
+        # alignment. Low-score fallbacks get one chance at most.
+        search_limit = 3 if score >= 60 or source.startswith("metadata") else 1
+        for hit in lrclib_search(artist, title)[:search_limit]:
+            had_lrclib_hit = True
+            pick = consider(hit, f"search:{source}")
+            if pick:
+                return pick
+
+        # If a high-confidence metadata candidate found LRCLib lyrics but ASR
+        # rejected them, trying unrelated ASR-search guesses usually creates
+        # the long 40-150s tail. Fall back to ASR-only instead.
+        if had_lrclib_hit and source in {"metadata-split", "metadata-title-part"} and score >= 80:
+            break
 
     aligned, lines = align_mod.asr_to_aligned(asr_words)
     stats = {
