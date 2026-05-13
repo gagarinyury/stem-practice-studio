@@ -641,7 +641,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
       <div className="w-[240px] flex-shrink-0 flex flex-col border-l border-[var(--color-border-soft)] bg-[var(--color-surface-muted)] overflow-y-auto thin-scroll z-20">
         <div className="p-4">
           <h3 className="font-serif italic text-[18px] mb-3 text-ink flex items-center gap-2">
-            Mixer
+            Микшер
           </h3>
           {hasStemFiles ? (
             <StemMixer
@@ -681,7 +681,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
 
         <div className="p-4">
           <h3 className="font-serif italic text-[18px] mb-3 text-ink">
-            Controls
+            Фрагмент
           </h3>
           {loop ? (
             <LoopControls

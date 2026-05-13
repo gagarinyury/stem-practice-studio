@@ -23,13 +23,13 @@ interface Props {
 }
 
 const LABEL: Record<StemKey, string> = {
-  vocals: "vocals",
-  drums: "drums",
-  bass: "bass",
-  guitar: "guitar",
-  piano: "piano",
-  other: "other",
-  music: "music",
+  vocals: "Вокал",
+  drums: "Ударные",
+  bass: "Бас",
+  guitar: "Гитара",
+  piano: "Пиано",
+  other: "Прочее",
+  music: "Музыка",
 };
 
 interface StemState {
@@ -130,7 +130,7 @@ export function StemMixer({ engineRef, stems, ready, vocalsMuted, onToggleVocals
           type="button"
           disabled={!ready}
           onClick={onMute}
-          title={muted ? "Unmute" : "Mute"}
+          title={muted ? "Включить дорожку" : "Выключить дорожку"}
           className={`p-1 rounded-full transition-colors ${
             muted
               ? "bg-[var(--color-accent-warn)]/10 text-[var(--color-accent-warn)]"
@@ -144,7 +144,7 @@ export function StemMixer({ engineRef, stems, ready, vocalsMuted, onToggleVocals
             type="button"
             disabled={!ready}
             onClick={onSolo}
-            title={isSolo ? "Снять solo" : "Solo"}
+            title={isSolo ? "Снять solo" : "Слушать только эту дорожку"}
             className={`p-1 rounded-full transition-colors ${
               isSolo
                 ? "bg-[var(--color-accent-vocal)]/20 text-[var(--color-accent-vocal)]"
@@ -177,7 +177,7 @@ export function StemMixer({ engineRef, stems, ready, vocalsMuted, onToggleVocals
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between mb-1">
         <span className="font-mono text-[9px] text-[var(--color-ink-faint)] tracking-widest uppercase">
-          TRACKS
+          ДОРОЖКИ
         </span>
         <button
           onClick={() => {
@@ -188,13 +188,13 @@ export function StemMixer({ engineRef, stems, ready, vocalsMuted, onToggleVocals
           className="font-mono text-[9px] text-[var(--color-accent-vocal)] hover:underline disabled:opacity-50 flex items-center gap-1"
         >
           {isExpanding && <IconLoader2 size={10} className="animate-spin" />}
-          {isExpanding ? "LOADING…" : expanded ? "COLLAPSE" : "EXPAND ALL"}
+          {isExpanding ? "ЗАГРУЗКА…" : expanded ? "СВЕРНУТЬ" : "ВСЕ ДОРОЖКИ"}
         </button>
       </div>
 
       {hasVocals && renderTrack(
         "vocals",
-        "Vocal",
+        LABEL.vocals,
         state["vocals"]?.volume ?? 1,
         vocalsMuted ?? state["vocals"]?.muted ?? false,
         solo === "vocals",
@@ -205,12 +205,13 @@ export function StemMixer({ engineRef, stems, ready, vocalsMuted, onToggleVocals
 
       {!expanded && instKeys.length > 0 && renderTrack(
         "music",
-        "Music",
+        LABEL.music,
         instVol,
         instMuted,
-        false,
+        solo === "music",
         setInstrumentalVolume,
-        toggleInstrumentalMute
+        toggleInstrumentalMute,
+        () => toggleSolo("music")
       )}
 
       {expanded && instKeys.map((key) =>

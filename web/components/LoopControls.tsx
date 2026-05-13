@@ -81,7 +81,7 @@ export function LoopControls({
   return (
     <div className="flex flex-col gap-3">
       {/* Loop window */}
-      <Group label="LOOP RANGE">
+      <Group label="ФРАГМЕНТ">
         <div className="flex items-center justify-between bg-[var(--color-surface)] p-1.5 rounded border border-[var(--color-border-soft)] shadow-sm">
           <Stepper
             title="Сдвинуть ◄"
@@ -113,7 +113,7 @@ export function LoopControls({
 
       <div className="flex gap-2">
         {/* A edge */}
-        <Group label="START (A)">
+        <Group label="НАЧАЛО">
           <div className="flex bg-[var(--color-surface)] rounded border border-[var(--color-border-soft)] shadow-sm p-1 gap-1">
             <Stepper title="A−" onClick={() => moveEdge("A", -1)} disabled={loop.from <= 0}>
               <IconArrowBarLeft size={12} />
@@ -125,7 +125,7 @@ export function LoopControls({
         </Group>
 
         {/* B edge */}
-        <Group label="END (B)">
+        <Group label="КОНЕЦ">
           <div className="flex bg-[var(--color-surface)] rounded border border-[var(--color-border-soft)] shadow-sm p-1 gap-1">
             <Stepper title="B−" onClick={() => moveEdge("B", -1)} disabled={loop.to <= loop.from + 0.2}>
               <IconArrowBarLeft size={12} />
@@ -140,7 +140,7 @@ export function LoopControls({
       <div className="h-px w-full bg-[var(--color-border-soft)] my-0.5" />
 
       {/* Tempo */}
-      <Group label="TEMPO">
+      <Group label="ТЕМП">
         <div className="flex items-center justify-between bg-[var(--color-surface)] p-1.5 rounded border border-[var(--color-border-soft)] shadow-sm">
           <Stepper
             title="−"
@@ -163,7 +163,7 @@ export function LoopControls({
       </Group>
 
       {/* Pitch */}
-      <Group label="PITCH">
+      <Group label="ТОН">
         <div className="flex items-center justify-between bg-[var(--color-surface)] p-1.5 rounded border border-[var(--color-border-soft)] shadow-sm">
           <Stepper
             title="−1 st"
@@ -188,7 +188,7 @@ export function LoopControls({
       {/* Reset / toggle / clear */}
       <div className="flex flex-col gap-2 mt-1">
         <div className="flex items-center justify-between">
-          <span className="font-mono text-[9px] text-[var(--color-ink-muted)]">LOOP</span>
+          <span className="font-mono text-[9px] text-[var(--color-ink-muted)]">ПОВТОР</span>
           <button
             type="button"
             onClick={onToggleEnabled}
@@ -200,7 +200,7 @@ export function LoopControls({
             }`}
           >
             {enabled ? <IconRepeat size={12} /> : <IconRepeatOff size={12} />}
-            {enabled ? "ON" : "OFF"}
+            {enabled ? "ВКЛ" : "ВЫКЛ"}
           </button>
         </div>
 
@@ -212,14 +212,14 @@ export function LoopControls({
             className="flex-1 py-1 rounded border border-[var(--color-border-soft)] text-[var(--color-ink-muted)] hover:text-ink hover:bg-[var(--color-surface)] disabled:opacity-30 disabled:hover:bg-transparent transition-colors flex items-center justify-center gap-1 font-mono text-[9px]"
             title="Сбросить темп/тон"
           >
-            <IconRefresh size={12} /> RESET
+            <IconRefresh size={12} /> СБРОС
           </button>
           <button
             type="button"
             onClick={onClear}
             className="flex-1 py-1 rounded border border-[var(--color-border-soft)] text-[var(--color-accent-warn)] hover:bg-[var(--color-accent-warn)]/10 transition-colors flex items-center justify-center gap-1 font-mono text-[9px]"
           >
-            CLEAR
+            УБРАТЬ
           </button>
         </div>
 
