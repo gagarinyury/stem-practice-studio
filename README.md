@@ -73,6 +73,11 @@ IDENTIFY_LLM_MODEL=qwen3.5-2b
 IDENTIFY_LLM_CTX=4096
 ```
 
+`IDENTIFY_LLM_MODEL_FILE` must exist inside `IDENTIFY_LLM_MODEL_DIR` as a real
+file or hardlink. Do not use a symlink that points outside the directory,
+because compose mounts only `IDENTIFY_LLM_MODEL_DIR` into the container as
+`/models`.
+
 ## Run
 
 On evo:
