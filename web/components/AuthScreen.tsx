@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { IconLoader2 } from "@tabler/icons-react";
 import { login, register, type User } from "@/lib/api";
 
@@ -12,8 +12,17 @@ export function AuthScreen({ onAuth }: Props) {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const invite = params.get("invite") || params.get("code");
+    if (!invite) return;
+    setInviteCode(invite);
+    setMode("register");
+  }, []);
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -23,13 +32,17 @@ export function AuthScreen({ onAuth }: Props) {
       setError("Пароль должен быть не короче 8 символов");
       return;
     }
+    if (mode === "register" && !inviteCode.trim()) {
+      setError("Введите код доступа");
+      return;
+    }
 
     setBusy(true);
     setError(null);
     try {
       const result = mode === "login"
         ? await login(normalizedEmail, password)
-        : await register(normalizedEmail, password);
+        : await register(normalizedEmail, password, inviteCode.trim());
       onAuth(result.user);
     } catch (err) {
       setError(humanAuthError(err));
@@ -96,6 +109,30 @@ export function AuthScreen({ onAuth }: Props) {
               </div>
             </label>
 
+            {mode === "register" && (
+              <div className="rounded-md border border-[var(--color-border-soft)] bg-[var(--color-paper)] px-3 py-2 font-mono text-[10px] leading-relaxed text-[var(--color-ink-muted)]">
+                Регистрация сейчас закрыта для случайных пользователей. Введите код сообщества, чтобы создать аккаунт.
+              </div>
+            )}
+
+            {mode === "register" && (
+              <label className="block">
+                <div className="mb-1 font-mono text-[10px] tracking-[0.08em] text-[var(--color-ink-muted)]">
+                  КОД ДОСТУПА
+                </div>
+                <input
+                  type="text"
+                  value={inviteCode}
+                  onChange={(ev) => setInviteCode(ev.target.value)}
+                  autoComplete="one-time-code"
+                  className="w-full rounded-md border border-[var(--color-border-soft)] bg-[var(--color-paper)] px-3 py-2.5 font-mono text-[13px] outline-none focus:border-[var(--color-accent-vocal)]"
+                />
+                <div className="mt-1 font-mono text-[10px] leading-relaxed text-[var(--color-ink-faint)]">
+                  Доступ пока по приглашению. Если хотите попробовать, напишите в WhatsApp.
+                </div>
+              </label>
+            )}
+
             {error && (
               <div className="rounded-md bg-[var(--color-accent-warn)]/10 px-3 py-2 font-mono text-[11px] text-[var(--color-accent-warn)]">
                 {error}
@@ -104,7 +141,7 @@ export function AuthScreen({ onAuth }: Props) {
 
             <button
               type="submit"
-              disabled={busy || !email.trim() || password.length < 8}
+              disabled={busy || !email.trim() || password.length < 8 || (mode === "register" && !inviteCode.trim())}
               className="w-full rounded-md bg-[var(--color-accent-vocal)] px-4 py-2.5 font-mono text-[12px] font-bold text-white disabled:opacity-40 flex items-center justify-center gap-2"
             >
               {busy && <IconLoader2 size={14} className="animate-spin" />}
@@ -127,6 +164,8 @@ export function AuthScreen({ onAuth }: Props) {
 function humanAuthError(err: unknown): string {
   const text = err instanceof Error ? err.message : String(err);
   if (text.includes("401")) return "Неверный email или пароль";
+  if (text.includes("403")) return "Неверный код доступа";
+  if (text.includes("503")) return "Регистрация временно закрыта";
   if (text.includes("409")) return "Этот email уже зарегистрирован";
   if (text.includes("400")) return "Проверьте email и пароль";
   return text;

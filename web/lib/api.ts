@@ -82,7 +82,7 @@ function formatDetail(detail: unknown): string {
   return JSON.stringify(detail);
 }
 
-async function authJson(path: string, body: { email: string; password: string }): Promise<{ user: User }> {
+async function authJson(path: string, body: { email: string; password: string; invite_code?: string }): Promise<{ user: User }> {
   const r = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -97,8 +97,8 @@ export async function login(email: string, password: string): Promise<{ user: Us
   return authJson("/auth/login", { email, password });
 }
 
-export async function register(email: string, password: string): Promise<{ user: User }> {
-  return authJson("/auth/register", { email, password });
+export async function register(email: string, password: string, inviteCode: string): Promise<{ user: User }> {
+  return authJson("/auth/register", { email, password, invite_code: inviteCode });
 }
 
 export async function getMe(): Promise<{ user: User }> {

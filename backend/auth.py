@@ -47,6 +47,14 @@ def init_db() -> None:
         """)
         con.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)")
         con.execute("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)")
+        ensure_column(con, "users", "invite_code", "TEXT")
+        ensure_column(con, "users", "invite_label", "TEXT")
+
+
+def ensure_column(con: sqlite3.Connection, table: str, column: str, declaration: str) -> None:
+    columns = {row["name"] for row in con.execute(f"PRAGMA table_info({table})")}
+    if column not in columns:
+        con.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
 
 
 def public_user(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
@@ -93,21 +101,47 @@ def verify_password(password: str, encoded: str) -> bool:
         return False
 
 
-def create_user(email: str, password: str) -> dict[str, Any]:
+def create_user(email: str, password: str, invite_code: str, invite_label: str) -> dict[str, Any]:
     email = normalize_email(email)
     validate_password(password)
     user_id = secrets.token_urlsafe(12)
     created_at = time.time()
     with connect() as con:
-        existing = con.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"]
-        role = "admin" if existing == 0 else "student"
         try:
             con.execute(
-                "INSERT INTO users (id, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)",
-                (user_id, email, hash_password(password), role, created_at),
+                """
+                INSERT INTO users (
+                    id, email, password_hash, role, created_at, invite_code, invite_label
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (user_id, email, hash_password(password), "student", created_at, invite_code, invite_label),
             )
         except sqlite3.IntegrityError as e:
             raise HTTPException(409, "email already registered") from e
+        row = con.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        return public_user(row)
+
+
+def create_or_update_admin(email: str, password: str) -> dict[str, Any]:
+    email = normalize_email(email)
+    validate_password(password)
+    password_hash = hash_password(password)
+    created_at = time.time()
+    with connect() as con:
+        row = con.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        if row:
+            con.execute(
+                "UPDATE users SET password_hash = ?, role = 'admin' WHERE email = ?",
+                (password_hash, email),
+            )
+            row = con.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+            return public_user(row)
+
+        user_id = secrets.token_urlsafe(12)
+        con.execute(
+            "INSERT INTO users (id, email, password_hash, role, created_at) VALUES (?, ?, ?, 'admin', ?)",
+            (user_id, email, password_hash, created_at),
+        )
         row = con.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         return public_user(row)
 

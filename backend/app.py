@@ -16,7 +16,7 @@ from nanoid import generate as nanoid_generate
 from pydantic import BaseModel
 from slugify import slugify
 
-from backend import auth, feedback
+from backend import auth, feedback, invites
 from pipeline.identify import title_candidates
 from pipeline.process import RunOpts, run as run_pipeline
 from pipeline.lyrics import choose as choose_lyrics, confirmed_pick, fetch_candidate_entry, public_candidates
@@ -51,6 +51,7 @@ llm_warmup_elapsed: float | None = None
 class AuthPayload(BaseModel):
     email: str
     password: str
+    invite_code: str | None = None
 
 
 class FeedbackPayload(BaseModel):
@@ -431,6 +432,7 @@ async def start_job(track_id: str, opts: RunOpts, user_id: str) -> None:
 def startup() -> None:
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
     auth.init_db()
+    invites.init_db()
     feedback.init_db()
     warmup_identify_llm()
 
@@ -451,7 +453,8 @@ def healthz() -> dict:
 
 @app.post("/auth/register")
 def register(payload: AuthPayload, response: Response) -> dict:
-    user = auth.create_user(payload.email, payload.password)
+    invite = invites.validate_invite(payload.invite_code)
+    user = auth.create_user(payload.email, payload.password, invite["code"], invite["label"])
     token = auth.create_session(user["id"])
     auth.set_session_cookie(response, token)
     return {"user": user}

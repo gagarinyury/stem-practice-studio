@@ -76,6 +76,7 @@ IDENTIFY_LLM_CTX=4096
 RUNS_DIR=/srv/apps/stem-practice-studio/runs
 CACHE_DIR=/srv/apps/stem-practice-studio/cache
 DB_PATH=/srv/apps/stem-practice-studio/data/app.db
+STUDENT_TRACK_LIMIT=10
 ```
 
 `IDENTIFY_LLM_MODEL_FILE` must exist inside `IDENTIFY_LLM_MODEL_DIR` as a real
@@ -105,7 +106,7 @@ Submit a URL:
 
 ```bash
 curl -c /tmp/stem.cookies -H 'Content-Type: application/json' \
-     -d '{"email":"you@example.com","password":"change-me-123"}' \
+     -d '{"email":"you@example.com","password":"change-me-123","invite_code":"stem-..."}' \
      http://127.0.0.1:8093/auth/register
 
 curl -b /tmp/stem.cookies -F url='https://www.youtube.com/watch?v=...' \
@@ -128,11 +129,58 @@ not plaintext.
 
 Endpoints:
 
-- `POST /auth/register` - creates a user and logs in. The first registered user
-  becomes `admin`; later users become `student`.
+- `POST /auth/register` - creates a `student` user and logs in. Requires
+  `invite_code`.
 - `POST /auth/login`
 - `POST /auth/logout`
 - `GET /auth/me`
+
+Public registration is invite-only. Invite codes live in SQLite, each code has
+a human label so we can see where users came from.
+
+Create readable community codes on evo:
+
+```bash
+cd /srv/apps/stem-practice-studio
+python3 tools/invite_codes.py add vocal-teacher "Vocal teacher"
+python3 tools/invite_codes.py add music-school "Music school"
+```
+
+Or generate a less guessable code from a label:
+
+```bash
+python3 tools/invite_codes.py generate "Vocal teacher"
+```
+
+List codes and signup counts:
+
+```bash
+python3 tools/invite_codes.py list
+```
+
+Give testers the public app address and their community code separately:
+
+```text
+Site: https://your-domain.example
+Invite code: vocal-teacher
+```
+
+The frontend also accepts `?invite=<code>` for internal testing, but public
+materials should show the short code separately.
+
+Admin users are not created through public registration. To create or reset the
+admin account, run this on evo and enter a strong password when prompted:
+
+```bash
+cd /srv/apps/stem-practice-studio
+python3 tools/bootstrap_admin.py
+```
+
+By default this creates/updates `yury@vitai.pro`. To use another email:
+
+```bash
+ADMIN_EMAIL=you@example.com python3 tools/bootstrap_admin.py
+```
 
 Tracks are owner-scoped. New runs get `user_id` in `status.json` and
 `manifest.json`; `/tracks`, `/tracks/:id`, `/runs/:id/*`, SSE, delete, and
