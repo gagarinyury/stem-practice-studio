@@ -16,6 +16,8 @@ import urllib.parse
 import urllib.request
 from html import unescape
 
+from . import runtime_cache
+
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://172.17.0.1:8083/v1")
 LLM_MODEL = os.environ.get("LLM_MODEL", "qwen3.5-2b")
 
@@ -241,7 +243,7 @@ def ask_llm(clean_results: list[str]) -> dict | None:
     return None
 
 
-def search_and_identify(asr_snippet: str) -> dict | None:
+def _search_and_identify_uncached(asr_snippet: str) -> dict | None:
     """Search DDG with the snippet and extract artist/title."""
     if not asr_snippet or len(asr_snippet.split()) < 3:
         return None
@@ -266,3 +268,13 @@ def search_and_identify(asr_snippet: str) -> dict | None:
     # parsing; LLM guesses are allowed only when they are not obvious search
     # utility pages.
     return ask_llm([r.title for r in all_results[:5]])
+
+
+def search_and_identify(asr_snippet: str) -> dict | None:
+    key = [asr_snippet]
+    cached = runtime_cache.get("identify-search-v1", key)
+    if cached is not None:
+        return cached.get("data")
+    found = _search_and_identify_uncached(asr_snippet)
+    runtime_cache.set("identify-search-v1", key, {"data": found})
+    return found

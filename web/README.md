@@ -88,9 +88,14 @@ Important behavior:
 - `resolve_input` is sequential. It downloads or normalizes the source audio.
 - `asr` runs on the raw source audio, so it does not wait for Demucs.
 - `identify_search`, `lrclib`, and `align` run after ASR in the lyrics branch.
+- LRCLib exact lookup is `artist/title` first; duration is used only as a weak
+  search ranking signal because YouTube length often differs from LRCLib.
 - `separate` runs in parallel in the stems branch.
 - The UI can receive `lyrics_ready` before stems are finished and show synced
   lyrics while the final stems are still processing.
+- If LRCLib is rejected, `lrc.reason` / `aligned.reason` tells the UI why it
+  fell back to ASR-only. Covers can become `partial` lyrics when only a strong
+  matched range is safe to show.
 - `done` means the final manifest has stems and lyrics.
 
 ## How To Read Timings
@@ -173,6 +178,10 @@ loads `source.wav` if stems are not ready yet. When the backend emits
 `lyrics_ready`, the UI fetches the partial manifest and aligned lyrics. When the
 backend emits `done`, the UI fetches the final manifest and swaps from source
 audio to finished stems.
+
+The header labels ASR-only and partial states so the user can distinguish
+“official text not found”, “text rejected by ASR match”, and “safe partial
+lyrics for a cover/short version” without reloading the page.
 
 Progress event labels are rendered in
 [`components/ProcessingScreen.tsx`](./components/ProcessingScreen.tsx).

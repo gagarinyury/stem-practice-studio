@@ -79,6 +79,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
   }, [isProcessing]);
   // Use engine-derived duration when manifest has none (processing mode)
   const effectiveDuration = manifest.duration || engineDuration;
+  const lyricsNotice = getLyricsNotice(manifest);
 
   // Determine if this manifest has a pre-merged "music" stem from the backend
   const hasMusic = !!manifest.stems["music"];
@@ -280,7 +281,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
   }
 
   function nudge(delta: number) {
-    seek(Math.max(0, Math.min(manifest.duration, currentTime + delta)));
+    seek(Math.max(0, Math.min(effectiveDuration, currentTime + delta)));
   }
 
   function applyLoopRange(range: LoopRange | null) {
@@ -385,6 +386,11 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
             <div className="font-mono text-[11px] text-[var(--color-ink-muted)] mt-1 truncate">
               {manifest.artist}{manifest.artist && manifest.language ? " · " : ""}{manifest.language}{manifest.duration ? ` · ${fmtDur(manifest.duration)}` : ""}
             </div>
+            {lyricsNotice && (
+              <div className={`font-mono text-[10px] mt-2 inline-flex max-w-full items-center rounded-md border px-2 py-1 ${lyricsNotice.className}`}>
+                <span className="truncate">{lyricsNotice.label}</span>
+              </div>
+            )}
           </div>
           <div className="ml-auto flex items-center gap-3">
             {!ready && !loadError && (
@@ -569,7 +575,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
           {loop ? (
             <LoopControls
               loop={loop}
-              duration={manifest.duration}
+              duration={effectiveDuration}
               enabled={loopEnabled}
               tempo={tempo}
               pitch={pitch}
@@ -617,4 +623,26 @@ function fmtDur(s: number): string {
 function fmtT(s: number): string {
   if (!isFinite(s)) return "0:00";
   return fmtDur(s);
+}
+
+function getLyricsNotice(manifest: Manifest): { label: string; className: string } | null {
+  const reason = manifest.aligned?.reason || manifest.lrc?.reason;
+  if (manifest.aligned?.partial || manifest.lrc?.partial) {
+    return {
+      label: "частичный текст: показан только совпавший фрагмент",
+      className: "border-[var(--color-accent-vocal-100)] bg-[var(--color-accent-vocal-50)] text-[var(--color-accent-vocal-700)]",
+    };
+  }
+  if (!manifest.aligned?.asr_only && !reason) return null;
+  const labels: Record<string, string> = {
+    lrclib_not_found: "ASR-only: официальный текст не найден",
+    lrclib_rejected_low_match: "ASR-only: текст найден, но совпадение слабое",
+    script_mismatch: "ASR-only: текст найден на другом письме",
+    unsupported_or_weak_asr_language: "ASR-only: язык слабо поддерживается ASR",
+    partial_cover_available: "частичный текст: показан только совпавший фрагмент",
+  };
+  return {
+    label: labels[String(reason)] || "ASR-only: используется распознанный текст",
+    className: "border-[var(--color-border-soft)] bg-[var(--color-surface-muted)] text-[var(--color-ink-muted)]",
+  };
 }

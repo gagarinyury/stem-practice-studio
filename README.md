@@ -14,6 +14,7 @@ web (:4324)
       -> separator service (:8092)
       -> DuckDuckGo + identify LLM (:8083)
       -> LRCLib + local alignment
+      -> runtime cache for external lookups
 ```
 
 ## Active Structure
@@ -29,6 +30,7 @@ web (:4324)
   - `yt.py` - direct `yt-dlp`/`ffmpeg` input resolution;
   - `identify.py` - candidate generation from metadata and ASR snippets;
   - `identify_search.py` - DuckDuckGo + local LLM song identification;
+  - `runtime_cache.py` - runtime-only cache for identify/LRCLib responses;
   - `lrc.py` - LRC parsing helpers;
   - `align.py` - ASR/LRC word alignment.
 - `bench/asr/server.py` - warmed Parakeet ASR HTTP service.
@@ -71,6 +73,8 @@ IDENTIFY_LLM_MODEL_DIR=/srv/models/stem-practice-llm
 IDENTIFY_LLM_MODEL_FILE=Qwen3.5-2B-UD-Q5_K_XL.gguf
 IDENTIFY_LLM_MODEL=qwen3.5-2b
 IDENTIFY_LLM_CTX=4096
+RUNS_DIR=/srv/apps/stem-practice-studio/runs
+CACHE_DIR=/srv/apps/stem-practice-studio/cache
 ```
 
 `IDENTIFY_LLM_MODEL_FILE` must exist inside `IDENTIFY_LLM_MODEL_DIR` as a real
@@ -121,6 +125,28 @@ Each run writes into `runs/<track-id>/`:
 - optional `lrc.txt`, `lrc_words.json`;
 - `lyrics_aligned.json`;
 - `manifest.json`, `status.json`.
+
+LRCLib exact lookup uses `artist/title` without duration first. YouTube
+durations often include intros, outros, live sections, or cover edits; duration
+is only a weak ranking signal during broader search. Every LRCLib hit is still
+gated against Parakeet ASR before it is accepted.
+
+If a full LRCLib text is too long for a cover or short version but the matched
+phrase coverage is strong, the backend emits a partial LRC result and the
+frontend labels it as partial. Only the matched lyric range is shown.
+
+When LRCLib is missing or rejected, `manifest.lrc.reason` and
+`manifest.aligned.reason` explain the ASR-only fallback:
+
+```text
+lrclib_not_found
+lrclib_rejected_low_match
+script_mismatch
+unsupported_or_weak_asr_language
+partial_cover_available
+```
+
+Runtime cache files live under `CACHE_DIR` and are not committed.
 
 ## Safety
 

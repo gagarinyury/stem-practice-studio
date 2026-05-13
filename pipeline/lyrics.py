@@ -9,6 +9,7 @@ from typing import Any
 
 from . import align as align_mod
 from . import lrc as lrc_mod
+from . import runtime_cache
 
 
 UA = "stem-practice-studio-clean/0.1"
@@ -108,16 +109,21 @@ def http_json(url: str, timeout: int = 10):
         return json.loads(r.read().decode("utf-8"))
 
 
-def lrclib_get(artist: str, title: str, duration: float | None) -> dict | None:
+def lrclib_get(artist: str, title: str) -> dict | None:
     if not artist or not title:
         return None
     qs = {"artist_name": artist, "track_name": title}
-    if duration:
-        qs["duration"] = str(int(round(duration)))
+    key = [artist, title]
+    cached = runtime_cache.get("lrclib-get-v1", key)
+    if cached is not None:
+        return cached.get("data")
     try:
-        return http_json("https://lrclib.net/api/get?" + urllib.parse.urlencode(qs))
+        data = http_json("https://lrclib.net/api/get?" + urllib.parse.urlencode(qs))
+        runtime_cache.set("lrclib-get-v1", key, {"data": data})
+        return data
     except urllib.error.HTTPError as e:
         if e.code == 404:
+            runtime_cache.set("lrclib-get-v1", key, {"data": None})
             return None
         raise
     except Exception:
@@ -133,8 +139,14 @@ def lrclib_search(artist: str, title: str) -> list[dict]:
     if title:
         queries.append({"track_name": title})
     for qs in queries:
+        key = [qs.get("artist_name"), qs.get("track_name")]
         try:
-            res = http_json("https://lrclib.net/api/search?" + urllib.parse.urlencode(qs))
+            cached = runtime_cache.get("lrclib-search-v1", key)
+            if cached is None:
+                res = http_json("https://lrclib.net/api/search?" + urllib.parse.urlencode(qs))
+                runtime_cache.set("lrclib-search-v1", key, {"data": res or []})
+            else:
+                res = cached.get("data") or []
         except Exception:
             continue
         for h in res or []:
@@ -179,6 +191,91 @@ def accepted(stats: dict[str, Any]) -> bool:
     )
 
 
+def partial_accepted(stats: dict[str, Any]) -> bool:
+    return (
+        not stats.get("rejected")
+        and (stats.get("asr_coverage") or 0.0) >= 0.65
+        and (stats.get("run_quality") or 0.0) >= 0.60
+        and (stats.get("matched") or 0) >= 30
+    )
+
+
+def matched_indices(aligned: list[dict]) -> list[int]:
+    out: list[int] = []
+    for idx, item in enumerate(aligned):
+        if similar(str(item.get("word", "")), str(item.get("asr_word", ""))):
+            out.append(idx)
+    return out
+
+
+def crop_partial(
+    lines: list[str],
+    words: list[dict],
+    aligned: list[dict],
+    stats: dict[str, Any],
+) -> tuple[list[str], list[dict], list[dict], dict[str, Any]]:
+    indices = matched_indices(aligned)
+    if not indices:
+        return lines, words, aligned, stats
+    start, end = min(indices), max(indices)
+    cropped_words = [dict(w) for w in words[start:end + 1]]
+    cropped_aligned = [dict(w) for w in aligned[start:end + 1]]
+
+    line_map: dict[int, int] = {}
+    next_line = 0
+    for item in cropped_words:
+        old_line = int(item.get("line", 0))
+        if old_line not in line_map:
+            line_map[old_line] = next_line
+            next_line += 1
+        item["line"] = line_map[old_line]
+    for item in cropped_aligned:
+        old_line = int(item.get("line", 0))
+        item["line"] = line_map.setdefault(old_line, len(line_map))
+
+    partial_lines: list[str] = []
+    for line_idx in range(len(line_map)):
+        partial_lines.append(" ".join(str(w.get("word", "")) for w in cropped_words if w.get("line") == line_idx).strip())
+    partial_lines = [line for line in partial_lines if line]
+
+    matched = len(matched_indices(cropped_aligned))
+    lrc_count = len(cropped_words)
+    asr_count = int(stats.get("asr_words") or 0)
+    partial_stats = {
+        **stats,
+        "lrc_words": lrc_count,
+        "matched": matched,
+        "match_rate": round(matched / max(lrc_count, 1), 3),
+        "asr_coverage": round(matched / max(asr_count, 1), 3) if asr_count else stats.get("asr_coverage"),
+        "combined_rate": round(min(matched / max(lrc_count, 1), matched / max(asr_count, 1)), 3) if asr_count else stats.get("combined_rate"),
+        "interpolated": sum(1 for w in cropped_aligned if w.get("match") == "interp"),
+        "lrc_span": 1.0,
+        "partial": True,
+        "reason": "partial_cover_available",
+        "full_lrc_words": stats.get("lrc_words"),
+    }
+    return partial_lines, cropped_words, cropped_aligned, partial_stats
+
+
+def rejection_reason(debug: list[dict[str, Any]]) -> str:
+    if not debug:
+        return "lrclib_not_found"
+    stats_list = [d.get("stats") or {} for d in debug]
+    if any(s.get("rejected") == "script_mismatch" for s in stats_list):
+        return "script_mismatch"
+    best = max(
+        stats_list,
+        key=lambda s: (
+            float(s.get("combined_rate") or 0.0),
+            float(s.get("run_quality") or 0.0),
+            float(s.get("lrc_span") or 0.0),
+        ),
+    )
+    if (best.get("asr_coverage") or 0.0) < 0.45 or (best.get("run_quality") or 0.0) < 0.40:
+        return "unsupported_or_weak_asr_language"
+    return "lrclib_rejected_low_match"
+
+
 def choose(candidates: list[dict], asr_words: list[dict], duration: float | None) -> LyricsPick:
     seen_ids: set[int] = set()
     debug: list[dict[str, Any]] = []
@@ -203,6 +300,9 @@ def choose(candidates: list[dict], asr_words: list[dict], duration: float | None
         })
         if accepted(stats):
             return LyricsPick(entry, lines, words, aligned, stats, debug)
+        if partial_accepted(stats):
+            partial_lines, partial_words, partial_aligned, partial_stats = crop_partial(lines, words, aligned, stats)
+            return LyricsPick(entry, partial_lines, partial_words, partial_aligned, partial_stats, debug)
         rank = (
             float(stats.get("combined_rate") or 0.0),
             float(stats.get("run_quality") or 0.0),
@@ -223,7 +323,7 @@ def choose(candidates: list[dict], asr_words: list[dict], duration: float | None
             continue
 
         had_lrclib_hit = False
-        exact = lrclib_get(artist, title, duration)
+        exact = lrclib_get(artist, title)
         if exact:
             had_lrclib_hit = True
             pick = consider(exact, f"exact:{source}")
@@ -259,5 +359,6 @@ def choose(candidates: list[dict], asr_words: list[dict], duration: float | None
         "match_rate": None,
         "interpolated": 0,
         "asr_only": True,
+        "reason": rejection_reason(debug),
     }
     return LyricsPick(None, lines, [], aligned, stats, debug)

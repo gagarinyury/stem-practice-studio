@@ -152,8 +152,10 @@ Target policy:
 - warm Parakeet during ASR service startup before reporting healthy;
 - do not load GigaAM in the production ASR service.
 
-GigaAM can remain in benchmark scripts for historical A/B tests, but it must not
-be imported or loaded by `bench/asr/server.py` in the production compose stack.
+GigaAM can remain in benchmark/diagnostic scripts for historical A/B tests, but
+it must not be imported or loaded by `bench/asr/server.py` in the production
+compose stack. For a one-off comparison, run `tools/diagnose_asr.py` on the
+server against a `track_id` or `source.wav`; it does not write to manifest.
 
 Required logging:
 

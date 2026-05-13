@@ -121,7 +121,13 @@ def run(opts: RunOpts, on_progress: ProgressCb | None = None) -> dict:
         timings["lyrics"] = round(time.perf_counter() - t_lrc, 2)
         atomic_write_json(out_dir / "lyrics_candidates.json", {"candidates": candidates, "lrclib": picked.candidates})
 
+        reason = picked.stats.get("reason")
+        partial = bool(picked.stats.get("partial"))
         lrc_meta = {"found": bool(picked.entry)}
+        if reason:
+            lrc_meta["reason"] = reason
+        if partial:
+            lrc_meta["partial"] = True
         if picked.entry:
             lrc_meta.update({
                 "artist": picked.entry.get("artistName"),
@@ -134,11 +140,13 @@ def run(opts: RunOpts, on_progress: ProgressCb | None = None) -> dict:
 
         aligned_path = out_dir / "lyrics_aligned.json"
         atomic_write_json(aligned_path, {
-            "model": "lrc-aligned-via-asr-raw" if picked.entry else "asr-only",
+            "model": "lrc-partial-via-asr-raw" if partial else ("lrc-aligned-via-asr-raw" if picked.entry else "asr-only"),
             "engine": ("lrclib+" if picked.entry else "") + str(asr_data.get("engine") or opts.asr_engine),
             "duration": asr_data.get("duration"),
             "lrc_source": lrc_meta if picked.entry else None,
             "alignment": picked.stats if picked.entry else None,
+            "reason": reason,
+            "partial": partial,
             "lines": picked.lines,
             "text": " ".join(w.get("word", "") for w in picked.aligned_words),
             "words": picked.aligned_words,
@@ -158,6 +166,8 @@ def run(opts: RunOpts, on_progress: ProgressCb | None = None) -> dict:
                 "lrc_words": picked.stats.get("lrc_words"),
                 "interpolated": picked.stats.get("interpolated"),
                 "asr_only": picked.stats.get("asr_only", False),
+                "partial": partial,
+                "reason": reason,
             },
         })
         shared["manifest"] = state.manifest(manifest)

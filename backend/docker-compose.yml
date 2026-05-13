@@ -104,6 +104,7 @@ services:
         condition: service_healthy
     environment:
       RUNS_DIR: "${RUNS_DIR:-/srv/apps/stem-practice-studio/runs}"
+      CACHE_DIR: "${CACHE_DIR:-/srv/apps/stem-practice-studio/cache}"
       PYTHONPATH: /srv/apps/stem-practice-studio
       ASR_URL: "http://asr:${ASR_PORT:-8091}"
       SEPARATOR_URL: "http://separator:${SEPARATOR_PORT:-8092}"

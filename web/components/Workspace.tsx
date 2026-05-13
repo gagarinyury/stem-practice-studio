@@ -120,7 +120,7 @@ export function Workspace() {
               stems: {} as Record<string, string>,
               lyrics: { raw_asr: "", engine: "" },
               lrc: { found: false },
-              aligned: null as unknown as Manifest["aligned"],
+              aligned: null,
               timings_sec: {},
             }}
             aligned={null}
