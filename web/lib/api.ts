@@ -23,6 +23,11 @@ export interface ProgressEvent {
   pct?: number;
   message?: string;
   ts?: string;
+  title?: string | null;
+  artist?: string | null;
+  lrc?: Manifest["lrc"] | null;
+  aligned?: Manifest["aligned"] | null;
+  stems?: string[];
 }
 
 export async function listTracks(): Promise<TrackSummary[]> {

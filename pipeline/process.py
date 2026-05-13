@@ -10,7 +10,7 @@ from typing import Callable, Optional
 
 from . import clients
 from . import yt as yt_mod
-from .identify import identify_candidates
+from .identify import best_metadata_candidate, identify_candidates
 from .lyrics import choose as choose_lyrics
 from .state import RunState, atomic_write_json
 
@@ -56,7 +56,8 @@ def resolve_input(opts: RunOpts, out_dir: Path) -> tuple[Path, dict]:
     return dst, {
         "id": out_dir.name,
         "title": opts.title,
-        "uploader": opts.artist,
+        "artist": opts.artist,
+        "uploader": None,
         "channel": None,
         "duration": None,
         "url": opts.url,
@@ -80,10 +81,13 @@ def run(opts: RunOpts, on_progress: ProgressCb | None = None) -> dict:
         "audio": _rel(out_dir, audio_path),
         "stream": "source.opus" if (out_dir / "source.opus").exists() else _rel(out_dir, audio_path),
         "video": "video.mp4" if (out_dir / "video.mp4").exists() else None,
+        "uploader": meta.get("uploader"),
+        "channel": meta.get("channel"),
     }
+    initial_identity = best_metadata_candidate(meta, opts.artist, opts.title)
     base_manifest = {
-        "title": opts.title or meta.get("title"),
-        "artist": opts.artist or meta.get("uploader") or meta.get("channel"),
+        "title": initial_identity.get("title") or opts.title or meta.get("title"),
+        "artist": initial_identity.get("artist") or None,
         "url": meta.get("url"),
         "duration": meta.get("duration"),
         "language": opts.language,

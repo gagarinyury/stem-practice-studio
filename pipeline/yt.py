@@ -78,7 +78,12 @@ def download(url: str, out_dir: Path) -> tuple[Path, dict]:
     meta = {
         "id": info.get("id"),
         "title": info.get("track") or info.get("title"),
-        "uploader": info.get("artist") or info.get("creator") or info.get("uploader"),
+        # yt-dlp's `artist`/`track` are music metadata. `uploader` and
+        # `channel` are source metadata and must not be treated as the
+        # performing artist.
+        "artist": info.get("artist"),
+        "creator": info.get("creator"),
+        "uploader": info.get("uploader"),
         "channel": info.get("channel"),
         "duration": info.get("duration"),
         "url": url,

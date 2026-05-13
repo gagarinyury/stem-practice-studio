@@ -63,6 +63,13 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
   const [engineDuration, setEngineDuration] = useState(0);
   const [processingSeconds, setProcessingSeconds] = useState(0);
 
+  useEffect(() => {
+    setManifest(initialManifest);
+    setAligned(initialAligned);
+    setIsProcessingLocal(!!processingTrack);
+    setProgressEvent(null);
+  }, [initialManifest.id]);
+
   // Timer for processing duration
   useEffect(() => {
     if (!isProcessing) return;
@@ -168,19 +175,30 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
   useEffect(() => {
     if (!isProcessing) return;
     let localLyricsLoaded = false;
+    const applyProgressPatch = (ev: ProgressEvent) => {
+      if (!ev.title && !ev.artist && !ev.lrc && !ev.aligned) return;
+      setManifest((prev) => ({
+        ...prev,
+        title: ev.title ?? prev.title,
+        artist: ev.artist ?? prev.artist,
+        lrc: ev.lrc ?? prev.lrc,
+        aligned: ev.aligned ?? prev.aligned,
+      }));
+    };
     const unsub = subscribeProgress(
       manifest.id,
       async (ev) => {
         setProgressEvent(ev);
+        applyProgressPatch(ev);
         // Progressive disclosure: load lyrics as soon as the fast track finishes!
         if (ev.stage === "lyrics_ready" && !localLyricsLoaded) {
           localLyricsLoaded = true;
           try {
             const track = await getTrack(manifest.id);
+            setManifest({ ...track, id: manifest.id });
             if (track.aligned?.path) {
               const newAligned = await getAligned(manifest.id, track.aligned.path);
               setAligned(newAligned);
-              setManifest({ ...track, id: manifest.id });
             }
           } catch (e) {
             console.error("Failed to load early lyrics:", e);
@@ -200,9 +218,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
               ? await getAligned(manifest.id, fullTrack.aligned.path)
               : null;
             setManifest({ ...fullTrack, id: manifest.id });
-            if (!localLyricsLoaded) {
-                setAligned(newAligned);
-            }
+            setAligned(newAligned);
           } catch (e) {
             console.error("Failed to load completed track:", e);
           }
