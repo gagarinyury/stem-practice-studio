@@ -23,6 +23,7 @@ from pipeline.lyrics import choose as choose_lyrics, confirmed_pick, fetch_candi
 from pipeline.state import atomic_write_json, read_json
 
 RUNS_DIR = Path(os.environ.get("RUNS_DIR", "/srv/apps/stem-practice-studio/runs"))
+STUDENT_TRACK_LIMIT = int(os.environ.get("STUDENT_TRACK_LIMIT", "10"))
 CORS_ORIGINS = [
     o.strip() for o in os.environ.get(
         "CORS_ORIGINS",
@@ -127,6 +128,26 @@ def list_tracks(user: dict[str, Any]) -> list[dict]:
         item.setdefault("id", d.name)
         out.append(item)
     return out
+
+
+def has_unlimited_tracks(user: dict[str, Any]) -> bool:
+    return user.get("role") in {"admin", "tester"}
+
+
+def enforce_track_limit(user: dict[str, Any]) -> None:
+    if has_unlimited_tracks(user):
+        return
+    track_count = len(list_tracks(user))
+    if track_count >= STUDENT_TRACK_LIMIT:
+        raise HTTPException(
+            403,
+            {
+                "code": "track_limit_reached",
+                "limit": STUDENT_TRACK_LIMIT,
+                "track_count": track_count,
+                "message": "Track limit reached for this MVP account",
+            },
+        )
 
 
 def write_confirmed_lrc(track_id: str, candidate_id: int) -> dict:
@@ -483,6 +504,7 @@ async def submit_track(
         raise HTTPException(400, "provide only file or url")
     if asr_engine != "parakeet":
         raise HTTPException(400, "asr_engine must be parakeet")
+    enforce_track_limit(user)
 
     upload_stem = (file.filename or "").rsplit(".", 1)[0] if file else None
     display_title = title or upload_stem or url or "track"

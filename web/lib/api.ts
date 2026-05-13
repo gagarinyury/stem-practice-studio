@@ -4,7 +4,7 @@ import type { AlignedLyrics, Manifest } from "./manifest";
 export interface User {
   id: string;
   email: string;
-  role: "admin" | "teacher" | "student" | string;
+  role: "admin" | "tester" | "teacher" | "student" | string;
   created_at: number;
 }
 
@@ -36,6 +36,50 @@ export interface ProgressEvent {
   aligned?: Manifest["aligned"] | null;
   stems?: string[];
   source?: TrackSummary["source"] | null;
+}
+
+export class ApiError extends Error {
+  status: number;
+  detail: unknown;
+
+  constructor(label: string, status: number, detail: unknown) {
+    super(`${label}: ${status} ${formatDetail(detail)}`);
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
+export function isTrackLimitError(error: unknown): error is ApiError {
+  const detail = error instanceof ApiError ? error.detail : null;
+  return Boolean(
+    error instanceof ApiError &&
+      error.status === 403 &&
+      detail &&
+      typeof detail === "object" &&
+      "code" in detail &&
+      detail.code === "track_limit_reached",
+  );
+}
+
+async function apiError(label: string, response: Response): Promise<ApiError> {
+  let detail: unknown;
+  try {
+    detail = await response.json();
+    if (detail && typeof detail === "object" && "detail" in detail) {
+      detail = detail.detail;
+    }
+  } catch {
+    detail = await response.text();
+  }
+  return new ApiError(label, response.status, detail);
+}
+
+function formatDetail(detail: unknown): string {
+  if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object" && "message" in detail && typeof detail.message === "string") {
+    return detail.message;
+  }
+  return JSON.stringify(detail);
 }
 
 async function authJson(path: string, body: { email: string; password: string }): Promise<{ user: User }> {
@@ -107,7 +151,7 @@ export async function uploadTrack(
   if (opts.title) fd.append("title", opts.title);
   if (opts.artist) fd.append("artist", opts.artist);
   const r = await fetch(`${API_BASE}/tracks`, { method: "POST", body: fd, credentials: "same-origin" });
-  if (!r.ok) throw new Error(`upload: ${r.status} ${await r.text()}`);
+  if (!r.ok) throw await apiError("upload", r);
   return r.json();
 }
 
@@ -121,7 +165,7 @@ export async function submitYouTube(
   if (opts.title) fd.append("title", opts.title);
   if (opts.artist) fd.append("artist", opts.artist);
   const r = await fetch(`${API_BASE}/tracks`, { method: "POST", body: fd, credentials: "same-origin" });
-  if (!r.ok) throw new Error(`submitYouTube: ${r.status} ${await r.text()}`);
+  if (!r.ok) throw await apiError("submitYouTube", r);
   return r.json();
 }
 

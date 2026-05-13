@@ -14,7 +14,9 @@ import {
   IconUpload,
   IconVideo,
 } from "@tabler/icons-react";
-import { deleteTrack, submitYouTube, uploadTrack, type TrackSummary, type User } from "@/lib/api";
+import { deleteTrack, isTrackLimitError, submitYouTube, uploadTrack, type TrackSummary, type User } from "@/lib/api";
+
+export const STUDENT_TRACK_LIMIT = 10;
 
 interface Props {
   user: User;
@@ -24,13 +26,16 @@ interface Props {
   onRefresh: () => void;
   onClose: () => void;
   onLogout: () => void;
+  onTrackLimit: () => void;
 }
 
-export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose, onLogout }: Props) {
+export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose, onLogout, onTrackLimit }: Props) {
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dark, setDark] = useState(false);
+  const unlimited = user.role === "admin" || user.role === "tester";
+  const limitReached = !unlimited && tracks.length >= STUDENT_TRACK_LIMIT;
 
   useEffect(() => {
     const stored = localStorage.getItem("stem-studio-theme");
@@ -42,6 +47,10 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
   }, []);
 
   async function onFile(file: File) {
+    if (limitReached) {
+      onTrackLimit();
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -49,7 +58,8 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
       onRefresh();
       onSelect(r.id);
     } catch (e) {
-      setError((e as Error).message);
+      if (isTrackLimitError(e)) onTrackLimit();
+      else setError((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -57,6 +67,10 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
 
   async function onUrl() {
     if (!url.trim()) return;
+    if (limitReached) {
+      onTrackLimit();
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -65,7 +79,8 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
       onRefresh();
       onSelect(r.id);
     } catch (e) {
-      setError((e as Error).message);
+      if (isTrackLimitError(e)) onTrackLimit();
+      else setError((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -127,7 +142,15 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
 
       {/* Upload */}
       <div className="px-5 py-4 border-b border-[var(--color-border-soft)] space-y-2.5">
-        <label className="flex items-center gap-2 cursor-pointer text-[13px] font-mono text-ink hover:text-[var(--color-accent-vocal)]">
+        <label
+          className="flex items-center gap-2 cursor-pointer text-[13px] font-mono text-ink hover:text-[var(--color-accent-vocal)]"
+          onClick={(e) => {
+            if (limitReached) {
+              e.preventDefault();
+              onTrackLimit();
+            }
+          }}
+        >
           <IconUpload size={16} />
           <span>{busy ? "загружаем…" : "загрузить аудио"}</span>
           <input
@@ -170,12 +193,17 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
             {error}
           </div>
         )}
+        {!unlimited && (
+          <div className="font-mono text-[10px] text-[var(--color-ink-faint)]">
+            тестовый лимит: {tracks.length}/{STUDENT_TRACK_LIMIT}
+          </div>
+        )}
       </div>
 
       {/* List */}
       <div className="flex items-center justify-between px-5 py-2 border-b border-[var(--color-border-soft)]">
         <div className="font-mono text-[10px] tracking-[0.08em] text-[var(--color-ink-muted)]">
-          ТРЕКИ · {tracks.length}
+          ТРЕКИ · {unlimited ? tracks.length : `${tracks.length}/${STUDENT_TRACK_LIMIT}`}
         </div>
         <button
           type="button"

@@ -139,18 +139,43 @@ Tracks are owner-scoped. New runs get `user_id` in `status.json` and
 lyrics confirmation/search all require the current user. Admin can access
 ownerless legacy runs, but for the MVP test legacy runs can simply be deleted.
 
+MVP access is intentionally limited for regular users:
+
+- `student` - can create up to 10 tracks;
+- `tester` - unlimited tracks;
+- `admin` - unlimited tracks.
+
+The frontend asks for quick feedback after 3 tracks. After the 10-track limit,
+new uploads are blocked and the user is asked to contact us on WhatsApp for
+manual unlimited access. Existing tracks remain available.
+
+To grant unlimited access:
+
+```bash
+python3 - <<'PY'
+import sqlite3
+con = sqlite3.connect("/srv/apps/stem-practice-studio/data/app.db")
+con.execute("update users set role = 'tester' where email = ?", ("user@example.com",))
+con.commit()
+PY
+```
+
 Password reset is intentionally manual for this MVP. The login screen tells
 users to write to WhatsApp. To reset a password on the server:
 
 ```bash
 cd /srv/apps/stem-practice-studio
-NEW_HASH=$(python - <<'PY'
+python3 - <<'PY'
+import sqlite3
 from backend.auth import manual_password_hash
-print(manual_password_hash("new-password-123"))
-PY
+
+con = sqlite3.connect("/srv/apps/stem-practice-studio/data/app.db")
+con.execute(
+    "update users set password_hash = ? where email = ?",
+    (manual_password_hash("new-password-123"), "user@example.com"),
 )
-sqlite3 /srv/apps/stem-practice-studio/data/app.db \
-  "UPDATE users SET password_hash='$NEW_HASH' WHERE email='user@example.com';"
+con.commit()
+PY
 ```
 
 Use a one-time temporary password and ask the user to change it when we add a

@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Sidebar } from "./Sidebar";
+import { Sidebar, STUDENT_TRACK_LIMIT } from "./Sidebar";
 import { TrackView } from "./TrackView";
 import { AuthScreen } from "./AuthScreen";
 import { FeedbackModal } from "./FeedbackModal";
+import { TrackLimitModal } from "./TrackLimitModal";
 import { getMe, getTrack, getAligned, listTracks, logout, type TrackSummary, type User } from "@/lib/api";
 import type { AlignedLyrics, Manifest } from "@/lib/manifest";
 
@@ -23,6 +24,7 @@ export function Workspace() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [feedbackStatus, setFeedbackStatus] = useState<FeedbackStatus>("pending");
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [trackLimitOpen, setTrackLimitOpen] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refreshTracks = useCallback(async () => {
@@ -156,6 +158,7 @@ export function Workspace() {
             onRefresh={refreshTracks}
             onClose={() => setSidebarOpen(false)}
             onLogout={handleLogout}
+            onTrackLimit={() => setTrackLimitOpen(true)}
           />
         </div>
       </div>
@@ -219,6 +222,13 @@ export function Workspace() {
           trackCount={tracks.length}
           onClose={() => persistFeedbackStatus("dismissed")}
           onSubmitted={() => persistFeedbackStatus("submitted")}
+        />
+      )}
+      {trackLimitOpen && (
+        <TrackLimitModal
+          user={user}
+          limit={STUDENT_TRACK_LIMIT}
+          onClose={() => setTrackLimitOpen(false)}
         />
       )}
     </div>
