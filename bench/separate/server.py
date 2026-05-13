@@ -59,9 +59,16 @@ def warmup() -> None:
             wav = td_path / "warmup.wav"
             sr = 44100
             seconds = 20
-            audio = np.zeros((sr * seconds, 2), dtype=np.float32)
+            t = np.linspace(0, seconds, sr * seconds, endpoint=False, dtype=np.float32)
+            tone = 0.08 * np.sin(2 * np.pi * 220 * t) + 0.04 * np.sin(2 * np.pi * 440 * t)
+            envelope = np.minimum(1.0, np.minimum(t / 0.25, (seconds - t) / 0.25))
+            mono = (tone * envelope).astype(np.float32)
+            audio = np.column_stack([mono, mono])
             sf.write(str(wav), audio, sr)
             run_separator(wav, td_path / "stems")
+            vocals = td_path / "stems" / f"{wav.stem}_(Vocals)_{MODEL.removesuffix('.yaml')}.flac"
+            if not vocals.exists():
+                raise RuntimeError(f"separator warmup produced no vocals stem: {vocals}")
         WARMUP_ELAPSED = time.perf_counter() - t0
         READY = True
     except Exception as e:

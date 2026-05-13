@@ -188,7 +188,11 @@ overlap: 0.1
 output_format: FLAC
 ```
 
-The service must warm up at startup before reporting `ready: true`.
+The service must warm up at startup before reporting `ready: true`. Warmup must
+use a non-silent synthetic audio file and verify that at least the vocals stem
+was actually written. A zero-filled WAV is not sufficient: `audio-separator` can
+report a processing error for empty audio without warming the real Demucs/MIOpen
+path.
 
 Expected outputs:
 
@@ -230,6 +234,13 @@ ASR words
   -> DuckDuckGo query: "lyrics <snippet>"
   -> local LLM extracts {artist, title}
 ```
+
+For Qwen3.5-style thinking models, the LLM request must pass
+`chat_template_kwargs: {"enable_thinking": false}`. Without it, llama.cpp returns
+the useful analysis in `reasoning_content` and leaves `message.content` empty
+until enough tokens are generated. The parser also keeps a mechanical fallback
+from search result titles, so identification can still produce candidates if the
+LLM returns invalid JSON.
 
 Known risk:
 
