@@ -17,21 +17,18 @@ startup, and it must never rely on a service restart to keep working.
 
 ```text
 frontend
-  -> backend-api-1
-  -> Redis queue
-  -> backend-worker-1
-  -> pipeline.process.run()
+  -> api-clean (:8093)
+  -> backend_clean.app
+  -> pipeline_clean.process.run()
 ```
 
 Long-running services:
 
 | Service | Port | Purpose |
 | --- | ---: | --- |
-| `backend-api-1` | 8090 | HTTP API, tracks, files, SSE events |
-| `backend-worker-1` | - | Background job runner |
-| `backend-redis-1` | - | Queue and progress state |
-| `backend-asr-1` | 8091 | Warmed ASR service |
-| `backend-separator-1` | 8092 | Warmed Demucs separator service |
+| `api-clean` | 8093 | HTTP API, tracks, files, SSE events |
+| `asr` | 8091 | Warmed ASR service |
+| `separator` | 8092 | Warmed Demucs separator service |
 
 ## Pipeline
 
@@ -468,15 +465,16 @@ with imported Python modules are not a valid deployment state.
 Before restarting services:
 
 ```bash
-python -c "from pipeline import process, separate, asr, lrc, align"
-python -c "from backend.app.main import app"
+python -c "from backend_clean.app import app"
+python -c "from pipeline_clean.process import run, RunOpts"
+python -c "from pipeline import yt, identify_search, lrc, align"
 test -f bench/separate/server.py
 ```
 
 Only after imports pass:
 
 ```bash
-docker compose -f backend/docker-compose.yml restart worker api asr separator
+docker compose -f backend/docker-compose.yml restart api-clean asr separator
 ```
 
 ## Open Decisions
