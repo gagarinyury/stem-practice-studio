@@ -110,7 +110,8 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
 
     if (!hasStemFiles) {
       // Processing mode: wait for source.wav to appear, then load it
-      const sourceUrl = `${API_BASE}/runs/${manifest.id}/source.wav`;
+      const sourceRel = manifest.source?.stream || manifest.source?.audio || "source.wav";
+      const sourceUrl = `${API_BASE}/runs/${manifest.id}/${sourceRel}`;
       let retryTimer: ReturnType<typeof setTimeout>;
       const waitForSource = async () => {
         try {
@@ -154,7 +155,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
       engine.dispose();
       engineRef.current = null;
     };
-  }, [manifest.id, manifest.stems, hasStemFiles]);
+  }, [manifest.id, manifest.stems, manifest.source?.stream, manifest.source?.audio, hasStemFiles]);
 
   // Handle expand: hot-swap music → individual stems
   async function handleExpand() {
@@ -181,11 +182,12 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
     if (!isProcessing) return;
     let localLyricsLoaded = false;
     const applyProgressPatch = (ev: ProgressEvent) => {
-      if (!ev.title && !ev.artist && !ev.lrc && !ev.aligned) return;
+      if (!ev.title && !ev.artist && !ev.source && !ev.lrc && !ev.aligned) return;
       setManifest((prev) => ({
         ...prev,
         title: ev.title ?? prev.title,
         artist: ev.artist ?? prev.artist,
+        source: ev.source ?? prev.source,
         lrc: ev.lrc ?? prev.lrc,
         aligned: ev.aligned ?? prev.aligned,
       }));
@@ -445,7 +447,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
               {showLrcCandidates && (
                 <div className="absolute left-8 right-8 top-4 z-20 rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-surface)]/95 shadow-lg px-4 py-3">
                   <div className="font-mono text-[11px] text-[var(--color-ink-muted)] mb-2">
-                    AI сомневается: официальный текст найден, но совпадение с ASR слабое. Можно выбрать текст вручную.
+                    AI сомневается. Возможно, это этот трек:
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {lrcCandidates.map((candidate) => (
@@ -458,10 +460,10 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
                         title="Принять этот LRCLib текст"
                       >
                         <div className="font-mono text-[11px] text-ink truncate">
-                          {candidate.artist} - {candidate.title}
+                          {acceptingCandidate === candidate.id ? "Загружаю текст..." : `${candidate.artist} - ${candidate.title}`}
                         </div>
                         <div className="font-mono text-[10px] text-[var(--color-ink-faint)]">
-                          {candidate.synced ? "synced" : "plain"} · match {fmtPct(candidate.stats?.match_rate)} · coverage {fmtPct(candidate.stats?.asr_coverage)}
+                          {candidate.synced ? "с таймингами" : "без таймингов"}{candidate.duration ? ` · ${fmtDur(candidate.duration)}` : ""}
                         </div>
                       </button>
                     ))}
@@ -684,20 +686,15 @@ function getLyricsNotice(manifest: Manifest): { label: string; className: string
   }
   if (!manifest.aligned?.asr_only && !reason) return null;
   const labels: Record<string, string> = {
-    lrclib_not_found: "ASR-only: официальный текст не найден",
-    lrclib_rejected_low_match: "ASR-only: текст найден, но совпадение слабое",
-    script_mismatch: "ASR-only: текст найден на другом письме",
-    unsupported_or_weak_asr_language: "ASR-only: язык слабо поддерживается ASR",
+    lrclib_not_found: "Текст не найден автоматически",
+    lrclib_rejected_low_match: "AI сомневается: можно выбрать найденный текст",
+    script_mismatch: "AI сомневается: найденный текст не похож на запись",
+    unsupported_or_weak_asr_language: "AI сомневается: можно выбрать найденный текст",
     partial_cover_available: "частичный текст: показан только совпавший фрагмент",
     user_confirmed_lrc: "текст выбран вручную: тайминги приблизительные",
   };
   return {
-    label: labels[String(reason)] || "ASR-only: используется распознанный текст",
+    label: labels[String(reason)] || "Показан распознанный текст",
     className: "border-[var(--color-border-soft)] bg-[var(--color-surface-muted)] text-[var(--color-ink-muted)]",
   };
-}
-
-function fmtPct(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) return "—";
-  return `${Math.round(value * 100)}%`;
 }

@@ -28,6 +28,7 @@ export interface ProgressEvent {
   lrc?: Manifest["lrc"] | null;
   aligned?: Manifest["aligned"] | null;
   stems?: string[];
+  source?: TrackSummary["source"] | null;
 }
 
 export async function listTracks(): Promise<TrackSummary[]> {

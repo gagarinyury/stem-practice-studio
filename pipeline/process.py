@@ -3,6 +3,7 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import shutil
+import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +16,8 @@ from .lyrics import choose as choose_lyrics, public_candidates
 from .state import RunState, atomic_write_json
 
 ProgressCb = Callable[[dict], None]
+
+VIDEO_EXTS = {".mp4", ".mov", ".mkv", ".webm", ".m4v"}
 
 
 @dataclass
@@ -50,10 +53,35 @@ def resolve_input(opts: RunOpts, out_dir: Path) -> tuple[Path, dict]:
     if not src.exists():
         raise FileNotFoundError(str(src))
     out_dir.mkdir(parents=True, exist_ok=True)
-    dst = out_dir / f"source{src.suffix or '.wav'}"
-    if src != dst.resolve():
-        shutil.copy2(src, dst)
-    return dst, {
+    audio_path = out_dir / "source.wav"
+    opus_path = out_dir / "source.opus"
+    suffix = src.suffix.lower()
+
+    if suffix in VIDEO_EXTS:
+        video_path = out_dir / "video.mp4"
+        try:
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", str(src), "-map", "0:v:0", "-map", "0:a:0?", "-c:v", "copy", "-c:a", "aac", str(video_path)],
+                check=True,
+            )
+        except subprocess.CalledProcessError:
+            if src != video_path.resolve() and suffix == ".mp4":
+                shutil.copy2(src, video_path)
+    elif suffix == ".wav" and src != audio_path.resolve():
+        shutil.copy2(src, audio_path)
+
+    if not audio_path.exists():
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", str(src), "-vn", "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2", str(audio_path)],
+            check=True,
+        )
+
+    try:
+        subprocess.run(["ffmpeg", "-y", "-i", str(audio_path), "-c:a", "libopus", "-b:a", "128k", str(opus_path)], check=True)
+    except subprocess.CalledProcessError:
+        pass
+
+    return audio_path, {
         "id": out_dir.name,
         "title": opts.title,
         "artist": opts.artist,

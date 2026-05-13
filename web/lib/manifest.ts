@@ -9,6 +9,13 @@ export interface Manifest {
   url: string | null;
   duration: number | null;
   language: string;
+  source?: {
+    audio?: string | null;
+    stream?: string | null;
+    video?: string | null;
+    uploader?: string | null;
+    channel?: string | null;
+  } | null;
   stems: Record<StemKey, string>;
   lyrics: { raw_asr: string; engine: string } | null;
   lrc: {

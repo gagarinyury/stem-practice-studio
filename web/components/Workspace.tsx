@@ -117,6 +117,7 @@ export function Workspace() {
               url: processingTrack.url || "",
               duration: processingTrack.duration || 0,
               language: processingTrack.language || "en",
+              source: processingTrack.source ?? null,
               stems: {} as Record<string, string>,
               lyrics: { raw_asr: "", engine: "" },
               lrc: { found: false },
