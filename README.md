@@ -142,20 +142,24 @@ Create readable community codes on evo:
 
 ```bash
 cd /srv/apps/stem-practice-studio
-python3 tools/invite_codes.py add vocal-teacher "Vocal teacher"
-python3 tools/invite_codes.py add music-school "Music school"
+docker compose -f backend/docker-compose.yml exec -T api \
+  python tools/invite_codes.py add vocal-teacher "Vocal teacher"
+docker compose -f backend/docker-compose.yml exec -T api \
+  python tools/invite_codes.py add music-school "Music school"
 ```
 
 Or generate a less guessable code from a label:
 
 ```bash
-python3 tools/invite_codes.py generate "Vocal teacher"
+docker compose -f backend/docker-compose.yml exec -T api \
+  python tools/invite_codes.py generate "Vocal teacher"
 ```
 
 List codes and signup counts:
 
 ```bash
-python3 tools/invite_codes.py list
+docker compose -f backend/docker-compose.yml exec -T api \
+  python tools/invite_codes.py list
 ```
 
 Give testers the public app address and their community code separately:
@@ -173,13 +177,14 @@ admin account, run this on evo and enter a strong password when prompted:
 
 ```bash
 cd /srv/apps/stem-practice-studio
-python3 tools/bootstrap_admin.py
+docker compose -f backend/docker-compose.yml exec api python tools/bootstrap_admin.py
 ```
 
 By default this creates/updates `yury@vitai.pro`. To use another email:
 
 ```bash
-ADMIN_EMAIL=you@example.com python3 tools/bootstrap_admin.py
+docker compose -f backend/docker-compose.yml exec -e ADMIN_EMAIL=you@example.com api \
+  python tools/bootstrap_admin.py
 ```
 
 Tracks are owner-scoped. New runs get `user_id` in `status.json` and
@@ -213,7 +218,7 @@ users to write to WhatsApp. To reset a password on the server:
 
 ```bash
 cd /srv/apps/stem-practice-studio
-python3 - <<'PY'
+docker compose -f backend/docker-compose.yml exec -T api python - <<'PY'
 import sqlite3
 from backend.auth import manual_password_hash
 
