@@ -3,11 +3,11 @@
 Backend and model runtime for generating playable stems, lyrics, and word-level
 timings for Stem Studio.
 
-The active backend is the clean warmed-service flow:
+The active backend is the warmed-service flow:
 
 ```text
 frontend
-  -> api-clean (:8093)
+  -> api (:8093)
       -> yt-dlp/ffmpeg for URL input
       -> ASR service (:8091)
       -> separator service (:8092)
@@ -17,10 +17,14 @@ frontend
 
 ## Active Structure
 
-- `backend_clean/` - FastAPI app, track API, SSE events, file serving.
-- `pipeline_clean/` - parallel processing flow and service clients.
-- `pipeline/` - shared helpers still used by the clean flow:
+- `backend/` - FastAPI app, Dockerfile, compose, env example.
+- `pipeline/` - parallel processing flow and helpers:
+  - `process.py` - main orchestration;
+  - `clients.py` - warmed ASR/separator HTTP clients;
+  - `lyrics.py` - LRCLib candidate selection and alignment gate;
+  - `state.py` - manifest/status writes;
   - `yt.py` - direct `yt-dlp`/`ffmpeg` input resolution;
+  - `identify.py` - candidate generation from metadata and ASR snippets;
   - `identify_search.py` - DuckDuckGo + local LLM song identification;
   - `lrc.py` - LRC parsing helpers;
   - `align.py` - ASR/LRC word alignment.
@@ -35,7 +39,7 @@ Historical benchmark artifacts remain under `bench/`.
 
 | Service | Port | Purpose |
 | --- | ---: | --- |
-| `api-clean` | 8093 | HTTP API, runs, status files, SSE |
+| `api` | 8093 | HTTP API, runs, status files, SSE |
 | `asr` | 8091 | Warmed Parakeet/GigaAM transcription |
 | `separator` | 8092 | Warmed `htdemucs_6s` stem separation |
 | `llama-swap` | 8080 | External local LLM used by identification |

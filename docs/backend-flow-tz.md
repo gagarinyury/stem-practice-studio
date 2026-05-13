@@ -17,16 +17,16 @@ startup, and it must never rely on a service restart to keep working.
 
 ```text
 frontend
-  -> api-clean (:8093)
-  -> backend_clean.app
-  -> pipeline_clean.process.run()
+  -> api (:8093)
+  -> backend.app
+  -> pipeline.process.run()
 ```
 
 Long-running services:
 
 | Service | Port | Purpose |
 | --- | ---: | --- |
-| `api-clean` | 8093 | HTTP API, tracks, files, SSE events |
+| `api` | 8093 | HTTP API, tracks, files, SSE events |
 | `asr` | 8091 | Warmed ASR service |
 | `separator` | 8092 | Warmed Demucs separator service |
 
@@ -465,8 +465,8 @@ with imported Python modules are not a valid deployment state.
 Before restarting services:
 
 ```bash
-python -c "from backend_clean.app import app"
-python -c "from pipeline_clean.process import run, RunOpts"
+python -c "from backend.app import app"
+python -c "from pipeline.process import run, RunOpts"
 python -c "from pipeline import yt, identify_search, lrc, align"
 test -f bench/separate/server.py
 ```
@@ -474,7 +474,7 @@ test -f bench/separate/server.py
 Only after imports pass:
 
 ```bash
-docker compose -f backend/docker-compose.yml restart api-clean asr separator
+docker compose -f backend/docker-compose.yml restart api asr separator
 ```
 
 ## Open Decisions

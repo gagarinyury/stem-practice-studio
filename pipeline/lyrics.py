@@ -7,8 +7,8 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
-from pipeline import align as align_mod
-from pipeline import lrc as lrc_mod
+from . import align as align_mod
+from . import lrc as lrc_mod
 
 
 UA = "stem-practice-studio-clean/0.1"

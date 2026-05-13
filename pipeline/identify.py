@@ -60,7 +60,7 @@ def identify_candidates(asr_words: list[dict], meta: dict, user_artist: str | No
         add_candidate(candidates, c.get("artist"), c.get("title"), c.get("source", "metadata"))
 
     try:
-        from pipeline import identify_search
+        from . import identify_search
         snippets = asr_snippets(asr_words)
         with ThreadPoolExecutor(max_workers=min(3, len(snippets)) or 1) as pool:
             futures = [pool.submit(identify_search.search_and_identify, snippet) for snippet in snippets]

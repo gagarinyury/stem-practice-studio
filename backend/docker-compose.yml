@@ -33,7 +33,7 @@ services:
       - "0.0.0.0:8092:8092"
     command: ["python", "-m", "uvicorn", "bench.separate.server:app", "--host", "0.0.0.0", "--port", "8092"]
 
-  api-clean:
+  api:
     build:
       context: ..
       dockerfile: backend/Dockerfile
@@ -58,4 +58,4 @@ services:
     working_dir: /srv/apps/stem-practice-studio
     ports:
       - "0.0.0.0:8093:8093"
-    command: ["uvicorn", "backend_clean.app:app", "--host", "0.0.0.0", "--port", "8093"]
+    command: ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8093"]

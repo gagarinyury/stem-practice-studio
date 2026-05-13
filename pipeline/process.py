@@ -8,9 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
-from pipeline import yt as yt_mod
-
 from . import clients
+from . import yt as yt_mod
 from .identify import identify_candidates
 from .lyrics import choose as choose_lyrics
 from .state import RunState, atomic_write_json

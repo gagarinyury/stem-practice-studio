@@ -15,8 +15,8 @@ from fastapi.staticfiles import StaticFiles
 from nanoid import generate as nanoid_generate
 from slugify import slugify
 
-from pipeline_clean.process import RunOpts, run as run_pipeline
-from pipeline_clean.state import atomic_write_json, read_json
+from pipeline.process import RunOpts, run as run_pipeline
+from pipeline.state import atomic_write_json, read_json
 
 RUNS_DIR = Path(os.environ.get("RUNS_DIR", "/srv/apps/stem-practice-studio/runs"))
 CORS_ORIGINS = [
@@ -27,7 +27,7 @@ CORS_ORIGINS = [
     if o.strip()
 ]
 
-app = FastAPI(title="Stem Practice Studio Clean API", version="0.2.0")
+app = FastAPI(title="Stem Practice Studio API", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
