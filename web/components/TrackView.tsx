@@ -13,7 +13,7 @@ import {
 import { StemEngine } from "@/lib/audio-engine";
 import type { AlignedLyrics, AlignedWord, Manifest, StemKey } from "@/lib/manifest";
 import { stemUrl } from "@/lib/manifest";
-import { subscribeProgress, getTrack, getAligned, type TrackSummary, type ProgressEvent } from "@/lib/api";
+import { acceptLyricsCandidate, subscribeProgress, getTrack, getAligned, type TrackSummary, type ProgressEvent } from "@/lib/api";
 import { API_BASE } from "@/lib/config";
 import { StemMixer } from "./StemMixer";
 import { Timeline } from "./Timeline";
@@ -62,12 +62,14 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
   const hasStemFiles = Object.keys(manifest.stems).length > 0;
   const [engineDuration, setEngineDuration] = useState(0);
   const [processingSeconds, setProcessingSeconds] = useState(0);
+  const [acceptingCandidate, setAcceptingCandidate] = useState<number | null>(null);
 
   useEffect(() => {
     setManifest(initialManifest);
     setAligned(initialAligned);
     setIsProcessingLocal(!!processingTrack);
     setProgressEvent(null);
+    setAcceptingCandidate(null);
   }, [initialManifest.id]);
 
   // Timer for processing duration
@@ -80,6 +82,8 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
   // Use engine-derived duration when manifest has none (processing mode)
   const effectiveDuration = manifest.duration || engineDuration;
   const lyricsNotice = getLyricsNotice(manifest);
+  const lrcCandidates = manifest.lrc?.candidates ?? [];
+  const showLrcCandidates = !!manifest.aligned?.asr_only && lrcCandidates.length > 0;
 
   // Determine if this manifest has a pre-merged "music" stem from the backend
   const hasMusic = !!manifest.stems["music"];
@@ -351,6 +355,23 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
     setPitch(0);
   }
 
+  async function confirmLrcCandidate(candidateId: number) {
+    setAcceptingCandidate(candidateId);
+    setLoadError(null);
+    try {
+      const track = await acceptLyricsCandidate(manifest.id, candidateId);
+      setManifest({ ...track, id: manifest.id });
+      if (track.aligned?.path) {
+        const newAligned = await getAligned(manifest.id, track.aligned.path);
+        setAligned(newAligned);
+      }
+    } catch (e) {
+      setLoadError(`lyrics confirm fail: ${(e as Error).message}`);
+    } finally {
+      setAcceptingCandidate(null);
+    }
+  }
+
   function jumpToLoopStart() {
     if (loop) seek(loop.from);
   }
@@ -420,18 +441,46 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
         {/* Lyrics Panel (Top) — or processing placeholder */}
         <div className="flex-1 min-h-0 bg-[var(--color-paper)] relative shadow-[inset_0_-10px_20px_rgba(0,0,0,0.02)]">
           {aligned ? (
-            <LyricsPanel
-              aligned={aligned}
-              currentTime={currentTime}
-              selection={
-                loop && loop.fromWordIdx != null && loop.toWordIdx != null
-                  ? { from: loop.fromWordIdx, to: loop.toWordIdx }
-                  : null
-              }
-              dragRange={loop ? { from: loop.from, to: loop.to } : null}
-              onSelectWords={onSelectWords}
-              onSeekWord={(w) => seek(w.start)}
-            />
+            <>
+              {showLrcCandidates && (
+                <div className="absolute left-8 right-8 top-4 z-20 rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-surface)]/95 shadow-lg px-4 py-3">
+                  <div className="font-mono text-[11px] text-[var(--color-ink-muted)] mb-2">
+                    AI сомневается: официальный текст найден, но совпадение с ASR слабое. Можно выбрать текст вручную.
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {lrcCandidates.map((candidate) => (
+                      <button
+                        key={candidate.id}
+                        type="button"
+                        onClick={() => confirmLrcCandidate(candidate.id)}
+                        disabled={acceptingCandidate != null}
+                        className="max-w-full rounded-md border border-[var(--color-border-soft)] bg-[var(--color-surface-muted)] px-3 py-2 text-left hover:border-[var(--color-accent-vocal)] disabled:opacity-50"
+                        title="Принять этот LRCLib текст"
+                      >
+                        <div className="font-mono text-[11px] text-ink truncate">
+                          {candidate.artist} - {candidate.title}
+                        </div>
+                        <div className="font-mono text-[10px] text-[var(--color-ink-faint)]">
+                          {candidate.synced ? "synced" : "plain"} · match {fmtPct(candidate.stats?.match_rate)} · coverage {fmtPct(candidate.stats?.asr_coverage)}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <LyricsPanel
+                aligned={aligned}
+                currentTime={currentTime}
+                selection={
+                  loop && loop.fromWordIdx != null && loop.toWordIdx != null
+                    ? { from: loop.fromWordIdx, to: loop.toWordIdx }
+                    : null
+                }
+                dragRange={loop ? { from: loop.from, to: loop.to } : null}
+                onSelectWords={onSelectWords}
+                onSeekWord={(w) => seek(w.start)}
+              />
+            </>
           ) : (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center max-w-sm">
@@ -640,9 +689,15 @@ function getLyricsNotice(manifest: Manifest): { label: string; className: string
     script_mismatch: "ASR-only: текст найден на другом письме",
     unsupported_or_weak_asr_language: "ASR-only: язык слабо поддерживается ASR",
     partial_cover_available: "частичный текст: показан только совпавший фрагмент",
+    user_confirmed_lrc: "текст выбран вручную: тайминги приблизительные",
   };
   return {
     label: labels[String(reason)] || "ASR-only: используется распознанный текст",
     className: "border-[var(--color-border-soft)] bg-[var(--color-surface-muted)] text-[var(--color-ink-muted)]",
   };
+}
+
+function fmtPct(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${Math.round(value * 100)}%`;
 }

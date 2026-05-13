@@ -96,6 +96,9 @@ Important behavior:
 - If LRCLib is rejected, `lrc.reason` / `aligned.reason` tells the UI why it
   fell back to ASR-only. Covers can become `partial` lyrics when only a strong
   matched range is safe to show.
+- If rejected LRCLib candidates are available, the UI can ask the user to
+  confirm one. The backend rebuilds alignment from existing ASR and marks the
+  result as `user_confirmed_lrc`.
 - `done` means the final manifest has stems and lyrics.
 
 ## How To Read Timings
@@ -182,6 +185,10 @@ audio to finished stems.
 The header labels ASR-only and partial states so the user can distinguish
 “official text not found”, “text rejected by ASR match”, and “safe partial
 lyrics for a cover/short version” without reloading the page.
+
+For weak-ASR languages, `TrackView` can render a small candidate chooser above
+the lyrics. Selecting a candidate posts to `/tracks/:id/lyrics/accept`; no ASR
+or Demucs work is repeated.
 
 Progress event labels are rendered in
 [`components/ProcessingScreen.tsx`](./components/ProcessingScreen.tsx).

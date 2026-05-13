@@ -17,6 +17,7 @@ from nanoid import generate as nanoid_generate
 from slugify import slugify
 
 from pipeline.process import RunOpts, run as run_pipeline
+from pipeline.lyrics import confirmed_pick, fetch_candidate_entry, public_candidates
 from pipeline.state import atomic_write_json, read_json
 
 RUNS_DIR = Path(os.environ.get("RUNS_DIR", "/srv/apps/stem-practice-studio/runs"))
@@ -89,6 +90,100 @@ def list_tracks() -> list[dict]:
         item.setdefault("id", d.name)
         out.append(item)
     return out
+
+
+def write_confirmed_lrc(track_id: str, candidate_id: int) -> dict:
+    d = safe_track_dir(track_id)
+    if not d.exists():
+        raise HTTPException(404, f"track not found: {track_id}")
+
+    asr_data = read_json(d / "lyrics.json", {})
+    asr_words = asr_data.get("words") or []
+    if not asr_words:
+        raise HTTPException(409, "ASR output is not available")
+
+    candidates_payload = read_json(d / "lyrics_candidates.json", {})
+    lrclib_debug = candidates_payload.get("lrclib") or []
+    candidate = next((c for c in lrclib_debug if c.get("id") == candidate_id), None)
+    if not candidate:
+        raise HTTPException(404, f"LRC candidate not found: {candidate_id}")
+
+    entry = fetch_candidate_entry(candidate)
+    if not entry:
+        raise HTTPException(502, "failed to fetch LRCLib candidate")
+
+    manifest = read_json(d / "manifest.json", {})
+    duration = manifest.get("duration") or asr_data.get("duration")
+    try:
+        picked = confirmed_pick(entry, asr_words, duration)
+    except ValueError as e:
+        raise HTTPException(409, str(e)) from e
+
+    lrc_meta = {
+        "found": True,
+        "artist": entry.get("artistName"),
+        "title": entry.get("trackName"),
+        "duration": entry.get("duration"),
+        "synced": bool(entry.get("syncedLyrics")),
+        "reason": "user_confirmed_lrc",
+        "user_confirmed": True,
+        "candidates": public_candidates(lrclib_debug),
+    }
+
+    (d / "lrc.txt").write_text("\n".join(picked.lines), encoding="utf-8")
+    atomic_write_json(d / "lrc_words.json", {
+        "source": "lrclib",
+        **lrc_meta,
+        "lines": picked.lines,
+        "words": picked.words,
+    })
+
+    aligned_path = d / "lyrics_aligned.json"
+    atomic_write_json(aligned_path, {
+        "model": "lrc-user-confirmed-via-asr-raw",
+        "engine": "lrclib+" + str(asr_data.get("engine") or manifest.get("asr_engine") or "parakeet"),
+        "duration": asr_data.get("duration") or manifest.get("duration"),
+        "lrc_source": lrc_meta,
+        "alignment": picked.stats,
+        "reason": "user_confirmed_lrc",
+        "user_confirmed": True,
+        "lines": picked.lines,
+        "text": " ".join(w.get("word", "") for w in picked.aligned_words),
+        "words": picked.aligned_words,
+    })
+
+    manifest.update({
+        "title": entry.get("trackName") or manifest.get("title"),
+        "artist": entry.get("artistName") or manifest.get("artist"),
+        "duration": asr_data.get("duration") or manifest.get("duration"),
+        "lyrics": manifest.get("lyrics") or {"raw_asr": "lyrics.json", "engine": asr_data.get("engine") or "parakeet"},
+        "lrc": lrc_meta,
+        "aligned": {
+            "path": "lyrics_aligned.json",
+            "match_rate": picked.stats.get("match_rate"),
+            "matched": picked.stats.get("matched"),
+            "lrc_words": picked.stats.get("lrc_words"),
+            "interpolated": picked.stats.get("interpolated"),
+            "asr_only": False,
+            "partial": False,
+            "reason": "user_confirmed_lrc",
+            "user_confirmed": True,
+        },
+    })
+    atomic_write_json(d / "manifest.json", manifest)
+
+    status = read_json(d / "status.json", {"id": track_id})
+    status.update({
+        "id": track_id,
+        "stage": status.get("stage") or "done",
+        "title": manifest.get("title"),
+        "artist": manifest.get("artist"),
+        "lrc": lrc_meta,
+        "aligned": manifest["aligned"],
+        "updated_at": now(),
+    })
+    atomic_write_json(d / "status.json", status)
+    return status_for(track_id)
 
 
 def warmup_identify_llm() -> None:
@@ -224,6 +319,11 @@ def track(track_id: str) -> dict:
     if not d.exists():
         raise HTTPException(404, f"track not found: {track_id}")
     return status_for(track_id)
+
+
+@app.post("/tracks/{track_id}/lyrics/accept")
+async def accept_lyrics_candidate(track_id: str, candidate_id: int = Form(...)) -> dict:
+    return await asyncio.to_thread(write_confirmed_lrc, track_id, candidate_id)
 
 
 @app.delete("/tracks/{track_id}", status_code=204)

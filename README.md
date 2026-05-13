@@ -144,7 +144,14 @@ lrclib_rejected_low_match
 script_mismatch
 unsupported_or_weak_asr_language
 partial_cover_available
+user_confirmed_lrc
 ```
+
+If LRCLib candidates exist but ASR confidence is weak, the frontend can show
+the candidates for manual confirmation. Confirming a candidate calls
+`POST /tracks/<id>/lyrics/accept`, rebuilds `lyrics_aligned.json` from the
+existing ASR output, and marks the result as `user_confirmed_lrc`. This does not
+rerun download, ASR, or Demucs.
 
 Runtime cache files live under `CACHE_DIR` and are not committed.
 

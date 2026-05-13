@@ -130,6 +130,24 @@ def lrclib_get(artist: str, title: str) -> dict | None:
         return None
 
 
+def lrclib_get_by_id(entry_id: int) -> dict | None:
+    key = [entry_id]
+    cached = runtime_cache.get("lrclib-get-id-v1", key)
+    if cached is not None:
+        return cached.get("data")
+    try:
+        data = http_json(f"https://lrclib.net/api/get/{int(entry_id)}", timeout=20)
+        runtime_cache.set("lrclib-get-id-v1", key, {"data": data})
+        return data
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            runtime_cache.set("lrclib-get-id-v1", key, {"data": None})
+            return None
+        return None
+    except Exception:
+        return None
+
+
 def lrclib_search(artist: str, title: str) -> list[dict]:
     out: list[dict] = []
     seen: set[int] = set()
@@ -274,6 +292,61 @@ def rejection_reason(debug: list[dict[str, Any]]) -> str:
     if (best.get("asr_coverage") or 0.0) < 0.45 or (best.get("run_quality") or 0.0) < 0.40:
         return "unsupported_or_weak_asr_language"
     return "lrclib_rejected_low_match"
+
+
+def public_candidates(debug: list[dict[str, Any]], *, limit: int = 5) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for item in debug[:limit]:
+        stats = item.get("stats") or {}
+        out.append({
+            "id": item.get("id"),
+            "artist": item.get("artist"),
+            "title": item.get("title"),
+            "duration": item.get("duration"),
+            "synced": bool(item.get("synced")),
+            "source": item.get("source"),
+            "stats": {
+                "match_rate": stats.get("match_rate"),
+                "asr_coverage": stats.get("asr_coverage"),
+                "combined_rate": stats.get("combined_rate"),
+                "run_quality": stats.get("run_quality"),
+                "lrc_span": stats.get("lrc_span"),
+                "matched": stats.get("matched"),
+                "lrc_words": stats.get("lrc_words"),
+            },
+        })
+    return [c for c in out if c.get("id") and c.get("artist") and c.get("title")]
+
+
+def fetch_candidate_entry(candidate: dict[str, Any]) -> dict | None:
+    entry_id = candidate.get("id")
+    artist = str(candidate.get("artist") or "")
+    title = str(candidate.get("title") or "")
+    exact = lrclib_get(artist, title)
+    if exact and (entry_id is None or exact.get("id") == entry_id):
+        return exact
+    for hit in lrclib_search(artist, title):
+        if entry_id is None or hit.get("id") == entry_id:
+            return hit
+    if entry_id is not None:
+        by_id = lrclib_get_by_id(int(entry_id))
+        if by_id:
+            return by_id
+    return exact
+
+
+def confirmed_pick(entry: dict, asr_words: list[dict], duration: float | None) -> LyricsPick:
+    lines, words, aligned, stats = score_entry(entry, asr_words, duration)
+    if stats.get("rejected") == "script_mismatch":
+        raise ValueError("candidate script does not match ASR transcript")
+    if not words or not aligned:
+        raise ValueError("candidate has no usable lyrics")
+    stats = {
+        **stats,
+        "reason": "user_confirmed_lrc",
+        "user_confirmed": True,
+    }
+    return LyricsPick(entry, lines, words, aligned, stats, [])
 
 
 def choose(candidates: list[dict], asr_words: list[dict], duration: float | None) -> LyricsPick:

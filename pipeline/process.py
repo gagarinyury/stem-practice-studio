@@ -11,7 +11,7 @@ from typing import Callable, Optional
 from . import clients
 from . import yt as yt_mod
 from .identify import best_metadata_candidate, identify_candidates
-from .lyrics import choose as choose_lyrics
+from .lyrics import choose as choose_lyrics, public_candidates
 from .state import RunState, atomic_write_json
 
 ProgressCb = Callable[[dict], None]
@@ -128,6 +128,8 @@ def run(opts: RunOpts, on_progress: ProgressCb | None = None) -> dict:
             lrc_meta["reason"] = reason
         if partial:
             lrc_meta["partial"] = True
+        if picked.candidates:
+            lrc_meta["candidates"] = public_candidates(picked.candidates)
         if picked.entry:
             lrc_meta.update({
                 "artist": picked.entry.get("artistName"),
@@ -168,6 +170,7 @@ def run(opts: RunOpts, on_progress: ProgressCb | None = None) -> dict:
                 "asr_only": picked.stats.get("asr_only", False),
                 "partial": partial,
                 "reason": reason,
+                "user_confirmed": picked.stats.get("user_confirmed", False),
             },
         })
         shared["manifest"] = state.manifest(manifest)

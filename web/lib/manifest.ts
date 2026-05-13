@@ -18,7 +18,9 @@ export interface Manifest {
     duration?: number | null;
     synced?: boolean;
     partial?: boolean;
+    user_confirmed?: boolean;
     reason?: LyricsReason | string | null;
+    candidates?: LrcCandidate[];
   };
   aligned: {
     path: string;
@@ -28,6 +30,7 @@ export interface Manifest {
     interpolated: number;
     asr_only?: boolean;
     partial?: boolean;
+    user_confirmed?: boolean;
     reason?: LyricsReason | string | null;
   } | null;
   timings_sec: Record<string, number>;
@@ -38,7 +41,26 @@ export type LyricsReason =
   | "lrclib_rejected_low_match"
   | "script_mismatch"
   | "unsupported_or_weak_asr_language"
-  | "partial_cover_available";
+  | "partial_cover_available"
+  | "user_confirmed_lrc";
+
+export interface LrcCandidate {
+  id: number;
+  artist: string;
+  title: string;
+  duration?: number | null;
+  synced?: boolean;
+  source?: string | null;
+  stats?: {
+    match_rate?: number | null;
+    asr_coverage?: number | null;
+    combined_rate?: number | null;
+    run_quality?: number | null;
+    lrc_span?: number | null;
+    matched?: number | null;
+    lrc_words?: number | null;
+  };
+}
 
 export interface AlignedWord {
   word: string;

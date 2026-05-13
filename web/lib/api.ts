@@ -81,6 +81,14 @@ export async function deleteTrack(id: string): Promise<void> {
   if (!r.ok && r.status !== 404) throw new Error(`delete: ${r.status}`);
 }
 
+export async function acceptLyricsCandidate(id: string, candidateId: number): Promise<Manifest & TrackSummary> {
+  const fd = new FormData();
+  fd.append("candidate_id", String(candidateId));
+  const r = await fetch(`${API_BASE}/tracks/${id}/lyrics/accept`, { method: "POST", body: fd });
+  if (!r.ok) throw new Error(`acceptLyricsCandidate ${id}: ${r.status} ${await r.text()}`);
+  return r.json();
+}
+
 export function subscribeProgress(
   id: string,
   onEvent: (e: ProgressEvent) => void,
