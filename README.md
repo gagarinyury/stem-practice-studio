@@ -166,8 +166,16 @@ Feedback is stored only in SQLite at `DB_PATH`; there is no SMTP/email
 dependency. To inspect recent feedback on evo:
 
 ```bash
-sqlite3 /srv/apps/stem-practice-studio/data/app.db \
-  "select datetime(created_at,'unixepoch'), email, rating, track_count, message from feedback order by created_at desc;"
+python3 - <<'PY'
+import sqlite3
+con = sqlite3.connect("/srv/apps/stem-practice-studio/data/app.db")
+for row in con.execute("""
+    select datetime(created_at,'unixepoch'), email, rating, track_count, message
+    from feedback
+    order by created_at desc
+"""):
+    print(row)
+PY
 ```
 
 ## Output
