@@ -1,0 +1,270 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import {
+  IconArrowRight,
+  IconChevronLeft,
+  IconLink,
+  IconMoon,
+  IconMusic,
+  IconRefresh,
+  IconSun,
+  IconTrash,
+  IconUpload,
+  IconVideo,
+} from "@tabler/icons-react";
+import { deleteTrack, submitYouTube, uploadTrack, type TrackSummary } from "@/lib/api";
+
+interface Props {
+  tracks: TrackSummary[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onRefresh: () => void;
+  onClose: () => void;
+}
+
+export function Sidebar({ tracks, selectedId, onSelect, onRefresh, onClose }: Props) {
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dark, setDark] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("stem-studio-theme");
+    if (stored === "dark" || stored === "light") {
+      document.documentElement.classList.toggle("dark", stored === "dark");
+    }
+    const isDark = document.documentElement.classList.contains("dark");
+    setDark(isDark);
+  }, []);
+
+  async function onFile(file: File) {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await uploadTrack(file);
+      onRefresh();
+      onSelect(r.id);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onUrl() {
+    if (!url.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await submitYouTube(url.trim());
+      setUrl("");
+      onRefresh();
+      onSelect(r.id);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onDelete(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm("Удалить трек?")) return;
+    await deleteTrack(id);
+    onRefresh();
+  }
+
+  function toggleTheme() {
+    const next = !dark;
+    document.documentElement.classList.toggle("dark", next);
+    localStorage.setItem("stem-studio-theme", next ? "dark" : "light");
+    setDark(next);
+  }
+
+  return (
+    <aside className="w-[240px] shrink-0 flex flex-col h-full bg-[var(--color-surface)] shadow-[4px_0_24px_rgba(0,0,0,0.02)] relative z-50">
+      <div className="px-4 py-3 border-b border-[var(--color-border-soft)] flex items-center justify-between">
+        <div>
+          <div className="text-[18px] font-serif italic leading-none flex items-center gap-2">
+            stem studio
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="text-[var(--color-ink-muted)] hover:text-[var(--color-accent-vocal)] transition-colors p-1 rounded-full hover:bg-[var(--color-surface-muted)]"
+              title={dark ? "Светлая тема" : "Темная тема"}
+            >
+              {dark ? <IconSun size={13} /> : <IconMoon size={13} />}
+            </button>
+          </div>
+          <div className="font-mono text-[9px] text-[var(--color-ink-muted)] tracking-[0.06em] mt-1">
+            STEMS · LOOPS · KARAOKE
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          className="p-1 rounded-md text-[var(--color-ink-muted)] hover:text-ink hover:bg-[var(--color-surface-muted)] transition-colors"
+          title="Скрыть боковую панель"
+        >
+          <IconChevronLeft size={20} />
+        </button>
+      </div>
+
+      {/* Upload */}
+      <div className="px-5 py-4 border-b border-[var(--color-border-soft)] space-y-2.5">
+        <label className="flex items-center gap-2 cursor-pointer text-[13px] font-mono text-ink hover:text-[var(--color-accent-vocal)]">
+          <IconUpload size={16} />
+          <span>{busy ? "загружаем…" : "загрузить аудио"}</span>
+          <input
+            type="file"
+            accept="audio/*,video/*"
+            className="hidden"
+            disabled={busy}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onFile(f);
+              e.target.value = "";
+            }}
+          />
+        </label>
+        <div className="flex items-center gap-2">
+          <IconLink size={16} className="text-[var(--color-ink-muted)] shrink-0" />
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="youtube url"
+            disabled={busy}
+            className="flex-1 min-w-0 bg-transparent border-b border-[var(--color-border-soft)] focus:border-[var(--color-ink)] outline-none font-mono text-[12px] py-1"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onUrl();
+            }}
+          />
+          <button
+            type="button"
+            onClick={onUrl}
+            disabled={busy || !url.trim()}
+            className="w-7 h-7 rounded-md border border-[var(--color-ink)] text-[var(--color-ink)] disabled:opacity-30 flex items-center justify-center hover:bg-[var(--color-ink)] hover:text-[var(--color-surface)] transition-colors"
+            title="Добавить YouTube"
+          >
+            <IconArrowRight size={15} />
+          </button>
+        </div>
+        {error && (
+          <div className="font-mono text-[10px] text-[var(--color-accent-warn)] truncate" title={error}>
+            {error}
+          </div>
+        )}
+      </div>
+
+      {/* List */}
+      <div className="flex items-center justify-between px-5 py-2 border-b border-[var(--color-border-soft)]">
+        <div className="font-mono text-[10px] tracking-[0.08em] text-[var(--color-ink-muted)]">
+          ТРЕКИ · {tracks.length}
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="text-[var(--color-ink-muted)] hover:text-ink"
+          title="Обновить"
+        >
+          <IconRefresh size={14} />
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto thin-scroll">
+        {tracks.length === 0 && (
+          <div className="px-5 py-6 font-mono text-[11px] text-[var(--color-ink-faint)]">
+            пока пусто — загрузите первый трек
+          </div>
+        )}
+        {tracks.map((t) => {
+          const active = t.id === selectedId;
+          const hasVideo = Boolean(t.source?.video);
+          return (
+            <div
+              key={t.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelect(t.id)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onSelect(t.id) }}
+              className={`group w-full text-left px-5 py-3 border-b border-[var(--color-border-soft)] flex items-start gap-3 transition-colors cursor-pointer ${
+                active ? "bg-[var(--color-accent-vocal-50)]" : "hover:bg-[var(--color-surface-muted)]"
+              }`}
+            >
+              <StatusDot status={t.status} />
+              <div className="min-w-0 flex-1">
+                <div className="text-[14px] font-serif italic leading-tight truncate">
+                  {t.title || "—"}
+                </div>
+                <div className="font-mono text-[10px] text-[var(--color-ink-muted)] min-w-0 flex items-center gap-1.5">
+                  <MediaBadge hasVideo={hasVideo} />
+                  <span className="truncate">
+                    {t.artist || "unknown"} · {t.language}
+                    {t.duration ? ` · ${fmtDur(t.duration)}` : ""}
+                  </span>
+                </div>
+                {t.status !== "done" && (
+                  <div
+                    className={`font-mono text-[10px] mt-0.5 ${
+                      t.status === "failed"
+                        ? "text-[var(--color-accent-warn)]"
+                        : "text-[var(--color-accent-vocal)]"
+                    }`}
+                  >
+                    {t.status}
+                    {t.error ? ` · ${t.error}` : ""}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={(e) => onDelete(t.id, e)}
+                className="opacity-0 group-hover:opacity-100 text-[var(--color-ink-faint)] hover:text-[var(--color-accent-warn)] mt-0.5"
+                title="Удалить"
+              >
+                <IconTrash size={13} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </aside>
+  );
+}
+
+function MediaBadge({ hasVideo }: { hasVideo: boolean }) {
+  return (
+    <span
+      className={`shrink-0 inline-flex items-center gap-1 rounded-sm border px-1 py-[1px] text-[8px] leading-none tracking-[0.06em] ${
+        hasVideo
+          ? "border-[var(--color-accent-vocal)]/35 text-[var(--color-accent-vocal)] bg-[var(--color-accent-vocal-50)]"
+          : "border-[var(--color-border-soft)] text-[var(--color-ink-muted)] bg-[var(--color-surface)]"
+      }`}
+      title={hasVideo ? "Есть видео для караоке" : "Только аудио"}
+    >
+      {hasVideo ? <IconVideo size={9} /> : <IconMusic size={9} />}
+      {hasVideo ? "VIDEO" : "AUDIO"}
+    </span>
+  );
+}
+
+function StatusDot({ status }: { status: TrackSummary["status"] }) {
+  const color =
+    status === "done"
+      ? "var(--color-accent-success)"
+      : status === "failed"
+      ? "var(--color-accent-warn)"
+      : "var(--color-accent-vocal)";
+  return (
+    <span
+      className="mt-[6px] w-[6px] h-[6px] rounded-full shrink-0"
+      style={{ background: color }}
+    />
+  );
+}
+
+function fmtDur(s: number): string {
+  const m = Math.floor(s / 60);
+  const ss = Math.floor(s % 60);
+  return `${m}:${ss.toString().padStart(2, "0")}`;
+}

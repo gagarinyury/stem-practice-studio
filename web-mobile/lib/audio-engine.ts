@@ -131,66 +131,6 @@ export class StemEngine {
     return this.stems.map((s) => s.key);
   }
 
-  /**
-   * Expand the merged "music" stem into individual instrument stems.
-   *
-   * Fetches and decodes each stem **sequentially** (one at a time) to avoid
-   * blocking the main thread and causing audio glitches during playback.
-   * Once all are ready, removes "music" and wires in the individual stems
-   * at the correct playback position — seamlessly, mid-playback.
-   *
-   * @returns The keys of all stems after expansion.
-   */
-  async expandStems(specs: StemSpec[]): Promise<string[]> {
-    if (!this.ctx || !this.mix) return this.stemKeys;
-
-    const ctx = this.ctx;
-    const decoded: { key: string; buffer: AudioBuffer }[] = [];
-
-    // Decode one by one to keep CPU load spread out (no UI freeze)
-    for (const spec of specs) {
-      // Skip stems we already have
-      if (this.stems.some((s) => s.key === spec.key)) continue;
-      const res = await fetch(spec.url);
-      const arr = await res.arrayBuffer();
-      const buffer = await ctx.decodeAudioData(arr);
-      decoded.push({ key: spec.key, buffer });
-    }
-
-    if (decoded.length === 0) return this.stemKeys;
-
-    // Snapshot playback state before the swap
-    const wasPlaying = this.state === "playing";
-    const resumeAt = this.currentTime;
-
-    // Stop the "music" source if playing
-    const musicIdx = this.stems.findIndex((s) => s.key === "music");
-    if (musicIdx >= 0) {
-      const music = this.stems[musicIdx];
-      try { music.source?.stop(); } catch { /* ok */ }
-      music.source = null;
-      music.gain.disconnect();
-      this.stems.splice(musicIdx, 1);
-    }
-
-    // Wire in the new individual stems
-    for (const { key, buffer } of decoded) {
-      const gain = ctx.createGain();
-      gain.connect(this.mix!);
-      this.stems.push({ key, buffer, activeBuffer: buffer, source: null, gain, muted: false });
-    }
-
-    this.duration = Math.max(...this.stems.map((s) => s.buffer.duration));
-
-    // Resume playback from exactly where we were
-    if (wasPlaying) {
-      this.startOffset = resumeAt;
-      this.play();
-    }
-
-    return this.stemKeys;
-  }
-
   /** Original full-length buffer for a stem (read-only — used for offline analysis). */
   getStemBuffer(key: string): AudioBuffer | null {
     return this.stems.find((s) => s.key === key)?.buffer ?? null;
@@ -522,7 +462,9 @@ export class StemEngine {
   /**
    * Apply independent time-stretch + pitch-shift to the current loop window
    * via offline rubberband processing. Pass `{ timeRatio: 1, pitchScale: 1 }`
-   * to fall back to native playback.
+   * to fall back to native playback (cheaper, no processing time).
+   *
+   * Regenerates each stem buffer; expect ~0.5–2 s per call for short loops.
    */
   async setTimePitch(timeRatio: number, pitchScale: number, loopRange?: { from: number; to: number }): Promise<void> {
     const range = loopRange ?? this.loopRange;
@@ -535,6 +477,7 @@ export class StemEngine {
     if (wasPlaying) this.pause();
 
     if (isPassthrough(timeRatio, pitchScale)) {
+      // Native mode.
       this.stretchInfo = null;
       for (const stem of this.stems) stem.activeBuffer = stem.buffer;
       this.loopRange = range;

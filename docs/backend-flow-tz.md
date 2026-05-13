@@ -16,7 +16,8 @@ startup, and it must never rely on a service restart to keep working.
 ## Current Target Architecture
 
 ```text
-frontend
+web (:4324)
+  -> /be/* rewrite
   -> api (:8093)
   -> backend.app
   -> pipeline.process.run()
@@ -26,6 +27,7 @@ Long-running services:
 
 | Service | Port | Purpose |
 | --- | ---: | --- |
+| `web` | 4324 | Desktop Next.js frontend |
 | `api` | 8093 | HTTP API, tracks, files, SSE events |
 | `asr` | 8091 | Warmed ASR service |
 | `separator` | 8092 | Warmed Demucs separator service |

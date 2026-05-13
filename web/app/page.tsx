@@ -1,5 +1,7 @@
-import { redirect } from "next/navigation";
+import { Workspace } from "@/components/Workspace";
 
-export default function Home() {
-  redirect("/library");
+export const dynamic = "force-dynamic";
+
+export default function Page() {
+  return <Workspace />;
 }

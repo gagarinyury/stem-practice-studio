@@ -6,7 +6,8 @@ timings for Stem Studio.
 The active backend is the warmed-service flow:
 
 ```text
-frontend
+web (:4324)
+  -> /be/* rewrite
   -> api (:8093)
       -> yt-dlp/ffmpeg for URL input
       -> ASR service (:8091)
@@ -18,6 +19,8 @@ frontend
 ## Active Structure
 
 - `backend/` - FastAPI app, Dockerfile, compose, env example.
+- `web/` - desktop Next.js frontend, served from evo on port 4324.
+- `web-mobile/` - Capacitor/iOS mobile frontend shell.
 - `pipeline/` - parallel processing flow and helpers:
   - `process.py` - main orchestration;
   - `clients.py` - warmed ASR/separator HTTP clients;
@@ -39,6 +42,7 @@ Historical benchmark artifacts remain under `bench/`.
 
 | Service | Port | Purpose |
 | --- | ---: | --- |
+| `web` | 4324 | Desktop Next.js frontend |
 | `api` | 8093 | HTTP API, runs, status files, SSE |
 | `asr` | 8091 | Warmed Parakeet/GigaAM transcription |
 | `separator` | 8092 | Warmed `htdemucs_6s` stem separation |
@@ -53,7 +57,14 @@ On evo:
 ```bash
 cd /srv/apps/stem-practice-studio
 docker compose -f backend/docker-compose.yml up -d --build
+curl http://127.0.0.1:4324
 curl http://127.0.0.1:8093/healthz
+```
+
+Open the app from the Mac through Tailscale:
+
+```text
+http://evox2:4324
 ```
 
 Submit a URL:

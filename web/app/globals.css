@@ -1,122 +1,168 @@
 @import "tailwindcss";
 
-@theme {
-  --color-paper: #FAF7F2;
+:root {
+  --color-paper: #FDFBF7;
   --color-surface: #FFFFFF;
-  --color-surface-muted: #F1EFE8;
-  --color-ink: #2C2C2A;
-  --color-ink-muted: #888780;
-  --color-ink-faint: #B4B2A9;
-  --color-border-soft: rgba(0, 0, 0, 0.08);
-  --color-accent-vocal: #534AB7;
-  --color-accent-vocal-50: #EEEDFE;
-  --color-accent-vocal-100: #CECBF6;
-  --color-accent-vocal-200: #AFA9EC;
-  --color-accent-vocal-300: #7F77DD;
-  --color-accent-vocal-700: #3C3489;
-  --color-accent-drill: #C66857;
-  --color-accent-plan: #BA7517;
-  --color-accent-success: #1D9E75;
-  --color-accent-warn: #993C1D;
+  --color-surface-muted: #F4F2EC;
+  --color-ink: #1F1D1A;
+  --color-ink-muted: #7A7873;
+  --color-ink-faint: #B5B2AB;
+  --color-border-soft: rgba(0, 0, 0, 0.06);
+  --color-accent-vocal: #6455D6;
+  --color-accent-vocal-50: rgba(100, 85, 214, 0.08);
+  --color-accent-vocal-100: rgba(100, 85, 214, 0.15);
+  --color-accent-vocal-700: #4B3FAD;
+  --color-accent-success: #2DA875;
+  --color-accent-warn: #D94635;
+  --range-shadow: rgba(0,0,0,0.15);
+}
 
+.dark {
+  --color-paper: #0F0F11;
+  --color-surface: #1A1A1E;
+  --color-surface-muted: #24242A;
+  --color-ink: #FFFFFF;
+  --color-ink-muted: #9BA1A6;
+  --color-ink-faint: #4B4C53;
+  --color-border-soft: rgba(255, 255, 255, 0.08);
+  --color-accent-vocal: #A371F7;
+  --color-accent-vocal-50: rgba(163, 113, 247, 0.1);
+  --color-accent-vocal-100: rgba(163, 113, 247, 0.2);
+  --color-accent-vocal-700: #8957E5;
+  --color-accent-success: #3FB950;
+  --color-accent-warn: #F85149;
+  --range-shadow: rgba(0,0,0,0.5);
+}
+
+@theme {
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 18px;
   --radius-pill: 999px;
 
   --font-serif: var(--font-cormorant), Georgia, serif;
-  --font-mono: var(--font-dm-mono), ui-monospace, monospace;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
 }
 
-/* Tailwind v4 @theme tokens with numeric shade suffixes don't always end up
-   on :root — re-declare the vocal tints so inline `var(...)` resolves. */
 :root {
-  --color-accent-vocal-50: #EEEDFE;
-  --color-accent-vocal-100: #CECBF6;
-  --color-accent-vocal-200: #AFA9EC;
-  --color-accent-vocal-300: #7F77DD;
-  --color-accent-vocal-700: #3C3489;
+  --color-accent-vocal-50: rgba(163, 113, 247, 0.1);
+  --color-accent-vocal-100: rgba(163, 113, 247, 0.2);
 }
 
 html, body {
   background: var(--color-paper);
   color: var(--color-ink);
   font-family: var(--font-serif);
-  /* Disable iOS Safari/WKWebView double-tap zoom and 300ms tap delay so
-     buttons feel native inside Capacitor. */
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  -webkit-touch-callout: none;
-  overscroll-behavior: none;
-}
-button, a, [role="button"] {
-  touch-action: manipulation;
-  cursor: pointer;
+  height: 100%;
 }
 
-/* Unified bottom reserve. BottomNav is now a flat bottom strip with its
-   own safe-area padding, so screens with the nav reserve `nav body height +
-   safe-area`. Screens without the nav reserve only the safe-area itself.
-   ScreenShell and karaoke phone overlay both consume this var. */
-:root {
-  --bottom-reserve: env(safe-area-inset-bottom, 0px);
-}
-[data-bottomnav="true"] {
-  --bottom-reserve: calc(env(safe-area-inset-bottom, 0px) + 56px);
-}
+button, a, [role="button"] { cursor: pointer; }
 
-/* Thin always-visible scrollbar for selectable scroll regions (Select screen).
-   WKWebView hides default scrollbars on mobile, so we draw a slim one. */
-.select-scroll::-webkit-scrollbar {
-  width: 4px;
-}
-.select-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.select-scroll::-webkit-scrollbar-thumb {
+/* Thin scrollbars in scroll regions */
+.thin-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.thin-scroll::-webkit-scrollbar-track { background: transparent; }
+.thin-scroll::-webkit-scrollbar-thumb {
   background: var(--color-ink-faint);
-  border-radius: 2px;
+  border-radius: 3px;
 }
-.select-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-ink-faint) transparent;
-}
+.thin-scroll { scrollbar-width: thin; scrollbar-color: var(--color-ink-faint) transparent; }
 
-/* Thin range slider for stem volume */
+/* Volume slider */
 .thin-range {
   -webkit-appearance: none;
   appearance: none;
-  height: 28px;
+  height: 18px;
   background: transparent;
   cursor: pointer;
-  touch-action: none;
 }
 .thin-range::-webkit-slider-runnable-track {
-  height: 2px;
+  height: 4px;
   background: var(--color-ink-faint);
-  border-radius: 1px;
+  border-radius: 2px;
 }
 .thin-range::-moz-range-track {
-  height: 2px;
+  height: 4px;
   background: var(--color-ink-faint);
-  border-radius: 1px;
+  border-radius: 2px;
   border: 0;
 }
 .thin-range::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 22px;
-  height: 22px;
+  width: 16px;
+  height: 16px;
   border-radius: 999px;
   background: var(--color-ink);
-  margin-top: -10px;
-  border: 4px solid var(--color-paper);
-  box-shadow: 0 0 0 1px var(--color-ink-faint);
+  margin-top: -6px;
+  border: 2px solid var(--color-surface);
+  box-shadow: 0 0 8px var(--range-shadow);
+  transition: transform 0.1s;
+}
+.thin-range:hover::-webkit-slider-thumb {
+  transform: scale(1.1);
 }
 .thin-range::-moz-range-thumb {
-  width: 22px;
-  height: 22px;
+  width: 16px;
+  height: 16px;
   border-radius: 999px;
   background: var(--color-ink);
-  border: 4px solid var(--color-paper);
+  border: 2px solid var(--color-surface);
+  box-shadow: 0 0 8px var(--range-shadow);
+}
+
+.karaoke-range {
+  --karaoke-progress: 0%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 24px;
+  background: transparent;
+  cursor: pointer;
+}
+.karaoke-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    rgba(255,255,255,0.92) 0%,
+    rgba(255,255,255,0.92) var(--karaoke-progress),
+    rgba(255,255,255,0.22) var(--karaoke-progress),
+    rgba(255,255,255,0.22) 100%
+  );
+}
+.karaoke-range::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.22);
+  border: 0;
+}
+.karaoke-range::-moz-range-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.92);
+}
+.karaoke-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #fff;
+  border: 2px solid rgba(0,0,0,0.28);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  margin-top: -6px;
+}
+.karaoke-range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #fff;
+  border: 2px solid rgba(0,0,0,0.28);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+}
+
+/* Simulated Waveform Animation */
+@keyframes pulseWave {
+  0% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+  100% { transform: scaleY(0.4); }
 }

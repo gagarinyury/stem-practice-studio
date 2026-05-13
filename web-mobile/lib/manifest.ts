@@ -1,6 +1,4 @@
-import { API_BASE } from "./config";
-
-export type StemKey = "vocals" | "drums" | "bass" | "guitar" | "piano" | "other" | "music";
+export type StemKey = "vocals" | "drums" | "bass" | "guitar" | "piano" | "other";
 
 export interface Manifest {
   id: string;
@@ -38,10 +36,8 @@ export interface AlignedLyrics {
   words: AlignedWord[];
 }
 
+import { API_BASE } from "./config";
+
 export function stemUrl(id: string, relPath: string): string {
   return `${API_BASE}/runs/${id}/${relPath}`;
-}
-
-export function videoUrl(id: string): string {
-  return `${API_BASE}/runs/${id}/video.mp4`;
 }

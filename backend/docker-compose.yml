@@ -59,3 +59,15 @@ services:
     ports:
       - "0.0.0.0:8093:8093"
     command: ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8093"]
+
+  web:
+    build:
+      context: ..
+      dockerfile: web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NEXT_PUBLIC_BACKEND_ORIGIN: "http://api:8093"
+    ports:
+      - "0.0.0.0:4324:4324"

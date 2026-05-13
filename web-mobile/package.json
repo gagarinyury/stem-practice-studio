@@ -1,0 +1,41 @@
+{
+  "name": "web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 4323 -H 0.0.0.0 --experimental-https --experimental-https-key ./certificates/dev-key.pem --experimental-https-cert ./certificates/dev-cert.pem",
+    "ios": "cap run ios",
+    "ios:open": "cap open ios",
+    "ios:sync": "cap sync ios",
+    "build": "next build",
+    "start": "next start -p 4323",
+    "lint": "eslint",
+    "test": "node scripts/test-rubberband.mjs && node scripts/test-engine-time.mjs && node scripts/test-drill-logic.mjs && node scripts/test-mix-buffers.mjs && node scripts/test-pitch.mjs && node scripts/test-processing-progress.mjs",
+    "postinstall": "cp -f node_modules/@echogarden/rubberband-wasm/rubberband.wasm public/rubberband.wasm && cp -f node_modules/@echogarden/rubberband-wasm/rubberband.js public/rubberband.js"
+  },
+  "dependencies": {
+    "@capacitor/cli": "^8.3.3",
+    "@capacitor/core": "^8.3.3",
+    "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/ios": "^8.3.3",
+    "@capacitor/keyboard": "^8.0.3",
+    "@echogarden/rubberband-wasm": "^0.2.0",
+    "@tabler/icons-react": "^3.44.0",
+    "next": "16.2.6",
+    "pitchy": "^4.1.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "server-only": "^0.0.1",
+    "tone": "^14.9.17"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.6",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
