@@ -80,6 +80,7 @@ tracks/
 models/
 storage/
 uploads/
+diagnostics/
 *.log
 
 # --- Claude / local tools ---
