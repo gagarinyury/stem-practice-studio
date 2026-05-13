@@ -13,8 +13,8 @@ services:
       - /srv/models/stem-practice-asr:/asr-models
     working_dir: /srv/apps/stem-practice-studio
     ports:
-      - "0.0.0.0:8091:8091"
-    command: ["python", "-m", "uvicorn", "bench.asr.server:app", "--host", "0.0.0.0", "--port", "8091"]
+      - "0.0.0.0:${ASR_PORT:-8091}:${ASR_PORT:-8091}"
+    command: ["python", "-m", "uvicorn", "bench.asr.server:app", "--host", "0.0.0.0", "--port", "${ASR_PORT:-8091}"]
 
   separator:
     image: stem-practice-bench:rocm
@@ -30,8 +30,8 @@ services:
       - /srv/models/stem-practice:/models:ro
     working_dir: /srv/apps/stem-practice-studio
     ports:
-      - "0.0.0.0:8092:8092"
-    command: ["python", "-m", "uvicorn", "bench.separate.server:app", "--host", "0.0.0.0", "--port", "8092"]
+      - "0.0.0.0:${SEPARATOR_PORT:-8092}:${SEPARATOR_PORT:-8092}"
+    command: ["python", "-m", "uvicorn", "bench.separate.server:app", "--host", "0.0.0.0", "--port", "${SEPARATOR_PORT:-8092}"]
 
   api:
     build:
@@ -41,24 +41,22 @@ services:
     depends_on:
       - asr
       - separator
-    env_file:
-      - path: .env
-        required: false
     environment:
-      RUNS_DIR: /srv/apps/stem-practice-studio/runs
+      RUNS_DIR: "${RUNS_DIR:-/srv/apps/stem-practice-studio/runs}"
       PYTHONPATH: /srv/apps/stem-practice-studio
-      ASR_URL: "http://host.docker.internal:8091"
-      SEPARATOR_URL: "http://host.docker.internal:8092"
-      LLM_BASE_URL: "http://host.docker.internal:8080/v1"
-      CORS_ORIGINS: "http://localhost:4323,http://localhost:4324,http://evox2:4323,http://evox2:4324,http://evo:4323,http://evo:4324"
+      ASR_URL: "http://asr:${ASR_PORT:-8091}"
+      SEPARATOR_URL: "http://separator:${SEPARATOR_PORT:-8092}"
+      LLM_BASE_URL: "http://host.docker.internal:${LLM_PORT:-8080}/v1"
+      LLM_MODEL: "${LLM_MODEL:-Qwen3-30B-Instruct (Q4_K_XL, 17gb)}"
+      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:4324,http://evox2:4324,http://evo:4324}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - /srv/apps/stem-practice-studio:/srv/apps/stem-practice-studio
     working_dir: /srv/apps/stem-practice-studio
     ports:
-      - "0.0.0.0:8093:8093"
-    command: ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8093"]
+      - "0.0.0.0:${API_PORT:-8093}:${API_PORT:-8093}"
+    command: ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "${API_PORT:-8093}"]
 
   web:
     build:
@@ -68,6 +66,6 @@ services:
     depends_on:
       - api
     environment:
-      NEXT_PUBLIC_BACKEND_ORIGIN: "http://api:8093"
+      NEXT_PUBLIC_BACKEND_ORIGIN: "http://api:${API_PORT:-8093}"
     ports:
-      - "0.0.0.0:4324:4324"
+      - "0.0.0.0:${WEB_PORT:-4324}:4324"

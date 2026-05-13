@@ -50,12 +50,32 @@ Historical benchmark artifacts remain under `bench/`.
 
 The old Redis/arq worker backend has been removed from the active tree.
 
+## Configuration
+
+Compose ports are centralized in the root `.env` file. Start from the template:
+
+```bash
+cp .env.example .env
+```
+
+Defaults:
+
+```text
+WEB_PORT=4324
+API_PORT=8093
+ASR_PORT=8091
+SEPARATOR_PORT=8092
+LLM_PORT=8080
+LLM_MODEL="Qwen3-30B-Instruct (Q4_K_XL, 17gb)"
+```
+
 ## Run
 
 On evo:
 
 ```bash
 cd /srv/apps/stem-practice-studio
+cp .env.example .env  # first run only, or edit existing .env
 docker compose -f backend/docker-compose.yml up -d --build
 curl http://127.0.0.1:4324
 curl http://127.0.0.1:8093/healthz

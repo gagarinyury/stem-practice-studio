@@ -32,6 +32,17 @@ Long-running services:
 | `asr` | 8091 | Warmed ASR service |
 | `separator` | 8092 | Warmed Demucs separator service |
 
+Ports are configured from the repository root `.env` file:
+
+```text
+WEB_PORT=4324
+API_PORT=8093
+ASR_PORT=8091
+SEPARATOR_PORT=8092
+LLM_PORT=8080
+LLM_MODEL="Qwen3-30B-Instruct (Q4_K_XL, 17gb)"
+```
+
 ## Pipeline
 
 The flow is sequential only until input is resolved. After that, lyrics and stems

@@ -29,10 +29,10 @@ NEXT_PUBLIC_BACKEND_ORIGIN=http://evox2:8093 npm run dev
 ```
 
 In the monorepo deployment, Docker Compose serves this app as `web` on port
-4324 and points rewrites at the internal API service:
+`${WEB_PORT:-4324}` and points rewrites at the internal API service:
 
 ```text
-NEXT_PUBLIC_BACKEND_ORIGIN=http://api:8093
+NEXT_PUBLIC_BACKEND_ORIGIN=http://api:${API_PORT:-8093}
 ```
 
 ## Backend Services
