@@ -16,7 +16,7 @@ from nanoid import generate as nanoid_generate
 from pydantic import BaseModel
 from slugify import slugify
 
-from backend import auth
+from backend import auth, feedback
 from pipeline.identify import title_candidates
 from pipeline.process import RunOpts, run as run_pipeline
 from pipeline.lyrics import choose as choose_lyrics, confirmed_pick, fetch_candidate_entry, public_candidates
@@ -50,6 +50,11 @@ llm_warmup_elapsed: float | None = None
 class AuthPayload(BaseModel):
     email: str
     password: str
+
+
+class FeedbackPayload(BaseModel):
+    rating: int | None = None
+    message: str = ""
 
 
 def now() -> float:
@@ -405,6 +410,7 @@ async def start_job(track_id: str, opts: RunOpts, user_id: str) -> None:
 def startup() -> None:
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
     auth.init_db()
+    feedback.init_db()
     warmup_identify_llm()
 
 
@@ -448,6 +454,17 @@ def logout(request: Request, response: Response) -> dict:
 @app.get("/auth/me")
 def me(user: dict = Depends(auth.require_user)) -> dict:
     return {"user": user}
+
+
+@app.post("/feedback")
+def submit_feedback(payload: FeedbackPayload, user: dict = Depends(auth.require_user)) -> dict:
+    rating = payload.rating
+    if rating is not None and not 1 <= rating <= 5:
+        raise HTTPException(400, "rating must be between 1 and 5")
+    if rating is None and not payload.message.strip():
+        raise HTTPException(400, "feedback is empty")
+    track_count = len(list_tracks(user))
+    return feedback.save(user, rating, payload.message, track_count)
 
 
 @app.post("/tracks", status_code=202)

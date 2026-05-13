@@ -4,8 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { TrackView } from "./TrackView";
 import { AuthScreen } from "./AuthScreen";
+import { FeedbackModal } from "./FeedbackModal";
 import { getMe, getTrack, getAligned, listTracks, logout, type TrackSummary, type User } from "@/lib/api";
 import type { AlignedLyrics, Manifest } from "@/lib/manifest";
+
+type FeedbackStatus = "pending" | "dismissed" | "submitted";
 
 export function Workspace() {
   const [user, setUser] = useState<User | null>(null);
@@ -18,6 +21,8 @@ export function Workspace() {
   const [processingTrack, setProcessingTrack] = useState<TrackSummary | null>(null);
   const [trackError, setTrackError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [feedbackStatus, setFeedbackStatus] = useState<FeedbackStatus>("pending");
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refreshTracks = useCallback(async () => {
@@ -47,6 +52,26 @@ export function Workspace() {
       if (pollRef.current) clearInterval(pollRef.current);
     };
   }, [refreshTracks, user]);
+
+  useEffect(() => {
+    if (!user) {
+      setFeedbackOpen(false);
+      setFeedbackStatus("pending");
+      return;
+    }
+    try {
+      const saved = localStorage.getItem(`stem-feedback-${user.id}`) as FeedbackStatus | null;
+      setFeedbackStatus(saved === "dismissed" || saved === "submitted" ? saved : "pending");
+    } catch {
+      setFeedbackStatus("pending");
+    }
+    setFeedbackOpen(false);
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || feedbackStatus !== "pending" || tracks.length < 3) return;
+    setFeedbackOpen(true);
+  }, [feedbackStatus, tracks.length, user]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -97,6 +122,15 @@ export function Workspace() {
     setManifest(null);
     setAligned(null);
     setProcessingTrack(null);
+  }
+
+  function persistFeedbackStatus(next: FeedbackStatus) {
+    setFeedbackStatus(next);
+    setFeedbackOpen(false);
+    if (!user) return;
+    try {
+      localStorage.setItem(`stem-feedback-${user.id}`, next);
+    } catch {}
   }
 
   if (authLoading) {
@@ -180,6 +214,13 @@ export function Workspace() {
           />
         ) : null}
       </main>
+      {feedbackOpen && (
+        <FeedbackModal
+          trackCount={tracks.length}
+          onClose={() => persistFeedbackStatus("dismissed")}
+          onSubmitted={() => persistFeedbackStatus("submitted")}
+        />
+      )}
     </div>
   );
 }

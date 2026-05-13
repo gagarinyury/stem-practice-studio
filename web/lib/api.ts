@@ -68,6 +68,17 @@ export async function logout(): Promise<void> {
   if (!r.ok) throw new Error(`logout: ${r.status}`);
 }
 
+export async function submitFeedback(payload: { rating?: number | null; message: string }): Promise<{ id: string; ok: boolean }> {
+  const r = await fetch(`${API_BASE}/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    credentials: "same-origin",
+  });
+  if (!r.ok) throw new Error(`feedback: ${r.status} ${await r.text()}`);
+  return r.json();
+}
+
 export async function listTracks(): Promise<TrackSummary[]> {
   const r = await fetch(`${API_BASE}/tracks`, { cache: "no-store", credentials: "same-origin" });
   if (!r.ok) throw new Error(`listTracks: ${r.status}`);

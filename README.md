@@ -156,6 +156,20 @@ sqlite3 /srv/apps/stem-practice-studio/data/app.db \
 Use a one-time temporary password and ask the user to change it when we add a
 profile screen.
 
+## Feedback
+
+After a user has at least three tracks, the frontend shows a small feedback
+modal once for that user. Closing it or submitting feedback stores that local UI
+decision in the browser, so the MVP does not keep asking.
+
+Feedback is stored only in SQLite at `DB_PATH`; there is no SMTP/email
+dependency. To inspect recent feedback on evo:
+
+```bash
+sqlite3 /srv/apps/stem-practice-studio/data/app.db \
+  "select datetime(created_at,'unixepoch'), email, rating, track_count, message from feedback order by created_at desc;"
+```
+
 ## Output
 
 Each run writes into `runs/<track-id>/`:
