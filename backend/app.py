@@ -16,8 +16,9 @@ from fastapi.staticfiles import StaticFiles
 from nanoid import generate as nanoid_generate
 from slugify import slugify
 
+from pipeline.identify import title_candidates
 from pipeline.process import RunOpts, run as run_pipeline
-from pipeline.lyrics import confirmed_pick, fetch_candidate_entry, public_candidates
+from pipeline.lyrics import choose as choose_lyrics, confirmed_pick, fetch_candidate_entry, public_candidates
 from pipeline.state import atomic_write_json, read_json
 
 RUNS_DIR = Path(os.environ.get("RUNS_DIR", "/srv/apps/stem-practice-studio/runs"))
@@ -186,6 +187,132 @@ def write_confirmed_lrc(track_id: str, candidate_id: int) -> dict:
     return status_for(track_id)
 
 
+def manual_lyrics_candidates(title: str, artist: str | None) -> list[dict]:
+    title = " ".join(str(title or "").split())
+    artist = " ".join(str(artist or "").split())
+    if not title:
+        raise HTTPException(400, "title is required")
+
+    out: dict[tuple[str, str], dict] = {}
+
+    def add(a: str | None, t: str | None) -> None:
+        aa = " ".join(str(a or "").split())
+        tt = " ".join(str(t or "").split())
+        if not tt:
+            return
+        out.setdefault((aa.casefold(), tt.casefold()), {
+            "artist": aa,
+            "title": tt,
+            "source": "user",
+            "score": 100,
+        })
+
+    add(artist, title)
+    for candidate in title_candidates(title, artist):
+        add(candidate.get("artist"), candidate.get("title"))
+    return list(out.values())
+
+
+def write_manual_lrc_search(track_id: str, title: str, artist: str | None = None) -> dict:
+    d = safe_track_dir(track_id)
+    if not d.exists():
+        raise HTTPException(404, f"track not found: {track_id}")
+
+    asr_data = read_json(d / "lyrics.json", {})
+    asr_words = asr_data.get("words") or []
+    if not asr_words:
+        raise HTTPException(409, "ASR output is not available")
+
+    manifest = read_json(d / "manifest.json", {})
+    duration = manifest.get("duration") or asr_data.get("duration")
+    candidates_payload = read_json(d / "lyrics_candidates.json", {})
+    existing_candidates = candidates_payload.get("candidates") or []
+    manual_candidates = manual_lyrics_candidates(title, artist)
+    picked = choose_lyrics(manual_candidates, asr_words, duration)
+
+    atomic_write_json(d / "lyrics_candidates.json", {
+        "candidates": existing_candidates,
+        "manual_query": {"artist": artist or "", "title": title},
+        "manual_candidates": manual_candidates,
+        "lrclib": picked.candidates,
+    })
+
+    reason = picked.stats.get("reason")
+    partial = bool(picked.stats.get("partial"))
+    lrc_meta = {
+        "found": bool(picked.entry),
+        "manual_query": {"artist": artist or "", "title": title},
+    }
+    if reason:
+        lrc_meta["reason"] = reason
+    if partial:
+        lrc_meta["partial"] = True
+    if picked.candidates:
+        lrc_meta["candidates"] = public_candidates(picked.candidates)
+    if picked.entry:
+        lrc_meta.update({
+            "artist": picked.entry.get("artistName"),
+            "title": picked.entry.get("trackName"),
+            "duration": picked.entry.get("duration"),
+            "synced": bool(picked.entry.get("syncedLyrics")),
+        })
+        (d / "lrc.txt").write_text("\n".join(picked.lines), encoding="utf-8")
+        atomic_write_json(d / "lrc_words.json", {
+            "source": "lrclib",
+            **lrc_meta,
+            "lines": picked.lines,
+            "words": picked.words,
+        })
+
+    aligned_path = d / "lyrics_aligned.json"
+    atomic_write_json(aligned_path, {
+        "model": "lrc-partial-via-asr-raw" if partial else ("lrc-aligned-via-asr-raw" if picked.entry else "asr-only"),
+        "engine": ("lrclib+" if picked.entry else "") + str(asr_data.get("engine") or manifest.get("asr_engine") or "parakeet"),
+        "duration": asr_data.get("duration") or manifest.get("duration"),
+        "lrc_source": lrc_meta if picked.entry else None,
+        "alignment": picked.stats if picked.entry else None,
+        "reason": reason,
+        "partial": partial,
+        "manual_query": {"artist": artist or "", "title": title},
+        "lines": picked.lines,
+        "text": " ".join(w.get("word", "") for w in picked.aligned_words),
+        "words": picked.aligned_words,
+    })
+
+    manifest.update({
+        "title": (picked.entry or {}).get("trackName") or title or manifest.get("title"),
+        "artist": (picked.entry or {}).get("artistName") or artist or manifest.get("artist"),
+        "duration": asr_data.get("duration") or manifest.get("duration"),
+        "lyrics": manifest.get("lyrics") or {"raw_asr": "lyrics.json", "engine": asr_data.get("engine") or "parakeet"},
+        "lrc": lrc_meta,
+        "aligned": {
+            "path": "lyrics_aligned.json",
+            "match_rate": picked.stats.get("match_rate"),
+            "matched": picked.stats.get("matched"),
+            "lrc_words": picked.stats.get("lrc_words"),
+            "interpolated": picked.stats.get("interpolated"),
+            "asr_only": picked.stats.get("asr_only", False),
+            "partial": partial,
+            "reason": reason,
+            "user_confirmed": picked.stats.get("user_confirmed", False),
+        },
+    })
+    atomic_write_json(d / "manifest.json", manifest)
+
+    status = read_json(d / "status.json", {"id": track_id})
+    status.update({
+        "id": track_id,
+        "stage": status.get("stage") or "done",
+        "title": manifest.get("title"),
+        "artist": manifest.get("artist"),
+        "lrc": lrc_meta,
+        "aligned": manifest["aligned"],
+        "updated_at": now(),
+    })
+    atomic_write_json(d / "status.json", status)
+    return status_for(track_id)
+
+
 def warmup_identify_llm() -> None:
     global llm_ready, llm_warmup_error, llm_warmup_elapsed
     base_url = os.environ.get("LLM_BASE_URL", "").rstrip("/")
@@ -324,6 +451,15 @@ def track(track_id: str) -> dict:
 @app.post("/tracks/{track_id}/lyrics/accept")
 async def accept_lyrics_candidate(track_id: str, candidate_id: int = Form(...)) -> dict:
     return await asyncio.to_thread(write_confirmed_lrc, track_id, candidate_id)
+
+
+@app.post("/tracks/{track_id}/lyrics/search")
+async def search_lyrics_manually(
+    track_id: str,
+    title: str = Form(...),
+    artist: Optional[str] = Form(None),
+) -> dict:
+    return await asyncio.to_thread(write_manual_lrc_search, track_id, title, artist)
 
 
 @app.delete("/tracks/{track_id}", status_code=204)

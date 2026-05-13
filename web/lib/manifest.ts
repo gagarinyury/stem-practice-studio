@@ -28,6 +28,10 @@ export interface Manifest {
     user_confirmed?: boolean;
     reason?: LyricsReason | string | null;
     candidates?: LrcCandidate[];
+    manual_query?: {
+      artist?: string | null;
+      title?: string | null;
+    };
   };
   aligned: {
     path: string;
@@ -39,6 +43,10 @@ export interface Manifest {
     partial?: boolean;
     user_confirmed?: boolean;
     reason?: LyricsReason | string | null;
+    manual_query?: {
+      artist?: string | null;
+      title?: string | null;
+    };
   } | null;
   timings_sec: Record<string, number>;
 }

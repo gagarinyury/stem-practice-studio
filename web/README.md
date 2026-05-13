@@ -99,6 +99,10 @@ Important behavior:
 - If rejected LRCLib candidates are available, the UI can ask the user to
   confirm one. The backend rebuilds alignment from existing ASR and marks the
   result as `user_confirmed_lrc`.
+- If automatic identify fails, the user can enter a song title and optional
+  artist. The backend searches LRCLib from existing ASR output only; ASR,
+  download, and Demucs are not repeated. If the found text is still rejected,
+  it is shown as an explicit confirmation candidate.
 - `done` means the final manifest has stems and lyrics.
 
 ## How To Read Timings
@@ -189,6 +193,11 @@ lyrics for a cover/short version” without reloading the page.
 For weak-ASR languages, `TrackView` can render a small candidate chooser above
 the lyrics. Selecting a candidate posts to `/tracks/:id/lyrics/accept`; no ASR
 or Demucs work is repeated.
+
+The same panel also supports manual lookup through `/tracks/:id/lyrics/search`.
+This is the fallback for uploads without useful metadata: the user can provide
+`title` and optionally `artist`, then confirm a candidate if ASR cannot prove it
+automatically.
 
 Progress event labels are rendered in
 [`components/ProcessingScreen.tsx`](./components/ProcessingScreen.tsx).

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import {
   IconPlayerPlayFilled,
   IconPlayerPauseFilled,
@@ -9,11 +9,12 @@ import {
   IconArrowsMaximize,
   IconPlayerTrackPrevFilled,
   IconLoader2,
+  IconSearch,
 } from "@tabler/icons-react";
 import { StemEngine } from "@/lib/audio-engine";
 import type { AlignedLyrics, AlignedWord, Manifest, StemKey } from "@/lib/manifest";
 import { stemUrl } from "@/lib/manifest";
-import { acceptLyricsCandidate, subscribeProgress, getTrack, getAligned, type TrackSummary, type ProgressEvent } from "@/lib/api";
+import { acceptLyricsCandidate, searchLyricsManually, subscribeProgress, getTrack, getAligned, type TrackSummary, type ProgressEvent } from "@/lib/api";
 import { API_BASE } from "@/lib/config";
 import { StemMixer } from "./StemMixer";
 import { Timeline } from "./Timeline";
@@ -63,6 +64,9 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
   const [engineDuration, setEngineDuration] = useState(0);
   const [processingSeconds, setProcessingSeconds] = useState(0);
   const [acceptingCandidate, setAcceptingCandidate] = useState<number | null>(null);
+  const [manualTitle, setManualTitle] = useState("");
+  const [manualArtist, setManualArtist] = useState("");
+  const [manualSearchBusy, setManualSearchBusy] = useState(false);
 
   useEffect(() => {
     setManifest(initialManifest);
@@ -70,6 +74,9 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
     setIsProcessingLocal(!!processingTrack);
     setProgressEvent(null);
     setAcceptingCandidate(null);
+    setManualTitle("");
+    setManualArtist("");
+    setManualSearchBusy(false);
   }, [initialManifest.id]);
 
   // Timer for processing duration
@@ -83,7 +90,8 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
   const effectiveDuration = manifest.duration || engineDuration;
   const lyricsNotice = getLyricsNotice(manifest);
   const lrcCandidates = manifest.lrc?.candidates ?? [];
-  const showLrcCandidates = !!manifest.aligned?.asr_only && lrcCandidates.length > 0;
+  const showManualLyricsTools = !!manifest.aligned?.asr_only || (!!manifest.lrc?.reason && !manifest.lrc?.found);
+  const showLrcCandidates = showManualLyricsTools && lrcCandidates.length > 0;
 
   // Determine if this manifest has a pre-merged "music" stem from the backend
   const hasMusic = !!manifest.stems["music"];
@@ -374,6 +382,27 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
     }
   }
 
+  async function submitManualLyricsSearch(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const title = manualTitle.trim();
+    const artist = manualArtist.trim();
+    if (!title || manualSearchBusy) return;
+    setManualSearchBusy(true);
+    setLoadError(null);
+    try {
+      const track = await searchLyricsManually(manifest.id, { title, artist });
+      setManifest({ ...track, id: manifest.id });
+      if (track.aligned?.path) {
+        const newAligned = await getAligned(manifest.id, track.aligned.path);
+        setAligned(newAligned);
+      }
+    } catch (err) {
+      setLoadError(`lyrics search fail: ${(err as Error).message}`);
+    } finally {
+      setManualSearchBusy(false);
+    }
+  }
+
   function jumpToLoopStart() {
     if (loop) seek(loop.from);
   }
@@ -444,30 +473,61 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
         <div className="flex-1 min-h-0 bg-[var(--color-paper)] relative shadow-[inset_0_-10px_20px_rgba(0,0,0,0.02)]">
           {aligned ? (
             <>
-              {showLrcCandidates && (
+              {showManualLyricsTools && (
                 <div className="absolute left-8 right-8 top-4 z-20 rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-surface)]/95 shadow-lg px-4 py-3">
-                  <div className="font-mono text-[11px] text-[var(--color-ink-muted)] mb-2">
-                    AI сомневается. Возможно, это этот трек:
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {lrcCandidates.map((candidate) => (
+                  {showLrcCandidates && (
+                    <>
+                      <div className="font-mono text-[11px] text-[var(--color-ink-muted)] mb-2">
+                        AI сомневается. Возможно, это этот трек:
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {lrcCandidates.map((candidate) => (
+                          <button
+                            key={candidate.id}
+                            type="button"
+                            onClick={() => confirmLrcCandidate(candidate.id)}
+                            disabled={acceptingCandidate != null || manualSearchBusy}
+                            className="max-w-full rounded-md border border-[var(--color-border-soft)] bg-[var(--color-surface-muted)] px-3 py-2 text-left hover:border-[var(--color-accent-vocal)] disabled:opacity-50"
+                            title="Принять этот LRCLib текст"
+                          >
+                            <div className="font-mono text-[11px] text-ink truncate">
+                              {acceptingCandidate === candidate.id ? "Загружаю текст..." : `${candidate.artist} - ${candidate.title}`}
+                            </div>
+                            <div className="font-mono text-[10px] text-[var(--color-ink-faint)]">
+                              {candidate.synced ? "с таймингами" : "без таймингов"}{candidate.duration ? ` · ${fmtDur(candidate.duration)}` : ""}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  <form onSubmit={submitManualLyricsSearch} className={`${showLrcCandidates ? "mt-3 pt-3 border-t border-[var(--color-border-soft)]" : ""}`}>
+                    <div className="font-mono text-[11px] text-[var(--color-ink-muted)] mb-2">
+                      Не тот вариант? Введите название песни.
+                    </div>
+                    <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto] gap-2">
+                      <input
+                        value={manualTitle}
+                        onChange={(ev) => setManualTitle(ev.target.value)}
+                        placeholder="Название"
+                        className="min-w-0 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-paper)] px-3 py-2 font-mono text-[11px] text-ink outline-none focus:border-[var(--color-accent-vocal)]"
+                      />
+                      <input
+                        value={manualArtist}
+                        onChange={(ev) => setManualArtist(ev.target.value)}
+                        placeholder="Исполнитель (необязательно)"
+                        className="min-w-0 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-paper)] px-3 py-2 font-mono text-[11px] text-ink outline-none focus:border-[var(--color-accent-vocal)]"
+                      />
                       <button
-                        key={candidate.id}
-                        type="button"
-                        onClick={() => confirmLrcCandidate(candidate.id)}
-                        disabled={acceptingCandidate != null}
-                        className="max-w-full rounded-md border border-[var(--color-border-soft)] bg-[var(--color-surface-muted)] px-3 py-2 text-left hover:border-[var(--color-accent-vocal)] disabled:opacity-50"
-                        title="Принять этот LRCLib текст"
+                        type="submit"
+                        disabled={!manualTitle.trim() || manualSearchBusy}
+                        className="rounded-md bg-[var(--color-accent-vocal)] px-3 py-2 font-mono text-[11px] font-bold text-white disabled:opacity-50 flex items-center gap-2"
                       >
-                        <div className="font-mono text-[11px] text-ink truncate">
-                          {acceptingCandidate === candidate.id ? "Загружаю текст..." : `${candidate.artist} - ${candidate.title}`}
-                        </div>
-                        <div className="font-mono text-[10px] text-[var(--color-ink-faint)]">
-                          {candidate.synced ? "с таймингами" : "без таймингов"}{candidate.duration ? ` · ${fmtDur(candidate.duration)}` : ""}
-                        </div>
+                        {manualSearchBusy ? <IconLoader2 size={14} className="animate-spin" /> : <IconSearch size={14} />}
+                        Найти
                       </button>
-                    ))}
-                  </div>
+                    </div>
+                  </form>
                 </div>
               )}
               <LyricsPanel

@@ -90,6 +90,18 @@ export async function acceptLyricsCandidate(id: string, candidateId: number): Pr
   return r.json();
 }
 
+export async function searchLyricsManually(
+  id: string,
+  opts: { title: string; artist?: string },
+): Promise<Manifest & TrackSummary> {
+  const fd = new FormData();
+  fd.append("title", opts.title);
+  if (opts.artist) fd.append("artist", opts.artist);
+  const r = await fetch(`${API_BASE}/tracks/${id}/lyrics/search`, { method: "POST", body: fd });
+  if (!r.ok) throw new Error(`searchLyricsManually ${id}: ${r.status} ${await r.text()}`);
+  return r.json();
+}
+
 export function subscribeProgress(
   id: string,
   onEvent: (e: ProgressEvent) => void,
