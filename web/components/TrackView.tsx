@@ -615,6 +615,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
                 title={vocalsMuted ? "Вокал выключен — включить" : "Заглушить вокал"}
               >
                 {vocalsMuted ? <IconMicrophoneOff size={16} /> : <IconMicrophone size={16} />}
+                <span className="lowercase">{vocalsMuted ? "вокал оф" : "вокал он"}</span>
               </button>
               {loop && (
                 <button
@@ -658,7 +659,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
               <div className="font-mono text-[16px] text-ink font-bold tabular-nums">
                 {fmtT(currentTime)} <span className="text-[var(--color-ink-faint)] text-[14px]">/ {fmtT(effectiveDuration)}</span>
               </div>
-              <div className="font-mono text-[10px] text-[var(--color-ink-faint)] tracking-[0.06em]">
+              <div className="hidden md:block font-mono text-[10px] text-[var(--color-ink-faint)] tracking-[0.06em]">
                 SPACE play · ← → ±5s · L loop
               </div>
             </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type RefObject } from "react";
+import { useEffect, useState, type RefObject } from "react";
 import {
   IconVolume,
   IconVolumeOff,
@@ -41,6 +41,23 @@ export function StemMixer({ engineRef, stems, ready, vocalsMuted, onToggleVocals
   const [state, setState] = useState<Record<string, StemState>>(() =>
     Object.fromEntries(stems.map((k) => [k, { volume: 1, muted: false }])),
   );
+
+  // Keep state in sync when the stems list grows (e.g. user clicks "ВСЕ ДОРОЖКИ"):
+  // without this, toggleMute on newly-added stems silently returns because state[key] is undefined.
+  useEffect(() => {
+    setState((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const k of stems) {
+        if (!next[k]) {
+          next[k] = { volume: 1, muted: false };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [stems]);
+
   const [solo, setSolo] = useState<string | null>(null);
   // Internal expanded toggle (used when no external expand control is provided)
   const [localExpanded, setLocalExpanded] = useState(false);
