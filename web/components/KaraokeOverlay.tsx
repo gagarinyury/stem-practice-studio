@@ -4,6 +4,7 @@ import { type CSSProperties, useEffect, useMemo, useRef } from "react";
 import { IconX, IconPlayerPlayFilled, IconPlayerPauseFilled } from "@tabler/icons-react";
 import type { AlignedLyrics, AlignedWord, Manifest } from "@/lib/manifest";
 import { videoUrl } from "@/lib/manifest";
+import { useI18n } from "@/lib/i18n";
 
 interface Props {
   manifest: Manifest;
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function KaraokeOverlay({ manifest, aligned, currentTime, playing, vocalMuted, onTogglePlay, onToggleVocal, onSeek, onClose }: Props) {
+  const { t } = useI18n();
   const videoRef = useRef<HTMLVideoElement>(null);
   const duration = manifest.duration || aligned.duration || 0;
   const progressPct = duration > 0 ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0;
@@ -179,7 +181,7 @@ export function KaraokeOverlay({ manifest, aligned, currentTime, playing, vocalM
             onChange={(e) => onSeek(Number(e.currentTarget.value))}
             className="karaoke-range w-full"
             style={{ "--karaoke-progress": `${progressPct}%` } as CSSProperties}
-            aria-label="Позиция трека"
+            aria-label={t("processing.position")}
           />
           <div className="font-mono text-[11px] text-white/45 tabular-nums">
             {fmtT(duration)}

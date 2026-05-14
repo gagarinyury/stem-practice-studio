@@ -10,6 +10,7 @@ import {
   IconRepeatOff,
 } from "@tabler/icons-react";
 import type { LoopRange } from "./TrackView";
+import { useI18n } from "@/lib/i18n";
 
 interface Props {
   loop: LoopRange;
@@ -50,6 +51,7 @@ export function LoopControls({
   onReset,
   onClear,
 }: Props) {
+  const { t } = useI18n();
   const len = loop.to - loop.from;
 
   function shift(dir: -1 | 1) {
@@ -81,10 +83,10 @@ export function LoopControls({
   return (
     <div className="flex flex-col gap-3">
       {/* Loop window */}
-      <Group label="ФРАГМЕНТ">
+      <Group label={t("loop.fragment")}>
         <div className="flex items-center justify-between bg-[var(--color-surface)] p-1.5 rounded border border-[var(--color-border-soft)] shadow-sm">
           <Stepper
-            title="Сдвинуть ◄"
+            title={t("loop.shiftLeft")}
             onClick={() => shift(-1)}
             disabled={loop.from <= 0}
           >
@@ -96,13 +98,13 @@ export function LoopControls({
               <span>{len.toFixed(1)}s</span>
               {loop.fromWordIdx != null && loop.toWordIdx != null && (
                 <span className="text-[var(--color-ink-muted)] font-normal text-[8px] mt-px">
-                  {Math.max(0, loop.toWordIdx - loop.fromWordIdx + 1)} слов
+                  {Math.max(0, loop.toWordIdx - loop.fromWordIdx + 1)} {t("loop.words")}
                 </span>
               )}
             </div>
           </div>
           <Stepper
-            title="Сдвинуть ►"
+            title={t("loop.shiftRight")}
             onClick={() => shift(1)}
             disabled={loop.to >= duration}
           >
@@ -113,7 +115,7 @@ export function LoopControls({
 
       <div className="flex gap-2">
         {/* A edge */}
-        <Group label="НАЧАЛО">
+        <Group label={t("loop.start")}>
           <div className="flex bg-[var(--color-surface)] rounded border border-[var(--color-border-soft)] shadow-sm p-1 gap-1">
             <Stepper title="A−" onClick={() => moveEdge("A", -1)} disabled={loop.from <= 0}>
               <IconArrowBarLeft size={12} />
@@ -125,7 +127,7 @@ export function LoopControls({
         </Group>
 
         {/* B edge */}
-        <Group label="КОНЕЦ">
+        <Group label={t("loop.end")}>
           <div className="flex bg-[var(--color-surface)] rounded border border-[var(--color-border-soft)] shadow-sm p-1 gap-1">
             <Stepper title="B−" onClick={() => moveEdge("B", -1)} disabled={loop.to <= loop.from + 0.2}>
               <IconArrowBarLeft size={12} />
@@ -140,7 +142,7 @@ export function LoopControls({
       <div className="h-px w-full bg-[var(--color-border-soft)] my-0.5" />
 
       {/* Tempo */}
-      <Group label="ТЕМП">
+      <Group label={t("loop.tempo")}>
         <div className="flex items-center justify-between bg-[var(--color-surface)] p-1.5 rounded border border-[var(--color-border-soft)] shadow-sm">
           <Stepper
             title="−"
@@ -163,7 +165,7 @@ export function LoopControls({
       </Group>
 
       {/* Pitch */}
-      <Group label="ТОН">
+      <Group label={t("loop.pitch")}>
         <div className="flex items-center justify-between bg-[var(--color-surface)] p-1.5 rounded border border-[var(--color-border-soft)] shadow-sm">
           <Stepper
             title="−1 st"
@@ -188,11 +190,11 @@ export function LoopControls({
       {/* Reset / toggle / clear */}
       <div className="flex flex-col gap-2 mt-1">
         <div className="flex items-center justify-between">
-          <span className="font-mono text-[9px] text-[var(--color-ink-muted)]">ПОВТОР</span>
+          <span className="font-mono text-[9px] text-[var(--color-ink-muted)]">{t("loop.repeat")}</span>
           <button
             type="button"
             onClick={onToggleEnabled}
-            title={enabled ? "Выключить loop" : "Включить loop"}
+            title={enabled ? t("loop.disableLoop") : t("loop.enableLoop")}
             className={`px-2 py-1 rounded font-mono text-[10px] font-bold transition-all shadow-sm flex items-center gap-1 ${
               enabled
                 ? "bg-[var(--color-accent-vocal)] text-white hover:bg-[var(--color-accent-vocal-700)]"
@@ -200,7 +202,7 @@ export function LoopControls({
             }`}
           >
             {enabled ? <IconRepeat size={12} /> : <IconRepeatOff size={12} />}
-            {enabled ? "ВКЛ" : "ВЫКЛ"}
+            {enabled ? t("loop.on") : t("loop.off")}
           </button>
         </div>
 
@@ -210,22 +212,22 @@ export function LoopControls({
             onClick={onReset}
             disabled={tempo === 1 && pitch === 0}
             className="flex-1 py-1 rounded border border-[var(--color-border-soft)] text-[var(--color-ink-muted)] hover:text-ink hover:bg-[var(--color-surface)] disabled:opacity-30 disabled:hover:bg-transparent transition-colors flex items-center justify-center gap-1 font-mono text-[9px]"
-            title="Сбросить темп/тон"
+            title={t("loop.resetTempo")}
           >
-            <IconRefresh size={12} /> СБРОС
+            <IconRefresh size={12} /> {t("loop.resetShort")}
           </button>
           <button
             type="button"
             onClick={onClear}
             className="flex-1 py-1 rounded border border-[var(--color-border-soft)] text-[var(--color-accent-warn)] hover:bg-[var(--color-accent-warn)]/10 transition-colors flex items-center justify-center gap-1 font-mono text-[9px]"
           >
-            УБРАТЬ
+            {t("loop.remove")}
           </button>
         </div>
 
         {processing && (
           <div className="text-center font-mono text-[9px] text-[var(--color-accent-vocal)] animate-pulse mt-1">
-            обрабатываем…
+            {t("loop.processing")}
           </div>
         )}
       </div>

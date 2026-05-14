@@ -10,6 +10,7 @@ import {
 } from "@tabler/icons-react";
 import type { StemEngine } from "@/lib/audio-engine";
 import type { StemKey } from "@/lib/manifest";
+import { useI18n, type I18nKey } from "@/lib/i18n";
 
 interface Props {
   engineRef: RefObject<StemEngine | null>;
@@ -22,14 +23,14 @@ interface Props {
   onExpand?: () => void;
 }
 
-const LABEL: Record<StemKey, string> = {
-  vocals: "Вокал",
-  drums: "Ударные",
-  bass: "Бас",
-  guitar: "Гитара",
-  piano: "Пиано",
-  other: "Прочее",
-  music: "Музыка",
+const LABEL_KEY: Record<StemKey, I18nKey> = {
+  vocals: "stems.vocals",
+  drums: "stems.drums",
+  bass: "stems.bass",
+  guitar: "stems.guitar",
+  piano: "stems.piano",
+  other: "stems.other",
+  music: "stems.music",
 };
 
 interface StemState {
@@ -38,6 +39,7 @@ interface StemState {
 }
 
 export function StemMixer({ engineRef, stems, ready, vocalsMuted, onToggleVocals, isExpanded, isExpanding, onExpand }: Props) {
+  const { t } = useI18n();
   const [state, setState] = useState<Record<string, StemState>>(() =>
     Object.fromEntries(stems.map((k) => [k, { volume: 1, muted: false }])),
   );
@@ -147,7 +149,7 @@ export function StemMixer({ engineRef, stems, ready, vocalsMuted, onToggleVocals
           type="button"
           disabled={!ready}
           onClick={onMute}
-          title={muted ? "Включить дорожку" : "Выключить дорожку"}
+          title={muted ? t("stems.enableTrack") : t("stems.disableTrack")}
           className={`p-1 rounded-full transition-colors ${
             muted
               ? "bg-[var(--color-accent-warn)]/10 text-[var(--color-accent-warn)]"
@@ -161,7 +163,7 @@ export function StemMixer({ engineRef, stems, ready, vocalsMuted, onToggleVocals
             type="button"
             disabled={!ready}
             onClick={onSolo}
-            title={isSolo ? "Снять solo" : "Слушать только эту дорожку"}
+            title={isSolo ? t("stems.removeSolo") : t("stems.soloOnly")}
             className={`p-1 rounded-full transition-colors ${
               isSolo
                 ? "bg-[var(--color-accent-vocal)]/20 text-[var(--color-accent-vocal)]"
@@ -194,7 +196,7 @@ export function StemMixer({ engineRef, stems, ready, vocalsMuted, onToggleVocals
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between mb-1">
         <span className="font-mono text-[9px] text-[var(--color-ink-faint)] tracking-widest uppercase">
-          ДОРОЖКИ
+          {t("stems.tracks")}
         </span>
         <button
           onClick={() => {
@@ -205,13 +207,13 @@ export function StemMixer({ engineRef, stems, ready, vocalsMuted, onToggleVocals
           className="font-mono text-[9px] text-[var(--color-accent-vocal)] hover:underline disabled:opacity-50 flex items-center gap-1"
         >
           {isExpanding && <IconLoader2 size={10} className="animate-spin" />}
-          {isExpanding ? "ЗАГРУЗКА…" : expanded ? "СВЕРНУТЬ" : "ВСЕ ДОРОЖКИ"}
+          {isExpanding ? t("stems.loading") : expanded ? t("stems.collapse") : t("stems.allTracks")}
         </button>
       </div>
 
       {hasVocals && renderTrack(
         "vocals",
-        LABEL.vocals,
+        t(LABEL_KEY.vocals),
         state["vocals"]?.volume ?? 1,
         vocalsMuted ?? state["vocals"]?.muted ?? false,
         solo === "vocals",
@@ -222,7 +224,7 @@ export function StemMixer({ engineRef, stems, ready, vocalsMuted, onToggleVocals
 
       {!expanded && instKeys.length > 0 && renderTrack(
         "music",
-        LABEL.music,
+        t(LABEL_KEY.music),
         instVol,
         instMuted,
         solo === "music",
@@ -234,7 +236,7 @@ export function StemMixer({ engineRef, stems, ready, vocalsMuted, onToggleVocals
       {expanded && instKeys.map((key) =>
         renderTrack(
           key,
-          LABEL[key as StemKey] || key,
+          LABEL_KEY[key as StemKey] ? t(LABEL_KEY[key as StemKey]) : key,
           state[key]?.volume ?? 1,
           state[key]?.muted ?? false,
           solo === key,

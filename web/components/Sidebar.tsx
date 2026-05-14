@@ -15,6 +15,8 @@ import {
   IconVideo,
 } from "@tabler/icons-react";
 import { deleteTrack, isTrackLimitError, submitYouTube, uploadTrack, type TrackSummary, type User } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
+import { LocaleSwitch } from "./LocaleSwitch";
 
 export const STUDENT_TRACK_LIMIT = 10;
 
@@ -30,6 +32,7 @@ interface Props {
 }
 
 export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose, onLogout, onTrackLimit }: Props) {
+  const { t: tr } = useI18n();
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +91,7 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
 
   async function onDelete(id: string, e: React.MouseEvent) {
     e.stopPropagation();
-    if (!confirm("Удалить трек?")) return;
+    if (!confirm(tr("sidebar.deleteConfirm"))) return;
     await deleteTrack(id);
     onRefresh();
   }
@@ -110,7 +113,7 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
               type="button"
               onClick={toggleTheme}
               className="text-[var(--color-ink-muted)] hover:text-[var(--color-accent-vocal)] transition-colors p-1 rounded-full hover:bg-[var(--color-surface-muted)]"
-              title={dark ? "Светлая тема" : "Темная тема"}
+              title={dark ? tr("sidebar.lightTheme") : tr("sidebar.darkTheme")}
             >
               {dark ? <IconSun size={13} /> : <IconMoon size={13} />}
             </button>
@@ -122,18 +125,19 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
             {user.email}
           </div>
         </div>
-        <div className="flex items-center">
+        <div className="flex items-center gap-1">
+          <LocaleSwitch className="mr-1" />
           <button
             onClick={onLogout}
             className="p-1 rounded-md text-[var(--color-ink-muted)] hover:text-[var(--color-accent-warn)] hover:bg-[var(--color-surface-muted)] transition-colors"
-            title="Выйти"
+            title={tr("sidebar.logout")}
           >
             <IconLogout size={17} />
           </button>
           <button
             onClick={onClose}
             className="p-1 rounded-md text-[var(--color-ink-muted)] hover:text-ink hover:bg-[var(--color-surface-muted)] transition-colors"
-            title="Скрыть боковую панель"
+            title={tr("sidebar.hideSidebar")}
           >
             <IconChevronLeft size={20} />
           </button>
@@ -152,7 +156,7 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
           }}
         >
           <IconUpload size={16} />
-          <span>{busy ? "загружаем…" : "загрузить аудио"}</span>
+          <span>{busy ? tr("sidebar.uploading") : tr("sidebar.uploadAudio")}</span>
           <input
             type="file"
             accept="audio/*,video/*"
@@ -183,7 +187,7 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
             onClick={onUrl}
             disabled={busy || !url.trim()}
             className="w-7 h-7 rounded-md border border-[var(--color-ink)] text-[var(--color-ink)] disabled:opacity-30 flex items-center justify-center hover:bg-[var(--color-ink)] hover:text-[var(--color-surface)] transition-colors"
-            title="Добавить YouTube"
+            title={tr("sidebar.addYoutube")}
           >
             <IconArrowRight size={15} />
           </button>
@@ -195,7 +199,7 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
         )}
         {!unlimited && (
           <div className="font-mono text-[10px] text-[var(--color-ink-faint)]">
-            тестовый лимит: {tracks.length}/{STUDENT_TRACK_LIMIT}
+            {tr("sidebar.testLimitPrefix")} {tracks.length}/{STUDENT_TRACK_LIMIT}
           </div>
         )}
       </div>
@@ -203,13 +207,13 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
       {/* List */}
       <div className="flex items-center justify-between px-5 py-2 border-b border-[var(--color-border-soft)]">
         <div className="font-mono text-[10px] tracking-[0.08em] text-[var(--color-ink-muted)]">
-          ТРЕКИ · {unlimited ? tracks.length : `${tracks.length}/${STUDENT_TRACK_LIMIT}`}
+          {tr("sidebar.tracksPrefix")} · {unlimited ? tracks.length : `${tracks.length}/${STUDENT_TRACK_LIMIT}`}
         </div>
         <button
           type="button"
           onClick={onRefresh}
           className="text-[var(--color-ink-muted)] hover:text-ink"
-          title="Обновить"
+          title={tr("sidebar.refresh")}
         >
           <IconRefresh size={14} />
         </button>
@@ -217,7 +221,7 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
       <div className="flex-1 overflow-y-auto thin-scroll">
         {tracks.length === 0 && (
           <div className="px-5 py-6 font-mono text-[11px] text-[var(--color-ink-faint)]">
-            пока пусто — загрузите первый трек
+            {tr("sidebar.empty")}
           </div>
         )}
         {tracks.map((t) => {
@@ -263,7 +267,7 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
                 type="button"
                 onClick={(e) => onDelete(t.id, e)}
                 className="opacity-0 group-hover:opacity-100 text-[var(--color-ink-faint)] hover:text-[var(--color-accent-warn)] mt-0.5"
-                title="Удалить"
+                title={tr("sidebar.delete")}
               >
                 <IconTrash size={13} />
               </button>
@@ -276,6 +280,7 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
 }
 
 function MediaBadge({ hasVideo }: { hasVideo: boolean }) {
+  const { t } = useI18n();
   return (
     <span
       className={`shrink-0 inline-flex items-center gap-1 rounded-sm border px-1 py-[1px] text-[8px] leading-none tracking-[0.06em] ${
@@ -283,7 +288,7 @@ function MediaBadge({ hasVideo }: { hasVideo: boolean }) {
           ? "border-[var(--color-accent-vocal)]/35 text-[var(--color-accent-vocal)] bg-[var(--color-accent-vocal-50)]"
           : "border-[var(--color-border-soft)] text-[var(--color-ink-muted)] bg-[var(--color-surface)]"
       }`}
-      title={hasVideo ? "Есть видео для караоке" : "Только аудио"}
+      title={hasVideo ? t("sidebar.hasVideo") : t("sidebar.audioOnly")}
     >
       {hasVideo ? <IconVideo size={9} /> : <IconMusic size={9} />}
       {hasVideo ? "VIDEO" : "AUDIO"}

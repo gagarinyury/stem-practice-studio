@@ -24,6 +24,7 @@ import { Timeline } from "./Timeline";
 import { LyricsPanel } from "./LyricsPanel";
 import { LoopControls } from "./LoopControls";
 import { KaraokeOverlay } from "./KaraokeOverlay";
+import { useI18n, type I18nKey } from "@/lib/i18n";
 
 const STEM_ORDER: StemKey[] = ["vocals", "drums", "bass", "guitar", "piano", "other"];
 
@@ -42,6 +43,7 @@ export interface LoopRange {
 }
 
 export function TrackView({ manifest: initialManifest, aligned: initialAligned, processingTrack, onProcessingDone }: Props) {
+  const { t } = useI18n();
   const engineRef = useRef<StemEngine | null>(null);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -92,7 +94,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
   }, [isProcessing]);
   // Use engine-derived duration when manifest has none (processing mode)
   const effectiveDuration = manifest.duration || engineDuration;
-  const lyricsNotice = getLyricsNotice(manifest);
+  const lyricsNotice = getLyricsNotice(manifest, t);
   const lrcCandidates = manifest.lrc?.candidates ?? [];
   const showManualLyricsTools = !!manifest.aligned?.asr_only || (!!manifest.lrc?.reason && !manifest.lrc?.found);
   const showLrcCandidates = showManualLyricsTools && lrcCandidates.length > 0;
@@ -137,7 +139,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
                 setReady(true);
               }
             } catch {
-              if (!cancelled) setLoadError("Не удалось загрузить аудио");
+              if (!cancelled) setLoadError(t("track.loadAudioError"));
             }
             return;
           }
@@ -452,12 +454,12 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
             {!ready && !loadError && (
               <div className="px-4 py-1.5 font-mono text-[11px] bg-[var(--color-surface-muted)] text-[var(--color-ink-muted)] rounded-md animate-pulse flex items-center gap-2 border border-[var(--color-border-soft)]">
                 <IconLoader2 size={14} className="animate-spin" />
-                {isProcessing ? "загрузка оригинала…" : "скачивание и распаковка аудио…"}
+                {isProcessing ? t("track.loadingOriginal") : t("track.downloadingAudio")}
               </div>
             )}
             {loadError && (
               <div className="px-4 py-1 font-mono text-[11px] text-[var(--color-accent-warn)]">
-                ошибка загрузки: {loadError}
+                {t("track.loadErrorPrefix")} {loadError}
               </div>
             )}
             {aligned && (
@@ -467,7 +469,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
                 className="font-mono text-[11px] tracking-[0.06em] px-4 py-2 rounded-lg bg-[var(--color-accent-vocal-50)] text-[var(--color-accent-vocal)] hover:bg-[var(--color-accent-vocal)] hover:text-white transition-colors shadow-sm font-bold flex items-center gap-2"
               >
                 <IconArrowsMaximize size={16} />
-                КАРАОКЕ
+                {t("track.karaoke")}
               </button>
             )}
             {/* Mobile-only mixer toggle (on desktop the mixer column is always visible) */}
@@ -475,10 +477,10 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
               type="button"
               onClick={() => setMixerOpen(true)}
               className="md:hidden font-mono text-[11px] tracking-[0.06em] px-4 py-2 rounded-lg bg-[var(--color-accent-vocal-50)] text-[var(--color-accent-vocal)] hover:bg-[var(--color-accent-vocal)] hover:text-white transition-colors shadow-sm font-bold flex items-center gap-2"
-              title="Микшер"
+              title={t("track.mixer")}
             >
               <IconAdjustmentsHorizontal size={16} />
-              МИКШЕР
+              {t("track.mixerShort")}
             </button>
           </div>
         </div>
@@ -492,7 +494,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
                   {showLrcCandidates && (
                     <>
                       <div className="font-mono text-[11px] text-[var(--color-ink-muted)] mb-2">
-                        AI сомневается. Возможно, это этот трек:
+                        {t("track.aiDoubts")}
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {lrcCandidates.map((candidate) => (
@@ -502,13 +504,13 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
                             onClick={() => confirmLrcCandidate(candidate.id)}
                             disabled={acceptingCandidate != null || manualSearchBusy}
                             className="max-w-full rounded-md border border-[var(--color-border-soft)] bg-[var(--color-surface-muted)] px-3 py-2 text-left hover:border-[var(--color-accent-vocal)] disabled:opacity-50"
-                            title="Принять этот LRCLib текст"
+                            title={t("track.acceptLrclib")}
                           >
                             <div className="font-mono text-[11px] text-ink truncate">
-                              {acceptingCandidate === candidate.id ? "Загружаю текст..." : `${candidate.artist} - ${candidate.title}`}
+                              {acceptingCandidate === candidate.id ? t("track.loadingLyrics") : `${candidate.artist} - ${candidate.title}`}
                             </div>
                             <div className="font-mono text-[10px] text-[var(--color-ink-faint)]">
-                              {candidate.synced ? "с таймингами" : "без таймингов"}{candidate.duration ? ` · ${fmtDur(candidate.duration)}` : ""}
+                              {candidate.synced ? t("track.synced") : t("track.noSync")}{candidate.duration ? ` · ${fmtDur(candidate.duration)}` : ""}
                             </div>
                           </button>
                         ))}
@@ -517,19 +519,19 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
                   )}
                   <form onSubmit={submitManualLyricsSearch} className={`${showLrcCandidates ? "mt-3 pt-3 border-t border-[var(--color-border-soft)]" : ""}`}>
                     <div className="font-mono text-[11px] text-[var(--color-ink-muted)] mb-2">
-                      Не тот вариант? Введите название песни.
+                      {t("track.wrongVariant")}
                     </div>
                     <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto] gap-2">
                       <input
                         value={manualTitle}
                         onChange={(ev) => setManualTitle(ev.target.value)}
-                        placeholder="Название"
+                        placeholder={t("track.titlePlaceholder")}
                         className="min-w-0 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-paper)] px-3 py-2 font-mono text-[11px] text-ink outline-none focus:border-[var(--color-accent-vocal)]"
                       />
                       <input
                         value={manualArtist}
                         onChange={(ev) => setManualArtist(ev.target.value)}
-                        placeholder="Исполнитель (необязательно)"
+                        placeholder={t("track.artistPlaceholder")}
                         className="min-w-0 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-paper)] px-3 py-2 font-mono text-[11px] text-ink outline-none focus:border-[var(--color-accent-vocal)]"
                       />
                       <button
@@ -538,7 +540,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
                         className="rounded-md bg-[var(--color-accent-vocal)] px-3 py-2 font-mono text-[11px] font-bold text-white disabled:opacity-50 flex items-center gap-2"
                       >
                         {manualSearchBusy ? <IconLoader2 size={14} className="animate-spin" /> : <IconSearch size={14} />}
-                        Найти
+                        {t("track.find")}
                       </button>
                     </div>
                   </form>
@@ -569,14 +571,14 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
                   <>
                     <IconLoader2 size={32} className="animate-spin text-[var(--color-accent-vocal)] mx-auto mb-4 opacity-60" />
                     <div className="font-mono text-[12px] text-[var(--color-ink-muted)] mb-2">
-                      {progressEvent?.stage === "separate" ? "Нейросеть разделяет инструменты…" :
-                       progressEvent?.stage === "asr" ? "Распознаём текст…" :
-                       progressEvent?.stage === "align" ? "Синхронизируем слова…" :
-                       progressEvent?.stage === "lrclib" ? "Ищем официальный текст…" :
-                       "Подготовка текста…"}
+                      {progressEvent?.stage === "separate" ? t("track.stageSeparating") :
+                       progressEvent?.stage === "asr" ? t("track.stageRecognizing") :
+                       progressEvent?.stage === "align" ? t("track.stageSyncing") :
+                       progressEvent?.stage === "lrclib" ? t("track.stageSearchingLrclib") :
+                       t("track.stagePreparingLyrics")}
                     </div>
                     <div className="font-mono text-[11px] text-[var(--color-ink-faint)] mb-4">
-                      Прошло: {processingSeconds} сек.
+                      {t("track.elapsed", { seconds: processingSeconds })}
                     </div>
                     {progressEvent?.pct != null && (
                       <div className="w-48 mx-auto h-1 bg-[var(--color-surface-muted)] rounded-full overflow-hidden">
@@ -612,17 +614,17 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
                     ? "bg-[var(--color-accent-vocal)] text-white"
                     : "bg-[var(--color-accent-vocal-50)] text-[var(--color-accent-vocal)]"
                 }`}
-                title={vocalsMuted ? "Вокал выключен — включить" : "Заглушить вокал"}
+                title={vocalsMuted ? t("track.vocalsOffEnable") : t("track.muteVocals")}
               >
                 {vocalsMuted ? <IconMicrophoneOff size={16} /> : <IconMicrophone size={16} />}
-                <span className="lowercase">{vocalsMuted ? "вокал оф" : "вокал он"}</span>
+                <span className="lowercase">{vocalsMuted ? t("track.vocalsOff") : t("track.vocalsOn")}</span>
               </button>
               {loop && (
                 <button
                   type="button"
                   onClick={jumpToLoopStart}
                   className="text-[var(--color-ink-muted)] hover:text-[var(--color-accent-vocal)] transition-colors p-2"
-                  title="К началу loop"
+                  title={t("track.toLoopStart")}
                 >
                   <IconPlayerTrackPrevFilled size={20} />
                 </button>
@@ -687,14 +689,14 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
       >
         <div className="p-4 flex items-center justify-between md:block">
           <h3 className="font-serif italic text-[18px] text-ink flex items-center gap-2">
-            Микшер
+            {t("track.mixer")}
           </h3>
           {/* Mobile-only close button */}
           <button
             type="button"
             onClick={() => setMixerOpen(false)}
             className="md:hidden p-1 text-[var(--color-ink-muted)] hover:text-ink"
-            title="Закрыть"
+            title={t("track.closeBtn")}
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
@@ -720,10 +722,10 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
             <div className="rounded-lg border border-dashed border-[var(--color-ink-faint)] bg-[var(--color-surface)]/50 px-4 py-8 text-center">
               <IconLoader2 size={20} className="animate-spin text-[var(--color-accent-vocal)] mx-auto mb-3 opacity-60" />
               <div className="font-mono text-[11px] text-[var(--color-ink-muted)]">
-                Нейросеть разделяет трек на дорожки…
+                {t("track.separating")}
               </div>
               <div className="font-mono text-[11px] text-[var(--color-ink-faint)] mt-1">
-                Прошло: {processingSeconds} сек.
+                {t("track.elapsed", { seconds: processingSeconds })}
               </div>
               {progressEvent?.pct != null && progressEvent.pct < 70 && (
                 <div className="w-full mt-3 h-1 bg-[var(--color-surface-muted)] rounded-full overflow-hidden">
@@ -738,7 +740,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
 
         <div className="p-4">
           <h3 className="font-serif italic text-[18px] mb-3 text-ink">
-            Фрагмент
+            {t("track.fragmentLabel")}
           </h3>
           {loop ? (
             <LoopControls
@@ -760,7 +762,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
               <div className="mb-2 text-[var(--color-ink-faint)]">
                 <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path></svg>
               </div>
-              Выделите слова в lyrics или растяните диапазон на таймлайне → появятся темп / тон / loop
+              {t("track.selectWordsHint")}
             </div>
           )}
         </div>
@@ -793,25 +795,29 @@ function fmtT(s: number): string {
   return fmtDur(s);
 }
 
-function getLyricsNotice(manifest: Manifest): { label: string; className: string } | null {
+function getLyricsNotice(
+  manifest: Manifest,
+  t: (key: I18nKey) => string,
+): { label: string; className: string } | null {
   const reason = manifest.aligned?.reason || manifest.lrc?.reason;
   if (manifest.aligned?.partial || manifest.lrc?.partial) {
     return {
-      label: "частичный текст: показан только совпавший фрагмент",
+      label: t("lyrics.partialMatch"),
       className: "border-[var(--color-accent-vocal-100)] bg-[var(--color-accent-vocal-50)] text-[var(--color-accent-vocal-700)]",
     };
   }
   if (!manifest.aligned?.asr_only && !reason) return null;
-  const labels: Record<string, string> = {
-    lrclib_not_found: "Текст не найден автоматически",
-    lrclib_rejected_low_match: "AI сомневается: можно выбрать найденный текст",
-    script_mismatch: "AI сомневается: найденный текст не похож на запись",
-    unsupported_or_weak_asr_language: "AI сомневается: можно выбрать найденный текст",
-    partial_cover_available: "частичный текст: показан только совпавший фрагмент",
-    user_confirmed_lrc: "текст выбран вручную: тайминги приблизительные",
+  const labels: Record<string, I18nKey> = {
+    lrclib_not_found: "lyrics.notFound",
+    lrclib_rejected_low_match: "lyrics.aiDoubtsCanPick",
+    script_mismatch: "lyrics.scriptMismatch",
+    unsupported_or_weak_asr_language: "lyrics.aiDoubtsCanPick",
+    partial_cover_available: "lyrics.partialMatch",
+    user_confirmed_lrc: "lyrics.userConfirmed",
   };
+  const key = labels[String(reason)];
   return {
-    label: labels[String(reason)] || "Показан распознанный текст",
+    label: key ? t(key) : t("lyrics.recognized"),
     className: "border-[var(--color-border-soft)] bg-[var(--color-surface-muted)] text-[var(--color-ink-muted)]",
   };
 }

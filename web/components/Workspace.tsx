@@ -8,10 +8,12 @@ import { FeedbackModal } from "./FeedbackModal";
 import { TrackLimitModal } from "./TrackLimitModal";
 import { getMe, getTrack, getAligned, listTracks, logout, type TrackSummary, type User } from "@/lib/api";
 import type { AlignedLyrics, Manifest } from "@/lib/manifest";
+import { useI18n } from "@/lib/i18n";
 
 type FeedbackStatus = "pending" | "dismissed" | "submitted";
 
 export function Workspace() {
+  const { t } = useI18n();
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [tracks, setTracks] = useState<TrackSummary[]>([]);
@@ -96,7 +98,7 @@ export function Workspace() {
           return;
         }
         if (m.status === "failed") {
-          setTrackError(`Ошибка обработки: ${m.error || "неизвестная ошибка"}`);
+          setTrackError(t("processing.error", { error: m.error || t("processing.unknownError") }));
           setManifest(null);
           setAligned(null);
           return;
@@ -136,7 +138,7 @@ export function Workspace() {
   }
 
   if (authLoading) {
-    return <CenterMsg text="Проверяем вход…" />;
+    return <CenterMsg text={t("workspace.checkingAuth")} />;
   }
 
   if (!user) {
@@ -192,12 +194,12 @@ export function Workspace() {
         {selectedId == null ? (
           <EmptyState />
         ) : loadingTrack ? (
-          <CenterMsg text="Загрузка манифеста…" />
+          <CenterMsg text={t("workspace.loadingManifest")} />
         ) : processingTrack ? (
           <TrackView
             manifest={{
               id: processingTrack.id,
-              title: processingTrack.title || "Обработка…",
+              title: processingTrack.title || t("processing.short"),
               artist: processingTrack.artist || "",
               url: processingTrack.url || "",
               duration: processingTrack.duration || 0,
@@ -251,12 +253,13 @@ export function Workspace() {
 }
 
 function EmptyState() {
+  const { t } = useI18n();
   return (
     <div className="flex-1 flex items-center justify-center">
       <div className="text-center max-w-md px-8">
         <div className="text-[44px] leading-tight font-serif italic mb-3">stem studio</div>
         <div className="text-[14px] text-[var(--color-ink-muted)] font-mono">
-          выбери трек слева или загрузи новый
+          {t("workspace.selectTrack")}
         </div>
       </div>
     </div>

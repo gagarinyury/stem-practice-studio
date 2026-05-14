@@ -1,5 +1,18 @@
 import { useEffect, useState } from "react";
 import { subscribeProgress, type TrackSummary, type ProgressEvent } from "@/lib/api";
+import { useI18n, type I18nKey } from "@/lib/i18n";
+
+const STAGE_KEYS: Record<string, I18nKey> = {
+  queued: "processing.stage.queued",
+  resolve_input: "processing.stage.resolve_input",
+  identify: "processing.stage.identify",
+  separate: "processing.stage.separate",
+  asr: "processing.stage.asr",
+  lrclib: "processing.stage.lrclib",
+  align: "processing.stage.align",
+  manifest: "processing.stage.manifest",
+  done: "processing.stage.done",
+};
 
 interface Props {
   track: TrackSummary;
@@ -7,6 +20,7 @@ interface Props {
 }
 
 export function ProcessingScreen({ track, onDone }: Props) {
+  const { t } = useI18n();
   const [event, setEvent] = useState<ProgressEvent | null>(null);
 
   useEffect(() => {
@@ -49,26 +63,19 @@ export function ProcessingScreen({ track, onDone }: Props) {
         </div>
 
         <h2 className="text-[20px] font-serif italic text-ink text-center mb-2">
-          {track.title || "Обработка трека"}
+          {track.title || t("processing.title")}
         </h2>
 
         {isError ? (
           <div className="text-[12px] font-mono text-[var(--color-accent-warn)] text-center">
-            {event?.message || track.error || "Произошла ошибка при обработке"}
+            {event?.message || track.error || t("processing.defaultError")}
           </div>
         ) : (
           <>
             <div className="text-[12px] font-mono text-[var(--color-ink-muted)] text-center mb-6 h-4">
-              {stage === "queued" && "В очереди..."}
-              {stage === "resolve_input" && "Скачивание исходника..."}
-              {stage === "identify" && "Распознавание трека..."}
-              {stage === "separate" && "Разделение на стемы (это займет время)..."}
-              {stage === "asr" && "Распознавание текста..."}
-              {stage === "lrclib" && "Поиск официальных текстов..."}
-              {stage === "align" && "Синхронизация слов..."}
-              {stage === "manifest" && "Финализация..."}
-              {stage === "done" && "Готово! Загружаем..."}
-              {!["queued", "resolve_input", "identify", "separate", "asr", "lrclib", "align", "manifest", "done"].includes(stage) && `Обработка: ${stage}...`}
+              {STAGE_KEYS[stage]
+                ? t(STAGE_KEYS[stage])
+                : t("processing.stage.unknown", { stage })}
             </div>
 
             <div className="w-full h-1 bg-[var(--color-surface-muted)] rounded-full overflow-hidden">

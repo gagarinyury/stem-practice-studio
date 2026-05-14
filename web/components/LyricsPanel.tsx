@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AlignedLyrics, AlignedWord } from "@/lib/manifest";
+import { useI18n } from "@/lib/i18n";
 
 interface Props {
   aligned: AlignedLyrics;
@@ -27,6 +28,7 @@ export function LyricsPanel({
   onSeekWord,
   onClearSelection,
 }: Props) {
+  const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragStartPos = useRef<{ x: number; y: number } | null>(null);
@@ -218,7 +220,7 @@ export function LyricsPanel({
         ))}
         {lines.length === 0 && (
           <div className="font-mono text-[12px] text-[var(--color-ink-muted)]">
-            нет lyrics для этого трека
+            {t("lyrics.noLyrics")}
           </div>
         )}
       </div>

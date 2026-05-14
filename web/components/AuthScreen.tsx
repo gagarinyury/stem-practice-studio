@@ -3,18 +3,22 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { IconLoader2 } from "@tabler/icons-react";
 import { login, register, type User } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
+import { LocaleSwitch } from "./LocaleSwitch";
 
 interface Props {
   onAuth: (user: User) => void;
 }
 
 export function AuthScreen({ onAuth }: Props) {
+  const { t } = useI18n();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showForgot, setShowForgot] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -29,11 +33,11 @@ export function AuthScreen({ onAuth }: Props) {
     const normalizedEmail = email.trim();
     if (!normalizedEmail || busy) return;
     if (password.length < 8) {
-      setError("Пароль должен быть не короче 8 символов");
+      setError(t("auth.passwordTooShort"));
       return;
     }
     if (mode === "register" && !inviteCode.trim()) {
-      setError("Введите код доступа");
+      setError(t("auth.enterAccessCode"));
       return;
     }
 
@@ -45,7 +49,7 @@ export function AuthScreen({ onAuth }: Props) {
         : await register(normalizedEmail, password, inviteCode.trim());
       onAuth(result.user);
     } catch (err) {
-      setError(humanAuthError(err));
+      setError(humanAuthError(err, t));
     } finally {
       setBusy(false);
     }
@@ -53,6 +57,9 @@ export function AuthScreen({ onAuth }: Props) {
 
   return (
     <main className="min-h-screen bg-[var(--color-paper)] text-ink flex items-center justify-center px-6">
+      <div className="absolute top-4 right-4">
+        <LocaleSwitch />
+      </div>
       <div className="w-full max-w-[360px]">
         <div className="mb-7">
           <div className="text-[42px] leading-none font-serif italic">stem studio</div>
@@ -68,14 +75,14 @@ export function AuthScreen({ onAuth }: Props) {
               onClick={() => setMode("login")}
               className={`rounded px-3 py-2 font-mono text-[11px] transition-colors ${mode === "login" ? "bg-[var(--color-surface)] text-ink shadow-sm" : "text-[var(--color-ink-muted)]"}`}
             >
-              Вход
+              {t("auth.login")}
             </button>
             <button
               type="button"
               onClick={() => setMode("register")}
               className={`rounded px-3 py-2 font-mono text-[11px] transition-colors ${mode === "register" ? "bg-[var(--color-surface)] text-ink shadow-sm" : "text-[var(--color-ink-muted)]"}`}
             >
-              Регистрация
+              {t("auth.register")}
             </button>
           </div>
 
@@ -95,7 +102,7 @@ export function AuthScreen({ onAuth }: Props) {
 
             <label className="block">
               <div className="mb-1 font-mono text-[10px] tracking-[0.08em] text-[var(--color-ink-muted)]">
-                ПАРОЛЬ
+                {t("auth.password")}
               </div>
               <input
                 type="password"
@@ -105,20 +112,20 @@ export function AuthScreen({ onAuth }: Props) {
                 className="w-full rounded-md border border-[var(--color-border-soft)] bg-[var(--color-paper)] px-3 py-2.5 font-mono text-[13px] outline-none focus:border-[var(--color-accent-vocal)]"
               />
               <div className="mt-1 font-mono text-[10px] text-[var(--color-ink-faint)]">
-                Минимум 8 символов
+                {t("auth.passwordHint")}
               </div>
             </label>
 
             {mode === "register" && (
               <div className="rounded-md border border-[var(--color-border-soft)] bg-[var(--color-paper)] px-3 py-2 font-mono text-[10px] leading-relaxed text-[var(--color-ink-muted)]">
-                Регистрация сейчас закрыта для случайных пользователей. Введите код сообщества, чтобы создать аккаунт.
+                {t("auth.registrationClosed")}
               </div>
             )}
 
             {mode === "register" && (
               <label className="block">
                 <div className="mb-1 font-mono text-[10px] tracking-[0.08em] text-[var(--color-ink-muted)]">
-                  КОД ДОСТУПА
+                  {t("auth.accessCode")}
                 </div>
                 <input
                   type="text"
@@ -128,7 +135,7 @@ export function AuthScreen({ onAuth }: Props) {
                   className="w-full rounded-md border border-[var(--color-border-soft)] bg-[var(--color-paper)] px-3 py-2.5 font-mono text-[13px] outline-none focus:border-[var(--color-accent-vocal)]"
                 />
                 <div className="mt-1 font-mono text-[10px] leading-relaxed text-[var(--color-ink-faint)]">
-                  Доступ пока по приглашению. Если хотите попробовать, напишите в WhatsApp.
+                  {t("auth.inviteOnly")}
                 </div>
               </label>
             )}
@@ -145,15 +152,27 @@ export function AuthScreen({ onAuth }: Props) {
               className="w-full rounded-md bg-[var(--color-accent-vocal)] px-4 py-2.5 font-mono text-[12px] font-bold text-white disabled:opacity-40 flex items-center justify-center gap-2"
             >
               {busy && <IconLoader2 size={14} className="animate-spin" />}
-              {mode === "login" ? "Войти" : "Создать аккаунт"}
+              {mode === "login" ? t("auth.signIn") : t("auth.createAccount")}
             </button>
           </form>
 
           <div className="mt-4 border-t border-[var(--color-border-soft)] pt-3 font-mono text-[10px] leading-relaxed text-[var(--color-ink-muted)]">
-            Забыли пароль? Напишите в WhatsApp:{" "}
-            <a className="text-[var(--color-accent-vocal)]" href="https://wa.me/33755209758">
-              +33 7 55 20 97 58
-            </a>
+            {showForgot ? (
+              <span>
+                {t("auth.forgotPasswordReveal")}{" "}
+                <a className="text-[var(--color-accent-vocal)]" href="https://wa.me/33755209758">
+                  +33 7 55 20 97 58
+                </a>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowForgot(true)}
+                className="text-[var(--color-accent-vocal)] hover:underline"
+              >
+                {t("auth.forgotPassword")}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -161,12 +180,12 @@ export function AuthScreen({ onAuth }: Props) {
   );
 }
 
-function humanAuthError(err: unknown): string {
+function humanAuthError(err: unknown, t: ReturnType<typeof useI18n>["t"]): string {
   const text = err instanceof Error ? err.message : String(err);
-  if (text.includes("401")) return "Неверный email или пароль";
-  if (text.includes("403")) return "Неверный код доступа";
-  if (text.includes("503")) return "Регистрация временно закрыта";
-  if (text.includes("409")) return "Этот email уже зарегистрирован";
-  if (text.includes("400")) return "Проверьте email и пароль";
+  if (text.includes("401")) return t("auth.invalidCredentials");
+  if (text.includes("403")) return t("auth.invalidAccessCode");
+  if (text.includes("503")) return t("auth.registrationTemporarilyClosed");
+  if (text.includes("409")) return t("auth.emailAlreadyExists");
+  if (text.includes("400")) return t("auth.checkEmailPassword");
   return text;
 }

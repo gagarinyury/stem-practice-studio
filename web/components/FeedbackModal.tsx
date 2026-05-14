@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { submitFeedback } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 
 interface Props {
   trackCount: number;
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function FeedbackModal({ trackCount, onClose, onSubmitted }: Props) {
+  const { t, plural } = useI18n();
   const [rating, setRating] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -17,7 +19,7 @@ export function FeedbackModal({ trackCount, onClose, onSubmitted }: Props) {
 
   async function handleSubmit() {
     if (!rating && !message.trim()) {
-      setError("Поставь оценку или напиши пару слов.");
+      setError(t("feedback.needRatingOrComment"));
       return;
     }
     setBusy(true);
@@ -38,17 +40,17 @@ export function FeedbackModal({ trackCount, onClose, onSubmitted }: Props) {
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-[22px] font-serif italic leading-tight text-[var(--color-ink)]">
-              Как вам Stem Studio?
+              {t("feedback.heading")}
             </h2>
             <p className="mt-2 text-[13px] leading-5 text-[var(--color-ink-muted)]">
-              Вы уже обработали {trackCount} {trackWord(trackCount)}. Напишите пару слов: что удобно, что мешает, чего не хватает.
+              {t("feedback.intro", { count: trackCount, word: plural(trackCount, "track") })}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-md border border-[var(--color-border-soft)] text-[var(--color-ink-muted)] transition-colors hover:text-[var(--color-ink)]"
-            aria-label="Закрыть"
+            aria-label={t("feedback.close")}
           >
             ×
           </button>
@@ -56,7 +58,7 @@ export function FeedbackModal({ trackCount, onClose, onSubmitted }: Props) {
 
         <div className="mt-5">
           <div className="mb-2 text-[11px] uppercase tracking-[0.14em] text-[var(--color-ink-muted)]">
-            Оценка
+            {t("feedback.rating")}
           </div>
           <div className="grid grid-cols-5 gap-2">
             {[1, 2, 3, 4, 5].map((value) => (
@@ -79,7 +81,7 @@ export function FeedbackModal({ trackCount, onClose, onSubmitted }: Props) {
 
         <label className="mt-5 block">
           <span className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-[var(--color-ink-muted)]">
-            Комментарий
+            {t("feedback.comment")}
           </span>
           <textarea
             value={message}
@@ -87,7 +89,7 @@ export function FeedbackModal({ trackCount, onClose, onSubmitted }: Props) {
             maxLength={4000}
             rows={5}
             className="w-full resize-none rounded-md border border-[var(--color-border-soft)] bg-[var(--color-paper)] px-3 py-2 text-[14px] leading-5 text-[var(--color-ink)] outline-none transition-colors placeholder:text-[var(--color-ink-muted)] focus:border-[var(--color-accent-vocal)]"
-            placeholder="Например: текст появился быстро, но неудобно выбирать фрагмент..."
+            placeholder={t("feedback.placeholder")}
           />
         </label>
 
@@ -104,7 +106,7 @@ export function FeedbackModal({ trackCount, onClose, onSubmitted }: Props) {
             disabled={busy}
             className="rounded-md border border-[var(--color-border-soft)] px-4 py-2 text-[13px] text-[var(--color-ink-muted)] transition-colors hover:text-[var(--color-ink)] disabled:opacity-50"
           >
-            Позже
+            {t("feedback.later")}
           </button>
           <button
             type="button"
@@ -112,18 +114,10 @@ export function FeedbackModal({ trackCount, onClose, onSubmitted }: Props) {
             disabled={busy}
             className="rounded-md bg-[var(--color-ink)] px-4 py-2 text-[13px] text-[var(--color-paper)] transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {busy ? "Отправляем..." : "Отправить"}
+            {busy ? t("feedback.sending") : t("feedback.send")}
           </button>
         </div>
       </section>
     </div>
   );
-}
-
-function trackWord(count: number): string {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return "трек";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "трека";
-  return "треков";
 }
