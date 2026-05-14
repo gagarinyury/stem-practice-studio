@@ -76,6 +76,10 @@ export function Workspace() {
   }, [feedbackStatus, tracks.length, user]);
 
   useEffect(() => {
+    if (selectedId) setSidebarOpen(false);
+  }, [selectedId]);
+
+  useEffect(() => {
     if (!selectedId) {
       setManifest(null);
       setAligned(null);
