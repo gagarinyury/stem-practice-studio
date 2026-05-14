@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, IBM_Plex_Mono } from "next/font/google";
+import { TelegramInit } from "@/components/TelegramInit";
 import "./globals.css";
 
 export const viewport: Viewport = {
@@ -28,7 +29,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${cormorant.variable} ${plexMono.variable} h-full antialiased`}>
-      <body className="min-h-full bg-paper text-ink">{children}</body>
+      <body className="min-h-full bg-paper text-ink">
+        <TelegramInit />
+        {children}
+      </body>
     </html>
   );
 }
