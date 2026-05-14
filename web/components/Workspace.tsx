@@ -76,10 +76,6 @@ export function Workspace() {
   }, [feedbackStatus, tracks.length, user]);
 
   useEffect(() => {
-    if (selectedId) setSidebarOpen(false);
-  }, [selectedId]);
-
-  useEffect(() => {
     if (!selectedId) {
       setManifest(null);
       setAligned(null);
@@ -149,22 +145,37 @@ export function Workspace() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[var(--color-paper)] relative">
-      {/* Sidebar Overlay/Slide */}
+      {/* Mobile backdrop when sidebar open */}
+      {sidebarOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-30 bg-black/30"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar — fixed overlay on mobile, push-flex on desktop */}
       <div
-        className={`flex-shrink-0 transition-all duration-300 ease-in-out relative z-40 ${sidebarOpen ? "w-[240px] translate-x-0" : "w-0 -translate-x-full overflow-hidden"}`}
+        className={`
+          transition-all duration-300 ease-in-out h-full z-40
+          fixed md:static inset-y-0 left-0
+          ${sidebarOpen
+            ? "translate-x-0 w-[280px] md:w-[240px]"
+            : "-translate-x-full md:translate-x-0 w-[280px] md:w-0 md:overflow-hidden"}
+        `}
       >
-        <div className="w-[240px] h-full">
-          <Sidebar
-            user={user}
-            tracks={tracks}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            onRefresh={refreshTracks}
-            onClose={() => setSidebarOpen(false)}
-            onLogout={handleLogout}
-            onTrackLimit={() => setTrackLimitOpen(true)}
-          />
-        </div>
+        <Sidebar
+          user={user}
+          tracks={tracks}
+          selectedId={selectedId}
+          onSelect={(id) => {
+            setSelectedId(id);
+            setSidebarOpen(false);
+          }}
+          onRefresh={refreshTracks}
+          onClose={() => setSidebarOpen(false)}
+          onLogout={handleLogout}
+          onTrackLimit={() => setTrackLimitOpen(true)}
+        />
       </div>
 
       <main className="flex-1 flex flex-col min-w-0 border-l border-[var(--color-border-soft)] relative">

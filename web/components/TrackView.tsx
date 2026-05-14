@@ -10,6 +10,9 @@ import {
   IconPlayerTrackPrevFilled,
   IconLoader2,
   IconSearch,
+  IconMicrophone,
+  IconMicrophoneOff,
+  IconAdjustmentsHorizontal,
 } from "@tabler/icons-react";
 import { StemEngine } from "@/lib/audio-engine";
 import type { AlignedLyrics, AlignedWord, Manifest, StemKey } from "@/lib/manifest";
@@ -50,6 +53,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
   const [pitch, setPitch] = useState(0);
   const [stretchBusy, setStretchBusy] = useState(false);
   const [karaokeOpen, setKaraokeOpen] = useState(false);
+  const [mixerOpen, setMixerOpen] = useState(false); // mobile only — on desktop mixer is always visible
   const [vocalsMuted, setVocalsMuted] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [expanding, setExpanding] = useState(false);
@@ -466,6 +470,16 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
                 КАРАОКЕ
               </button>
             )}
+            {/* Mobile-only mixer toggle (on desktop the mixer column is always visible) */}
+            <button
+              type="button"
+              onClick={() => setMixerOpen(true)}
+              className="md:hidden font-mono text-[11px] tracking-[0.06em] px-4 py-2 rounded-lg bg-[var(--color-accent-vocal-50)] text-[var(--color-accent-vocal)] hover:bg-[var(--color-accent-vocal)] hover:text-white transition-colors shadow-sm font-bold flex items-center gap-2"
+              title="Микшер"
+            >
+              <IconAdjustmentsHorizontal size={16} />
+              МИКШЕР
+            </button>
           </div>
         </div>
 
@@ -588,6 +602,20 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
 
           <div className="mt-6 flex items-center justify-between">
             <div className="flex items-center gap-4">
+              {/* Mobile-only vocal mute toggle (desktop uses the mixer column instead) */}
+              <button
+                type="button"
+                onClick={toggleVocals}
+                disabled={!ready}
+                className={`md:hidden font-mono text-[11px] tracking-[0.06em] px-3 py-2 rounded-lg shadow-sm font-bold flex items-center gap-2 transition-colors disabled:opacity-30 ${
+                  vocalsMuted
+                    ? "bg-[var(--color-accent-vocal)] text-white"
+                    : "bg-[var(--color-accent-vocal-50)] text-[var(--color-accent-vocal)]"
+                }`}
+                title={vocalsMuted ? "Вокал выключен — включить" : "Заглушить вокал"}
+              >
+                {vocalsMuted ? <IconMicrophoneOff size={16} /> : <IconMicrophone size={16} />}
+              </button>
               {loop && (
                 <button
                   type="button"
@@ -638,12 +666,39 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
         </div>
       </div>
 
-      {/* Right Column: StemMixer and LoopControls */}
-      <div className="w-[240px] flex-shrink-0 flex flex-col border-l border-[var(--color-border-soft)] bg-[var(--color-surface-muted)] overflow-y-auto thin-scroll z-20">
-        <div className="p-4">
-          <h3 className="font-serif italic text-[18px] mb-3 text-ink flex items-center gap-2">
+      {/* Mobile-only backdrop when mixer is open */}
+      {mixerOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-30 bg-black/30"
+          onClick={() => setMixerOpen(false)}
+        />
+      )}
+
+      {/* Right Column: StemMixer and LoopControls.
+          Desktop: static push (always visible). Mobile: fixed overlay, toggle via header button. */}
+      <div
+        className={`
+          flex flex-col border-l border-[var(--color-border-soft)] bg-[var(--color-surface-muted)] overflow-y-auto thin-scroll z-40
+          md:static md:translate-x-0 md:w-[240px] md:max-w-none md:flex-shrink-0 md:transition-none
+          fixed inset-y-0 right-0 w-[300px] max-w-[85vw] transition-transform duration-300 ease-in-out
+          ${mixerOpen ? "translate-x-0" : "translate-x-full md:translate-x-0"}
+        `}
+      >
+        <div className="p-4 flex items-center justify-between md:block">
+          <h3 className="font-serif italic text-[18px] text-ink flex items-center gap-2">
             Микшер
           </h3>
+          {/* Mobile-only close button */}
+          <button
+            type="button"
+            onClick={() => setMixerOpen(false)}
+            className="md:hidden p-1 text-[var(--color-ink-muted)] hover:text-ink"
+            title="Закрыть"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+        <div className="p-4 pt-0">
           {hasStemFiles ? (
             <StemMixer
               engineRef={engineRef}

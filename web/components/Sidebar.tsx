@@ -101,7 +101,7 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
   }
 
   return (
-    <aside className="w-[240px] shrink-0 flex flex-col h-full bg-[var(--color-surface)] shadow-[4px_0_24px_rgba(0,0,0,0.02)] relative z-50">
+    <aside className="w-full h-full flex flex-col bg-[var(--color-surface)] shadow-[4px_0_24px_rgba(0,0,0,0.02)] relative z-50">
       <div className="px-4 py-3 border-b border-[var(--color-border-soft)] flex items-center justify-between">
         <div className="min-w-0">
           <div className="text-[18px] font-serif italic leading-none flex items-center gap-2">
