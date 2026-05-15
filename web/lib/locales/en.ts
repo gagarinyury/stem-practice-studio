@@ -109,6 +109,12 @@ export const en: Dict = {
     loading: "LOADING…",
     collapse: "COLLAPSE",
     allTracks: "ALL TRACKS",
+    export: "EXPORT",
+    exportInstrumental: "Instrumental",
+    exportAcapella: "Acapella",
+    exportPickAll: "All",
+    exportDownload: "Download WAV",
+    exporting: "preparing…",
   },
   track: {
     loadAudioError: "Failed to load audio",

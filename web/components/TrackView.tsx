@@ -717,6 +717,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
               isExpanded={expanded}
               isExpanding={expanding}
               onExpand={hasMusic ? handleExpand : undefined}
+              trackTitle={manifest.title}
             />
           ) : (
             <div className="rounded-lg border border-dashed border-[var(--color-ink-faint)] bg-[var(--color-surface)]/50 px-4 py-8 text-center">

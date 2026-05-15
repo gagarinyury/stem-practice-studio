@@ -105,6 +105,12 @@ export const ru = {
     loading: "ЗАГРУЗКА…",
     collapse: "СВЕРНУТЬ",
     allTracks: "ВСЕ ДОРОЖКИ",
+    export: "ЭКСПОРТ",
+    exportInstrumental: "Инструментал",
+    exportAcapella: "Акапелла",
+    exportPickAll: "Все",
+    exportDownload: "Скачать WAV",
+    exporting: "готовим…",
   },
   track: {
     loadAudioError: "Не удалось загрузить аудио",
