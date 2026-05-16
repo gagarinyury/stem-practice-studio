@@ -36,6 +36,16 @@ const LABEL_KEY: Record<StemKey, I18nKey> = {
   music: "stems.music",
 };
 
+const STEM_COLOR: Record<string, string> = {
+  vocals: "#8B5CF6",
+  drums: "#EF4444",
+  bass: "#A16207",
+  guitar: "#F97316",
+  piano: "#3B82F6",
+  other: "#6B7280",
+  music: "#0F172A",
+};
+
 interface StemState {
   volume: number;
   muted: boolean;
@@ -204,14 +214,23 @@ export function StemMixer({ engineRef, stems, ready, vocalsMuted, onToggleVocals
     onSolo?: () => void
   ) {
     const isMuted = solo ? !isSolo : muted;
+    const color = STEM_COLOR[key] || "#6B7280";
     return (
       <div
         key={key}
-        className={`flex items-center gap-2 px-2 py-1.5 rounded bg-[var(--color-surface)] border border-[var(--color-border-soft)] shadow-sm transition-opacity ${
-          isMuted ? "opacity-50" : "hover:border-[var(--color-ink-muted)] hover:shadow-md"
+        className={`flex items-center gap-2 px-2.5 py-2 rounded-md bg-[var(--color-surface)] border transition-all ${
+          isMuted
+            ? "opacity-40 border-[var(--color-border-soft)]"
+            : isSolo
+            ? "border-[var(--color-accent-vocal)] shadow-md"
+            : "border-[var(--color-border-soft)] hover:border-[var(--color-ink-muted)] hover:shadow-sm"
         }`}
       >
-        <div className="w-10 font-mono text-[9px] font-bold tracking-widest uppercase text-ink truncate" title={label}>
+        <span
+          className="shrink-0 w-2 h-2 rounded-full"
+          style={{ background: isMuted ? "transparent" : color, border: `1.5px solid ${color}` }}
+        />
+        <div className="w-12 font-mono text-[9px] font-bold tracking-[0.12em] uppercase text-ink truncate" title={label}>
           {label}
         </div>
         <button
@@ -219,13 +238,13 @@ export function StemMixer({ engineRef, stems, ready, vocalsMuted, onToggleVocals
           disabled={!ready}
           onClick={onMute}
           title={muted ? t("stems.enableTrack") : t("stems.disableTrack")}
-          className={`p-1 rounded-full transition-colors ${
+          className={`p-1.5 rounded-md transition-colors active:scale-95 ${
             muted
-              ? "bg-[var(--color-accent-warn)]/10 text-[var(--color-accent-warn)]"
+              ? "bg-[var(--color-accent-warn)]/15 text-[var(--color-accent-warn)]"
               : "text-[var(--color-ink-muted)] hover:text-ink hover:bg-[var(--color-surface-muted)]"
           }`}
         >
-          {muted ? <IconVolumeOff size={12} /> : <IconVolume size={12} />}
+          {muted ? <IconVolumeOff size={14} /> : <IconVolume size={14} />}
         </button>
         {onSolo ? (
           <button
@@ -233,16 +252,16 @@ export function StemMixer({ engineRef, stems, ready, vocalsMuted, onToggleVocals
             disabled={!ready}
             onClick={onSolo}
             title={isSolo ? t("stems.removeSolo") : t("stems.soloOnly")}
-            className={`p-1 rounded-full transition-colors ${
+            className={`p-1.5 rounded-md transition-colors active:scale-95 ${
               isSolo
                 ? "bg-[var(--color-accent-vocal)]/20 text-[var(--color-accent-vocal)]"
                 : "text-[var(--color-ink-muted)] hover:text-ink hover:bg-[var(--color-surface-muted)]"
             }`}
           >
-            {isSolo ? <IconHeadphones size={12} /> : <IconHeadphonesOff size={12} />}
+            {isSolo ? <IconHeadphones size={14} /> : <IconHeadphonesOff size={14} />}
           </button>
         ) : (
-          <div className="w-[20px]" /> // placeholder for alignment
+          <div className="w-[26px]" />
         )}
         <input
           type="range"
@@ -253,6 +272,7 @@ export function StemMixer({ engineRef, stems, ready, vocalsMuted, onToggleVocals
           disabled={!ready}
           onChange={(e) => onVolChange(Number(e.target.value))}
           className="thin-range flex-1 min-w-0 ml-1"
+          style={{ accentColor: color }}
         />
       </div>
     );

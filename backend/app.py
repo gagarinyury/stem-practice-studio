@@ -24,6 +24,7 @@ from pipeline.state import atomic_write_json, read_json
 
 RUNS_DIR = Path(os.environ.get("RUNS_DIR", "/srv/apps/stem-practice-studio/runs"))
 STUDENT_TRACK_LIMIT = int(os.environ.get("STUDENT_TRACK_LIMIT", "10"))
+DEMO_TRACK_ID = os.environ.get("DEMO_TRACK_ID", "").strip()
 CORS_ORIGINS = [
     o.strip() for o in os.environ.get(
         "CORS_ORIGINS",
@@ -104,6 +105,8 @@ def track_owner_id(track_id: str) -> str | None:
 
 
 def can_access_track(user: dict[str, Any], track_id: str) -> bool:
+    if DEMO_TRACK_ID and track_id == DEMO_TRACK_ID:
+        return True
     owner_id = track_owner_id(track_id)
     if not owner_id:
         return user.get("role") == "admin"
@@ -451,21 +454,46 @@ def healthz() -> dict:
     }
 
 
+def adopt_anon_tracks(request: Request, user_id: str) -> int:
+    anon = request.cookies.get(auth.ANON_COOKIE)
+    if not anon:
+        return 0
+    anon_id = auth.anon_actor_id(anon)
+    RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    count = 0
+    for d in RUNS_DIR.iterdir():
+        if not d.is_dir():
+            continue
+        owner = track_owner_id(d.name)
+        if owner != anon_id:
+            continue
+        for name in ("status.json", "manifest.json"):
+            path = d / name
+            data = read_json(path, {})
+            if data:
+                data["user_id"] = user_id
+                atomic_write_json(path, data)
+        count += 1
+    return count
+
+
 @app.post("/auth/register")
-def register(payload: AuthPayload, response: Response) -> dict:
+def register(payload: AuthPayload, request: Request, response: Response) -> dict:
     invite = invites.validate_invite(payload.invite_code)
     user = auth.create_user(payload.email, payload.password, invite["code"], invite["label"])
     token = auth.create_session(user["id"])
     auth.set_session_cookie(response, token)
-    return {"user": user}
+    adopted = adopt_anon_tracks(request, user["id"])
+    return {"user": user, "adopted": adopted}
 
 
 @app.post("/auth/login")
-def login(payload: AuthPayload, response: Response) -> dict:
+def login(payload: AuthPayload, request: Request, response: Response) -> dict:
     user = auth.authenticate(payload.email, payload.password)
     token = auth.create_session(user["id"])
     auth.set_session_cookie(response, token)
-    return {"user": user}
+    adopted = adopt_anon_tracks(request, user["id"])
+    return {"user": user, "adopted": adopted}
 
 
 @app.post("/auth/logout")
@@ -493,7 +521,8 @@ def submit_feedback(payload: FeedbackPayload, user: dict = Depends(auth.require_
 
 @app.post("/tracks", status_code=202)
 async def submit_track(
-    user: dict = Depends(auth.require_user),
+    request: Request,
+    actor: dict = Depends(auth.get_actor),
     file: Optional[UploadFile] = File(None),
     url: Optional[str] = Form(None),
     language: str = Form("ru"),
@@ -507,7 +536,10 @@ async def submit_track(
         raise HTTPException(400, "provide only file or url")
     if asr_engine != "parakeet":
         raise HTTPException(400, "asr_engine must be parakeet")
-    enforce_track_limit(user)
+    if actor.get("anon"):
+        auth.enforce_anon_daily_limit(actor, request)
+    else:
+        enforce_track_limit(actor)
 
     upload_stem = (file.filename or "").rsplit(".", 1)[0] if file else None
     display_title = title or upload_stem or url or "track"
@@ -525,7 +557,7 @@ async def submit_track(
 
     atomic_write_json(out_dir / "status.json", {
         "id": track_id,
-        "user_id": user["id"],
+        "user_id": actor["id"],
         "stage": "queued",
         "title": display_title,
         "artist": artist,
@@ -533,6 +565,9 @@ async def submit_track(
         "asr_engine": asr_engine,
         "updated_at": now(),
     })
+
+    if actor.get("anon"):
+        auth.increment_anon_daily(actor["id"], auth.client_ip(request))
 
     opts = RunOpts(
         out_dir=out_dir,
@@ -543,7 +578,7 @@ async def submit_track(
         artist=artist,
         title=title,
     )
-    tasks[track_id] = asyncio.create_task(start_job(track_id, opts, user["id"]))
+    tasks[track_id] = asyncio.create_task(start_job(track_id, opts, actor["id"]))
     return {"id": track_id, "status": "queued"}
 
 
@@ -553,8 +588,8 @@ def tracks(user: dict = Depends(auth.require_user)) -> list[dict]:
 
 
 @app.get("/tracks/{track_id}")
-def track(track_id: str, user: dict = Depends(auth.require_user)) -> dict:
-    require_track_access(track_id, user)
+def track(track_id: str, actor: dict = Depends(auth.get_actor)) -> dict:
+    require_track_access(track_id, actor)
     return status_for(track_id)
 
 
@@ -562,9 +597,9 @@ def track(track_id: str, user: dict = Depends(auth.require_user)) -> dict:
 async def accept_lyrics_candidate(
     track_id: str,
     candidate_id: int = Form(...),
-    user: dict = Depends(auth.require_user),
+    actor: dict = Depends(auth.get_actor),
 ) -> dict:
-    require_track_access(track_id, user)
+    require_track_access(track_id, actor)
     return await asyncio.to_thread(write_confirmed_lrc, track_id, candidate_id)
 
 
@@ -573,15 +608,15 @@ async def search_lyrics_manually(
     track_id: str,
     title: str = Form(...),
     artist: Optional[str] = Form(None),
-    user: dict = Depends(auth.require_user),
+    actor: dict = Depends(auth.get_actor),
 ) -> dict:
-    require_track_access(track_id, user)
+    require_track_access(track_id, actor)
     return await asyncio.to_thread(write_manual_lrc_search, track_id, title, artist)
 
 
 @app.delete("/tracks/{track_id}", status_code=204)
-async def delete_track(track_id: str, user: dict = Depends(auth.require_user)) -> Response:
-    d = require_track_access(track_id, user)
+async def delete_track(track_id: str, actor: dict = Depends(auth.get_actor)) -> Response:
+    d = require_track_access(track_id, actor)
     task = tasks.pop(track_id, None)
     if task and not task.done():
         task.cancel()
@@ -614,17 +649,17 @@ async def event_stream(request: Request, track_id: str, user: dict):
 
 
 @app.get("/tracks/{track_id}/events")
-async def track_events(track_id: str, request: Request, user: dict = Depends(auth.require_user)):
+async def track_events(track_id: str, request: Request, actor: dict = Depends(auth.get_actor)):
     return StreamingResponse(
-        event_stream(request, track_id, user),
+        event_stream(request, track_id, actor),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
 @app.api_route("/runs/{track_id}/{rel_path:path}", methods=["GET", "HEAD"])
-def run_file(track_id: str, rel_path: str, user: dict = Depends(auth.require_user)) -> FileResponse:
-    d = require_track_access(track_id, user)
+def run_file(track_id: str, rel_path: str, actor: dict = Depends(auth.get_actor)) -> FileResponse:
+    d = require_track_access(track_id, actor)
     path = (d / rel_path).resolve()
     if d.resolve() not in path.parents or not path.is_file():
         raise HTTPException(404, "file not found")

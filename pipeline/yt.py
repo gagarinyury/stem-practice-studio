@@ -40,6 +40,8 @@ def download(url: str, out_dir: Path) -> tuple[Path, dict]:
         "yt-dlp",
         "-f", "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4]/best",
         "--write-info-json",
+        "--write-thumbnail",
+        "--convert-thumbnails", "jpg",
         "--no-write-playlist-metafiles",
         "--no-playlist",
         "--playlist-items", "1",
@@ -47,6 +49,22 @@ def download(url: str, out_dir: Path) -> tuple[Path, dict]:
         clean_url,
     ]
     subprocess.run(cmd, check=True)
+
+    # Normalize thumbnail filename → cover.jpg (yt-dlp writes "video.jpg")
+    for guess in ("video.jpg", "video.webp", "video.png"):
+        candidate = out_abs / guess
+        if candidate.exists():
+            target = out_abs / "cover.jpg"
+            if candidate.suffix.lower() == ".jpg":
+                if candidate != target:
+                    candidate.rename(target)
+            else:
+                try:
+                    subprocess.run(["ffmpeg", "-y", "-i", str(candidate), str(target)], check=True)
+                    candidate.unlink(missing_ok=True)
+                except subprocess.CalledProcessError:
+                    pass
+            break
 
     # 2. Extract source.wav from video.mp4 using ffmpeg (needed by pipeline)
     cmd_ffmpeg = [

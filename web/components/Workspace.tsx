@@ -1,19 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { IconUpload } from "@tabler/icons-react";
 import { Sidebar, STUDENT_TRACK_LIMIT } from "./Sidebar";
 import { TrackView } from "./TrackView";
 import { AuthScreen } from "./AuthScreen";
 import { FeedbackModal } from "./FeedbackModal";
 import { TrackLimitModal } from "./TrackLimitModal";
-import { getMe, getTrack, getAligned, listTracks, logout, type TrackSummary, type User } from "@/lib/api";
+import { getMe, getTrack, getAligned, isDailyLimitError, isTrackLimitError, listTracks, logout, submitYouTube, uploadTrack, type TrackSummary, type User } from "@/lib/api";
 import type { AlignedLyrics, Manifest } from "@/lib/manifest";
 import { useI18n } from "@/lib/i18n";
+import { useToast } from "./Toaster";
 
 type FeedbackStatus = "pending" | "dismissed" | "submitted";
 
 export function Workspace() {
   const { t } = useI18n();
+  const toast = useToast();
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [tracks, setTracks] = useState<TrackSummary[]>([]);
@@ -23,14 +26,22 @@ export function Workspace() {
   const [loadingTrack, setLoadingTrack] = useState(false);
   const [processingTrack, setProcessingTrack] = useState<TrackSummary | null>(null);
   const [trackError, setTrackError] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.matchMedia("(min-width: 768px)").matches;
+  });
   const [feedbackStatus, setFeedbackStatus] = useState<FeedbackStatus>("pending");
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [trackLimitOpen, setTrackLimitOpen] = useState(false);
+  const [dailyLimitOpen, setDailyLimitOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refreshTracks = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setTracks([]);
+      return;
+    }
     try {
       const list = await listTracks();
       setTracks(list.slice().reverse());
@@ -118,6 +129,20 @@ export function Workspace() {
     };
   }, [selectedId]);
 
+  const handleUpload = useCallback(async (kind: "file" | "url", payload: File | string) => {
+    try {
+      const r = kind === "file"
+        ? await uploadTrack(payload as File)
+        : await submitYouTube((payload as string).trim());
+      await refreshTracks();
+      setSelectedId(r.id);
+    } catch (e) {
+      if (isDailyLimitError(e)) setDailyLimitOpen(true);
+      else if (isTrackLimitError(e)) setTrackLimitOpen(true);
+      else toast.show((e as Error).message, "error");
+    }
+  }, [refreshTracks, toast]);
+
   async function handleLogout() {
     await logout().catch(() => {});
     setUser(null);
@@ -141,12 +166,8 @@ export function Workspace() {
     return <CenterMsg text={t("workspace.checkingAuth")} />;
   }
 
-  if (!user) {
-    return <AuthScreen onAuth={setUser} />;
-  }
-
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[var(--color-paper)] relative">
+    <div className="flex h-[100dvh] w-screen overflow-hidden bg-[var(--color-paper)] relative">
       {/* Mobile backdrop when sidebar open */}
       {sidebarOpen && (
         <div
@@ -161,8 +182,8 @@ export function Workspace() {
           transition-all duration-300 ease-in-out h-full z-40
           fixed md:static inset-y-0 left-0
           ${sidebarOpen
-            ? "translate-x-0 w-[280px] md:w-[240px]"
-            : "-translate-x-full md:translate-x-0 w-[280px] md:w-0 md:overflow-hidden"}
+            ? "translate-x-0 w-[300px] md:w-[280px]"
+            : "-translate-x-full md:translate-x-0 w-[300px] md:w-0 md:overflow-hidden"}
         `}
       >
         <Sidebar
@@ -177,6 +198,8 @@ export function Workspace() {
           onClose={() => setSidebarOpen(false)}
           onLogout={handleLogout}
           onTrackLimit={() => setTrackLimitOpen(true)}
+          onDailyLimit={() => setDailyLimitOpen(true)}
+          onSignInRequest={() => setAuthOpen(true)}
         />
       </div>
 
@@ -192,7 +215,14 @@ export function Workspace() {
         )}
 
         {selectedId == null ? (
-          <EmptyState />
+          <EmptyState
+            onFile={(f) => handleUpload("file", f)}
+            onUrl={(u) => handleUpload("url", u)}
+            onDemo={() => {
+              const id = process.env.NEXT_PUBLIC_DEMO_TRACK_ID;
+              if (id) setSelectedId(id);
+            }}
+          />
         ) : loadingTrack ? (
           <CenterMsg text={t("workspace.loadingManifest")} />
         ) : processingTrack ? (
@@ -226,11 +256,15 @@ export function Workspace() {
           <TrackView
             manifest={manifest}
             aligned={aligned}
+            isAnon={!user}
+            onSignInRequest={() => setAuthOpen(true)}
           />
         ) : manifest ? (
           <TrackView
             manifest={manifest}
             aligned={null}
+            isAnon={!user}
+            onSignInRequest={() => setAuthOpen(true)}
           />
         ) : null}
       </main>
@@ -241,26 +275,198 @@ export function Workspace() {
           onSubmitted={() => persistFeedbackStatus("submitted")}
         />
       )}
-      {trackLimitOpen && (
+      {trackLimitOpen && user && (
         <TrackLimitModal
           user={user}
           limit={STUDENT_TRACK_LIMIT}
           onClose={() => setTrackLimitOpen(false)}
         />
       )}
+      {dailyLimitOpen && (
+        <DailyLimitModal
+          onSignIn={() => {
+            setDailyLimitOpen(false);
+            setAuthOpen(true);
+          }}
+          onClose={() => setDailyLimitOpen(false)}
+        />
+      )}
+      {authOpen && (
+        <AuthOverlay
+          onClose={() => setAuthOpen(false)}
+          onAuth={(u) => {
+            setUser(u);
+            setAuthOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function EmptyState() {
+function AuthOverlay({ onAuth, onClose }: { onAuth: (u: import("@/lib/api").User) => void; onClose: () => void }) {
   const { t } = useI18n();
   return (
-    <div className="flex-1 flex items-center justify-center">
-      <div className="text-center max-w-md px-8">
-        <div className="text-[44px] leading-tight font-serif italic mb-3">stem studio</div>
-        <div className="text-[14px] text-[var(--color-ink-muted)] font-mono">
-          {t("workspace.selectTrack")}
+    <div
+      className="fixed inset-0 z-[60] bg-black/45 backdrop-blur-sm flex items-center justify-center px-4 py-8 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-[400px] rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-surface)] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute top-3 right-3 z-10 w-8 h-8 rounded-md text-[var(--color-ink-muted)] hover:text-ink hover:bg-[var(--color-surface-muted)] flex items-center justify-center transition-colors"
+        >
+          ×
+        </button>
+        <div className="px-6 pt-6 pb-2">
+          <div className="font-serif italic text-[26px] leading-tight">{t("signup.modalTitle")}</div>
+          <div className="font-mono text-[11px] text-[var(--color-ink-muted)] mt-1.5">
+            {t("signup.modalSubtitle")}
+          </div>
         </div>
+        <div className="px-5 pb-5">
+          <AuthScreen onAuth={onAuth} compact />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DailyLimitModal({ onSignIn, onClose }: { onSignIn: () => void; onClose: () => void }) {
+  const { t } = useI18n();
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center px-4" onClick={onClose}>
+      <div
+        className="max-w-[420px] w-full rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-surface)] p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="font-serif italic text-[24px] mb-2 leading-tight">{t("limit.title")}</div>
+        <div className="font-mono text-[12px] text-[var(--color-ink-muted)] leading-relaxed mb-5">
+          {t("limit.body")}
+        </div>
+        <div className="flex flex-col-reverse sm:flex-row gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="sm:flex-none rounded-md border border-[var(--color-border-soft)] px-4 py-2.5 font-mono text-[12px] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-muted)] transition-colors"
+          >
+            {t("limit.later")}
+          </button>
+          <button
+            type="button"
+            onClick={onSignIn}
+            className="flex-1 rounded-md bg-[var(--color-accent-vocal)] px-4 py-2.5 font-mono text-[12px] font-bold text-white hover:opacity-90 transition-opacity"
+          >
+            {t("limit.signUp")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ onFile, onUrl, onDemo }: { onFile: (f: File) => void; onUrl: (u: string) => void; onDemo: () => void }) {
+  const { t } = useI18n();
+  const [dragOver, setDragOver] = useState(false);
+  const [url, setUrl] = useState("");
+  const demoTrackId = process.env.NEXT_PUBLIC_DEMO_TRACK_ID;
+  const stemLabels = ["vocals", "drums", "bass", "piano", "guitar"];
+  return (
+    <div
+      className={`flex-1 flex items-center justify-center transition-colors px-4 ${dragOver ? "bg-[var(--color-accent-vocal-50)]" : ""}`}
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const f = e.dataTransfer.files?.[0];
+        if (f) onFile(f);
+      }}
+    >
+      <div className="text-center max-w-[460px] w-full">
+        <div className="text-[36px] sm:text-[48px] leading-[1.05] font-serif italic mb-3">stem studio</div>
+        <div className="text-[12px] sm:text-[13px] text-[var(--color-ink-muted)] font-mono mb-3 px-2">
+          {t("empty.subtitle")}
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-1.5 mb-7">
+          {stemLabels.map((label) => (
+            <span
+              key={label}
+              className="font-mono text-[9px] tracking-[0.08em] uppercase px-1.5 py-0.5 rounded border border-[var(--color-border-soft)] text-[var(--color-ink-muted)]"
+            >
+              {label}
+            </span>
+          ))}
+        </div>
+
+        <label className="block cursor-pointer">
+          <div className={`rounded-xl border-2 border-dashed px-6 py-8 transition-all ${dragOver ? "border-[var(--color-accent-vocal)] bg-[var(--color-accent-vocal-50)] scale-[1.01]" : "border-[var(--color-border-soft)] hover:border-[var(--color-accent-vocal)] hover:bg-[var(--color-surface-muted)]/30"}`}>
+            <div className="flex justify-center mb-3">
+              <div className="w-12 h-12 rounded-full bg-[var(--color-accent-vocal-50)] flex items-center justify-center text-[var(--color-accent-vocal)]">
+                <IconUpload size={22} />
+              </div>
+            </div>
+            <div className="font-mono text-[13px] text-ink mb-1">{t("empty.dropAudio")}</div>
+            <div className="font-mono text-[11px] text-[var(--color-ink-muted)]">{t("empty.dropHint")}</div>
+          </div>
+          <input
+            type="file"
+            accept="audio/*,video/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onFile(f);
+              e.target.value = "";
+            }}
+          />
+        </label>
+
+        <div className="mt-5 flex items-center gap-3">
+          <div className="flex-1 h-px bg-[var(--color-border-soft)]" />
+          <div className="font-mono text-[10px] tracking-[0.08em] text-[var(--color-ink-faint)]">{t("empty.or")}</div>
+          <div className="flex-1 h-px bg-[var(--color-border-soft)]" />
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (url.trim()) {
+              onUrl(url.trim());
+              setUrl("");
+            }
+          }}
+          className="mt-5 flex gap-2"
+        >
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder={t("empty.urlPlaceholder")}
+            className="flex-1 min-w-0 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-paper)] px-3 py-2.5 font-mono text-[12px] outline-none focus:border-[var(--color-accent-vocal)] transition-colors"
+          />
+          <button
+            type="submit"
+            disabled={!url.trim()}
+            className="rounded-md bg-[var(--color-accent-vocal)] px-4 py-2.5 font-mono text-[11px] font-bold text-white disabled:opacity-40 hover:opacity-90 transition-opacity"
+          >
+            {t("empty.split")}
+          </button>
+        </form>
+
+        {demoTrackId && (
+          <button
+            type="button"
+            onClick={onDemo}
+            className="mt-6 font-mono text-[11px] text-[var(--color-accent-vocal)] hover:underline"
+          >
+            {t("empty.tryDemo")}
+          </button>
+        )}
       </div>
     </div>
   );

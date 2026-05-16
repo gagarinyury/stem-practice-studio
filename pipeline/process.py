@@ -105,10 +105,22 @@ def run(opts: RunOpts, on_progress: ProgressCb | None = None) -> dict:
     audio_path, meta = resolve_input(opts, out_dir)
     timings["resolve_input"] = round(time.perf_counter() - t, 2)
 
+    cover_path = out_dir / "cover.jpg"
+    if not cover_path.exists() and opts.input_path:
+        try:
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", str(opts.input_path), "-an", "-vcodec", "mjpeg", "-frames:v", "1", str(cover_path)],
+                check=True,
+                capture_output=True,
+            )
+        except subprocess.CalledProcessError:
+            cover_path.unlink(missing_ok=True)
+
     source = {
         "audio": _rel(out_dir, audio_path),
         "stream": "source.opus" if (out_dir / "source.opus").exists() else _rel(out_dir, audio_path),
         "video": "video.mp4" if (out_dir / "video.mp4").exists() else None,
+        "cover": "cover.jpg" if cover_path.exists() else None,
         "uploader": meta.get("uploader"),
         "channel": meta.get("channel"),
     }

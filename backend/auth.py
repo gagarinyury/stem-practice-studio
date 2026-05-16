@@ -14,7 +14,10 @@ from fastapi import HTTPException, Request, Response
 
 
 SESSION_COOKIE = "stem_session"
+ANON_COOKIE = "stem_anon"
 SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
+ANON_TTL_SECONDS = 60 * 60 * 24 * 365
+ANON_DAILY_LIMIT = int(os.environ.get("ANON_DAILY_LIMIT", "2"))
 PBKDF2_ITERATIONS = 210_000
 DB_PATH = Path(os.environ.get("DB_PATH", "/srv/apps/stem-practice-studio/data/app.db"))
 
@@ -49,6 +52,14 @@ def init_db() -> None:
         con.execute("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)")
         ensure_column(con, "users", "invite_code", "TEXT")
         ensure_column(con, "users", "invite_label", "TEXT")
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS daily_splits (
+                key TEXT NOT NULL,
+                day TEXT NOT NULL,
+                count INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (key, day)
+            )
+        """)
 
 
 def ensure_column(con: sqlite3.Connection, table: str, column: str, declaration: str) -> None:
@@ -214,3 +225,94 @@ def require_user(request: Request) -> dict[str, Any]:
 def manual_password_hash(password: str) -> str:
     validate_password(password)
     return hash_password(password)
+
+
+def anon_actor_id(anon_id: str) -> str:
+    return f"anon_{anon_id}"
+
+
+def get_or_create_anon(request: Request, response: Response) -> str:
+    anon = request.cookies.get(ANON_COOKIE)
+    if not anon or len(anon) < 16:
+        anon = secrets.token_urlsafe(16)
+        response.set_cookie(
+            ANON_COOKIE,
+            anon,
+            max_age=ANON_TTL_SECONDS,
+            httponly=True,
+            samesite="lax",
+            path="/",
+        )
+    return anon
+
+
+def get_actor(request: Request, response: Response) -> dict[str, Any]:
+    user = get_user_by_session(request.cookies.get(SESSION_COOKIE))
+    if user:
+        return {**user, "anon": False}
+    anon = get_or_create_anon(request, response)
+    return {
+        "id": anon_actor_id(anon),
+        "email": None,
+        "role": "anon",
+        "created_at": None,
+        "anon": True,
+        "anon_id": anon,
+    }
+
+
+def client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    real = request.headers.get("x-real-ip")
+    if real:
+        return real.strip()
+    return request.client.host if request.client else "0.0.0.0"
+
+
+def _today() -> str:
+    return time.strftime("%Y-%m-%d", time.gmtime())
+
+
+def get_anon_daily_count(actor_id: str, ip: str) -> int:
+    day = _today()
+    with connect() as con:
+        rows = con.execute(
+            "SELECT count FROM daily_splits WHERE day = ? AND key IN (?, ?)",
+            (day, f"actor:{actor_id}", f"ip:{ip}"),
+        ).fetchall()
+    return max((r["count"] for r in rows), default=0)
+
+
+def increment_anon_daily(actor_id: str, ip: str) -> None:
+    day = _today()
+    with connect() as con:
+        for key in (f"actor:{actor_id}", f"ip:{ip}"):
+            con.execute(
+                """
+                INSERT INTO daily_splits (key, day, count) VALUES (?, ?, 1)
+                ON CONFLICT(key, day) DO UPDATE SET count = count + 1
+                """,
+                (key, day),
+            )
+
+
+def enforce_anon_daily_limit(actor: dict[str, Any], request: Request) -> None:
+    if not actor.get("anon"):
+        return
+    ip = client_ip(request)
+    count = get_anon_daily_count(actor["id"], ip)
+    if count >= ANON_DAILY_LIMIT:
+        raise HTTPException(
+            429,
+            {
+                "code": "daily_limit_reached",
+                "limit": ANON_DAILY_LIMIT,
+                "count": count,
+                "message": (
+                    f"Free limit reached: {ANON_DAILY_LIMIT} splits per day. "
+                    "Sign up to save your history and get more."
+                ),
+            },
+        )

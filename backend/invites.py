@@ -30,7 +30,7 @@ def normalize_code(code: str | None) -> str:
 def validate_invite(code: str | None) -> dict[str, Any]:
     normalized = normalize_code(code)
     if not normalized:
-        raise HTTPException(403, "invite code is required")
+        return {"code": "public", "label": "public", "active": 1}
     with auth.connect() as con:
         row = con.execute(
             "SELECT * FROM invite_codes WHERE code = ? AND active = 1",

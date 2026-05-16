@@ -61,6 +61,18 @@ export function isTrackLimitError(error: unknown): error is ApiError {
   );
 }
 
+export function isDailyLimitError(error: unknown): error is ApiError {
+  const detail = error instanceof ApiError ? error.detail : null;
+  return Boolean(
+    error instanceof ApiError &&
+      error.status === 429 &&
+      detail &&
+      typeof detail === "object" &&
+      "code" in detail &&
+      detail.code === "daily_limit_reached",
+  );
+}
+
 async function apiError(label: string, response: Response): Promise<ApiError> {
   let detail: unknown;
   try {
@@ -82,7 +94,7 @@ function formatDetail(detail: unknown): string {
   return JSON.stringify(detail);
 }
 
-async function authJson(path: string, body: { email: string; password: string; invite_code?: string }): Promise<{ user: User }> {
+async function authJson(path: string, body: { email: string; password: string; invite_code?: string }): Promise<{ user: User; adopted?: number }> {
   const r = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -93,12 +105,12 @@ async function authJson(path: string, body: { email: string; password: string; i
   return r.json();
 }
 
-export async function login(email: string, password: string): Promise<{ user: User }> {
+export async function login(email: string, password: string): Promise<{ user: User; adopted?: number }> {
   return authJson("/auth/login", { email, password });
 }
 
-export async function register(email: string, password: string, inviteCode: string): Promise<{ user: User }> {
-  return authJson("/auth/register", { email, password, invite_code: inviteCode });
+export async function register(email: string, password: string, inviteCode?: string): Promise<{ user: User; adopted?: number }> {
+  return authJson("/auth/register", { email, password, invite_code: inviteCode || undefined });
 }
 
 export async function getMe(): Promise<{ user: User }> {

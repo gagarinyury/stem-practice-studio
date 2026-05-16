@@ -13,6 +13,7 @@ import {
   IconMicrophone,
   IconMicrophoneOff,
   IconAdjustmentsHorizontal,
+  IconMusic,
 } from "@tabler/icons-react";
 import { StemEngine } from "@/lib/audio-engine";
 import type { AlignedLyrics, AlignedWord, Manifest, StemKey } from "@/lib/manifest";
@@ -33,6 +34,8 @@ interface Props {
   aligned: AlignedLyrics | null;
   processingTrack?: TrackSummary;
   onProcessingDone?: () => void;
+  isAnon?: boolean;
+  onSignInRequest?: () => void;
 }
 
 export interface LoopRange {
@@ -42,7 +45,7 @@ export interface LoopRange {
   toWordIdx?: number;
 }
 
-export function TrackView({ manifest: initialManifest, aligned: initialAligned, processingTrack, onProcessingDone }: Props) {
+export function TrackView({ manifest: initialManifest, aligned: initialAligned, processingTrack, onProcessingDone, isAnon, onSignInRequest }: Props) {
   const { t } = useI18n();
   const engineRef = useRef<StemEngine | null>(null);
   const [ready, setReady] = useState(false);
@@ -73,6 +76,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
   const [manualTitle, setManualTitle] = useState("");
   const [manualArtist, setManualArtist] = useState("");
   const [manualSearchBusy, setManualSearchBusy] = useState(false);
+  const [lyricsToolsOpen, setLyricsToolsOpen] = useState(false);
 
   useEffect(() => {
     setManifest(initialManifest);
@@ -83,6 +87,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
     setManualTitle("");
     setManualArtist("");
     setManualSearchBusy(false);
+    setLyricsToolsOpen(false);
   }, [initialManifest.id]);
 
   // Timer for processing duration
@@ -96,8 +101,10 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
   const effectiveDuration = manifest.duration || engineDuration;
   const lyricsNotice = getLyricsNotice(manifest, t);
   const lrcCandidates = manifest.lrc?.candidates ?? [];
-  const showManualLyricsTools = !!manifest.aligned?.asr_only || (!!manifest.lrc?.reason && !manifest.lrc?.found);
+  const showManualLyricsToolsRaw = !!manifest.aligned?.asr_only || (!!manifest.lrc?.reason && !manifest.lrc?.found);
+  const showManualLyricsTools = showManualLyricsToolsRaw && lyricsToolsOpen;
   const showLrcCandidates = showManualLyricsTools && lrcCandidates.length > 0;
+  const canOfferManualLyrics = showManualLyricsToolsRaw && !lyricsToolsOpen;
 
   // Determine if this manifest has a pre-merged "music" stem from the backend
   const hasMusic = !!manifest.stems["music"];
@@ -433,54 +440,83 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  const showSignupNudge = isAnon && !isProcessing && hasStemFiles;
+
   return (
     <div className="flex h-full bg-[var(--color-paper)]">
       {/* Left Column: Lyrics and Timeline */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
-        <div className="px-8 py-4 border-b border-[var(--color-border-soft)] flex items-center gap-6 bg-[var(--color-surface)]">
-          <div className="min-w-0">
-            <div className="text-[26px] font-serif italic leading-none truncate text-ink">{manifest.title}</div>
-            <div className="font-mono text-[11px] text-[var(--color-ink-muted)] mt-1 truncate">
-              {manifest.artist}{manifest.artist && manifest.language ? " · " : ""}{manifest.language}{manifest.duration ? ` · ${fmtDur(manifest.duration)}` : ""}
+        {showSignupNudge && (
+          <div className="px-4 md:px-8 py-2.5 bg-gradient-to-r from-[var(--color-accent-vocal-50)] to-transparent border-b border-[var(--color-border-soft)] flex items-center justify-between gap-3">
+            <div className="font-mono text-[11px] text-ink leading-snug min-w-0">
+              <span className="text-[var(--color-accent-vocal)]">●</span> {t("signup.nudge")}
             </div>
-            {lyricsNotice && (
-              <div className={`font-mono text-[10px] mt-2 inline-flex max-w-full items-center rounded-md border px-2 py-1 ${lyricsNotice.className}`}>
-                <span className="truncate">{lyricsNotice.label}</span>
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={onSignInRequest}
+              className="shrink-0 rounded-md bg-[var(--color-accent-vocal)] px-3 py-1.5 font-mono text-[11px] font-bold text-white hover:opacity-90 transition-opacity"
+            >
+              {t("signup.save")}
+            </button>
           </div>
-          <div className="ml-auto flex items-center gap-3">
+        )}
+        {/* Header */}
+        <div className="px-4 md:px-8 py-3 md:py-4 border-b border-[var(--color-border-soft)] flex items-center gap-3 md:gap-5 bg-[var(--color-surface)]">
+          {manifest.source?.cover ? (
+            <img
+              src={`${API_BASE}/runs/${manifest.id}/${manifest.source.cover}`}
+              alt=""
+              className="shrink-0 w-11 h-11 md:w-14 md:h-14 rounded-lg object-cover border border-[var(--color-border-soft)] shadow-sm"
+            />
+          ) : (
+            <div className="shrink-0 w-11 h-11 md:w-14 md:h-14 rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-surface-muted)] flex items-center justify-center text-[var(--color-ink-faint)]">
+              <IconMusic size={20} />
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="text-[18px] md:text-[24px] font-serif italic leading-tight truncate text-ink">{manifest.title}</div>
+              {lyricsNotice && (
+                <span
+                  className={`shrink-0 hidden md:inline-flex items-center font-mono text-[9px] tracking-[0.06em] uppercase rounded px-1.5 py-0.5 ${lyricsNotice.className}`}
+                  title={lyricsNotice.label}
+                >
+                  {lyricsNotice.short || lyricsNotice.label}
+                </span>
+              )}
+            </div>
+            <div className="font-mono text-[10px] md:text-[11px] text-[var(--color-ink-muted)] mt-0.5 md:mt-1 truncate">
+              {manifest.artist || t("track.unknownArtist")}
+              {manifest.duration ? ` · ${fmtDur(manifest.duration)}` : ""}
+              {manifest.language ? ` · ${manifest.language.toUpperCase()}` : ""}
+            </div>
+          </div>
+          <div className="ml-auto flex items-center gap-2 shrink-0">
             {!ready && !loadError && (
-              <div className="px-4 py-1.5 font-mono text-[11px] bg-[var(--color-surface-muted)] text-[var(--color-ink-muted)] rounded-md animate-pulse flex items-center gap-2 border border-[var(--color-border-soft)]">
-                <IconLoader2 size={14} className="animate-spin" />
+              <div className="hidden md:flex px-3 py-1.5 font-mono text-[10px] bg-[var(--color-surface-muted)] text-[var(--color-ink-muted)] rounded-md items-center gap-1.5 border border-[var(--color-border-soft)]">
+                <IconLoader2 size={12} className="animate-spin" />
                 {isProcessing ? t("track.loadingOriginal") : t("track.downloadingAudio")}
-              </div>
-            )}
-            {loadError && (
-              <div className="px-4 py-1 font-mono text-[11px] text-[var(--color-accent-warn)]">
-                {t("track.loadErrorPrefix")} {loadError}
               </div>
             )}
             {aligned && (
               <button
                 type="button"
                 onClick={() => setKaraokeOpen(true)}
-                className="font-mono text-[11px] tracking-[0.06em] px-4 py-2 rounded-lg bg-[var(--color-accent-vocal-50)] text-[var(--color-accent-vocal)] hover:bg-[var(--color-accent-vocal)] hover:text-white transition-colors shadow-sm font-bold flex items-center gap-2"
+                className="font-mono text-[11px] tracking-[0.06em] p-2 md:px-3 md:py-2 rounded-lg bg-[var(--color-accent-vocal-50)] text-[var(--color-accent-vocal)] hover:bg-[var(--color-accent-vocal)] hover:text-white transition-colors shadow-sm font-bold flex items-center gap-2"
+                title={t("track.karaoke")}
               >
                 <IconArrowsMaximize size={16} />
-                {t("track.karaoke")}
+                <span className="hidden md:inline">{t("track.karaoke")}</span>
               </button>
             )}
-            {/* Mobile-only mixer toggle (on desktop the mixer column is always visible) */}
             <button
               type="button"
               onClick={() => setMixerOpen(true)}
-              className="md:hidden font-mono text-[11px] tracking-[0.06em] px-4 py-2 rounded-lg bg-[var(--color-accent-vocal-50)] text-[var(--color-accent-vocal)] hover:bg-[var(--color-accent-vocal)] hover:text-white transition-colors shadow-sm font-bold flex items-center gap-2"
+              className="md:hidden p-2 rounded-lg bg-[var(--color-accent-vocal)] text-white shadow-sm flex items-center justify-center"
               title={t("track.mixer")}
+              aria-label={t("track.mixer")}
             >
-              <IconAdjustmentsHorizontal size={16} />
-              {t("track.mixerShort")}
+              <IconAdjustmentsHorizontal size={18} />
             </button>
           </div>
         </div>
@@ -489,8 +525,28 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
         <div className="flex-1 min-h-0 bg-[var(--color-paper)] relative shadow-[inset_0_-10px_20px_rgba(0,0,0,0.02)]">
           {aligned ? (
             <>
+              {canOfferManualLyrics && (
+                <button
+                  type="button"
+                  onClick={() => setLyricsToolsOpen(true)}
+                  className="absolute top-3 right-3 md:top-4 md:right-4 z-20 font-mono text-[10px] tracking-[0.04em] px-2.5 py-1.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-surface)]/90 text-[var(--color-ink-muted)] hover:text-ink hover:border-[var(--color-accent-vocal)] hover:bg-[var(--color-surface)] backdrop-blur-sm transition-colors flex items-center gap-1.5 shadow-sm"
+                  title={t("track.wrongVariant")}
+                >
+                  <IconSearch size={12} />
+                  <span className="hidden sm:inline">{t("track.wrongVariant")}</span>
+                </button>
+              )}
               {showManualLyricsTools && (
-                <div className="absolute left-8 right-8 top-4 z-20 rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-surface)]/95 shadow-lg px-4 py-3">
+                <div className="absolute left-3 right-3 md:left-8 md:right-8 top-3 md:top-4 z-20 rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-surface)]/95 backdrop-blur-sm shadow-lg px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => setLyricsToolsOpen(false)}
+                    aria-label="Close"
+                    className="absolute top-2 right-2 w-6 h-6 rounded-md text-[var(--color-ink-muted)] hover:text-ink hover:bg-[var(--color-surface-muted)] flex items-center justify-center"
+                    title="Close"
+                  >
+                    ×
+                  </button>
                   {showLrcCandidates && (
                     <>
                       <div className="font-mono text-[11px] text-[var(--color-ink-muted)] mb-2">
@@ -521,7 +577,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
                     <div className="font-mono text-[11px] text-[var(--color-ink-muted)] mb-2">
                       {t("track.wrongVariant")}
                     </div>
-                    <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto] gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto] gap-2">
                       <input
                         value={manualTitle}
                         onChange={(ev) => setManualTitle(ev.target.value)}
@@ -593,7 +649,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
         </div>
 
         {/* Timeline & Transport (Bottom) */}
-        <div className="flex-shrink-0 border-t border-[var(--color-border-soft)] bg-[var(--color-surface)] px-8 pt-6 pb-8 shadow-2xl relative z-10">
+        <div className="flex-shrink-0 border-t border-[var(--color-border-soft)] bg-[var(--color-surface)] px-4 md:px-8 pt-3 md:pt-6 pb-3 md:pb-8 shadow-2xl relative z-10">
           <Timeline
             duration={effectiveDuration}
             currentTime={currentTime}
@@ -602,64 +658,64 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
             onLoopChange={onLoopChange}
           />
 
-          <div className="mt-6 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              {/* Mobile-only vocal mute toggle (desktop uses the mixer column instead) */}
+          <div className="mt-3 md:mt-6 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 md:gap-4">
               <button
                 type="button"
                 onClick={toggleVocals}
                 disabled={!ready}
-                className={`md:hidden font-mono text-[11px] tracking-[0.06em] px-3 py-2 rounded-lg shadow-sm font-bold flex items-center gap-2 transition-colors disabled:opacity-30 ${
+                className={`md:hidden p-2 rounded-full shadow-sm flex items-center justify-center transition-colors disabled:opacity-30 active:scale-95 ${
                   vocalsMuted
                     ? "bg-[var(--color-accent-vocal)] text-white"
                     : "bg-[var(--color-accent-vocal-50)] text-[var(--color-accent-vocal)]"
                 }`}
                 title={vocalsMuted ? t("track.vocalsOffEnable") : t("track.muteVocals")}
+                aria-label={vocalsMuted ? t("track.vocalsOffEnable") : t("track.muteVocals")}
               >
-                {vocalsMuted ? <IconMicrophoneOff size={16} /> : <IconMicrophone size={16} />}
-                <span className="lowercase">{vocalsMuted ? t("track.vocalsOff") : t("track.vocalsOn")}</span>
+                {vocalsMuted ? <IconMicrophoneOff size={18} /> : <IconMicrophone size={18} />}
               </button>
               {loop && (
                 <button
                   type="button"
                   onClick={jumpToLoopStart}
-                  className="text-[var(--color-ink-muted)] hover:text-[var(--color-accent-vocal)] transition-colors p-2"
+                  className="text-[var(--color-ink-muted)] hover:text-[var(--color-accent-vocal)] transition-colors p-1.5 md:p-2 active:scale-95"
                   title={t("track.toLoopStart")}
                 >
-                  <IconPlayerTrackPrevFilled size={20} />
+                  <IconPlayerTrackPrevFilled size={18} />
                 </button>
               )}
-              <button type="button" onClick={() => nudge(-15)} className="text-[var(--color-ink-muted)] hover:text-[var(--color-accent-vocal)] transition-colors p-2" disabled={!ready} title="−15s (←)">
-                <IconRewindBackward15 size={24} />
+              <button type="button" onClick={() => nudge(-15)} className="text-[var(--color-ink-muted)] hover:text-[var(--color-accent-vocal)] transition-colors p-1.5 md:p-2 active:scale-95" disabled={!ready} title="−15s (←)">
+                <IconRewindBackward15 size={22} />
               </button>
               <button
                 type="button"
                 onClick={togglePlay}
                 disabled={!ready}
-                className={`relative w-14 h-14 rounded-full bg-[var(--color-accent-vocal)] text-white shadow-lg flex items-center justify-center disabled:opacity-30 transition-transform active:scale-95 ${
+                className={`relative w-12 h-12 md:w-14 md:h-14 rounded-full bg-[var(--color-accent-vocal)] text-white shadow-lg flex items-center justify-center disabled:opacity-30 transition-transform active:scale-95 ${
                   playing ? "" : "hover:scale-105"
                 }`}
                 title="space"
+                aria-label={playing ? "Pause" : "Play"}
               >
                 {playing && ready && (
                   <span className="absolute inset-0 rounded-full border-2 border-[var(--color-accent-vocal)] animate-ping opacity-60" />
                 )}
                 {!ready ? (
-                  <IconLoader2 size={28} className="animate-spin" />
+                  <IconLoader2 size={24} className="animate-spin" />
                 ) : playing ? (
-                  <IconPlayerPauseFilled size={28} />
+                  <IconPlayerPauseFilled size={24} />
                 ) : (
-                  <IconPlayerPlayFilled size={28} className="ml-1" />
+                  <IconPlayerPlayFilled size={24} className="ml-0.5" />
                 )}
               </button>
-              <button type="button" onClick={() => nudge(15)} className="text-[var(--color-ink-muted)] hover:text-[var(--color-accent-vocal)] transition-colors p-2" disabled={!ready} title="+15s (→)">
-                <IconRewindForward15 size={24} />
+              <button type="button" onClick={() => nudge(15)} className="text-[var(--color-ink-muted)] hover:text-[var(--color-accent-vocal)] transition-colors p-1.5 md:p-2 active:scale-95" disabled={!ready} title="+15s (→)">
+                <IconRewindForward15 size={22} />
               </button>
             </div>
 
-            <div className="flex flex-col items-end gap-1">
-              <div className="font-mono text-[16px] text-ink font-bold tabular-nums">
-                {fmtT(currentTime)} <span className="text-[var(--color-ink-faint)] text-[14px]">/ {fmtT(effectiveDuration)}</span>
+            <div className="flex flex-col items-end gap-0.5 shrink-0">
+              <div className="font-mono text-[14px] md:text-[16px] text-ink font-bold tabular-nums">
+                {fmtT(currentTime)} <span className="text-[var(--color-ink-faint)] text-[12px] md:text-[14px]">/ {fmtT(effectiveDuration)}</span>
               </div>
               <div className="hidden md:block font-mono text-[10px] text-[var(--color-ink-faint)] tracking-[0.06em]">
                 SPACE play · ← → ±5s · L loop
@@ -799,12 +855,13 @@ function fmtT(s: number): string {
 function getLyricsNotice(
   manifest: Manifest,
   t: (key: I18nKey) => string,
-): { label: string; className: string } | null {
+): { label: string; short?: string; className: string } | null {
   const reason = manifest.aligned?.reason || manifest.lrc?.reason;
   if (manifest.aligned?.partial || manifest.lrc?.partial) {
     return {
       label: t("lyrics.partialMatch"),
-      className: "border-[var(--color-accent-vocal-100)] bg-[var(--color-accent-vocal-50)] text-[var(--color-accent-vocal-700)]",
+      short: "PARTIAL",
+      className: "border border-[var(--color-accent-vocal-100)] bg-[var(--color-accent-vocal-50)] text-[var(--color-accent-vocal-700)]",
     };
   }
   if (!manifest.aligned?.asr_only && !reason) return null;
@@ -819,6 +876,7 @@ function getLyricsNotice(
   const key = labels[String(reason)];
   return {
     label: key ? t(key) : t("lyrics.recognized"),
-    className: "border-[var(--color-border-soft)] bg-[var(--color-surface-muted)] text-[var(--color-ink-muted)]",
+    short: "AI",
+    className: "border border-[var(--color-border-soft)] bg-[var(--color-surface-muted)] text-[var(--color-ink-muted)]",
   };
 }

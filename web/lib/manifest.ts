@@ -13,6 +13,7 @@ export interface Manifest {
     audio?: string | null;
     stream?: string | null;
     video?: string | null;
+    cover?: string | null;
     uploader?: string | null;
     channel?: string | null;
   } | null;
