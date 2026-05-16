@@ -831,6 +831,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
           currentTime={currentTime}
           playing={playing}
           vocalMuted={vocalsMuted}
+          engine={engineRef.current}
           onTogglePlay={togglePlay}
           onToggleVocal={toggleVocals}
           onSeek={seek}

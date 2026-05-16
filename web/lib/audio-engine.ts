@@ -196,6 +196,12 @@ export class StemEngine {
     return this.stems.find((s) => s.key === key)?.buffer ?? null;
   }
 
+  /** Master analyser node — connected to the post-mix output. Visualizers
+   *  can attach to this without creating a second AudioContext. */
+  get analyserNode(): AnalyserNode | null {
+    return this.analyser;
+  }
+
   /** AudioContext used by the engine — for callers that need to allocate buffers. */
   get audioContext(): AudioContext | null {
     return this.ctx;

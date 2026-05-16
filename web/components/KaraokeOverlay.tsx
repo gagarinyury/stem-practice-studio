@@ -1,10 +1,14 @@
 "use client";
 
-import { type CSSProperties, useEffect, useMemo, useRef } from "react";
-import { IconX, IconPlayerPlayFilled, IconPlayerPauseFilled } from "@tabler/icons-react";
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { IconX, IconArrowLeft, IconPlayerPlayFilled, IconPlayerPauseFilled, IconVideo, IconSparkles } from "@tabler/icons-react";
 import type { AlignedLyrics, AlignedWord, Manifest } from "@/lib/manifest";
 import { videoUrl } from "@/lib/manifest";
 import { useI18n } from "@/lib/i18n";
+import type { StemEngine } from "@/lib/audio-engine";
+import { KaraokeVisualizer } from "./KaraokeVisualizer";
+
+type BgMode = "video" | "visualizer";
 
 interface Props {
   manifest: Manifest;
@@ -12,17 +16,34 @@ interface Props {
   currentTime: number;
   playing: boolean;
   vocalMuted: boolean;
+  engine?: StemEngine | null;
   onTogglePlay: () => void;
   onToggleVocal: () => void;
   onSeek: (t: number) => void;
   onClose: () => void;
 }
 
-export function KaraokeOverlay({ manifest, aligned, currentTime, playing, vocalMuted, onTogglePlay, onToggleVocal, onSeek, onClose }: Props) {
+export function KaraokeOverlay({ manifest, aligned, currentTime, playing, vocalMuted, engine, onTogglePlay, onToggleVocal, onSeek, onClose }: Props) {
   const { t } = useI18n();
   const videoRef = useRef<HTMLVideoElement>(null);
   const duration = manifest.duration || aligned.duration || 0;
   const progressPct = duration > 0 ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0;
+
+  // Background mode: video if available, otherwise visualizer.
+  // Preference is remembered globally (user choice persists across tracks).
+  const hasVideo = !!manifest.source?.video;
+  const [bgMode, setBgMode] = useState<BgMode>(() => {
+    if (typeof window === "undefined") return hasVideo ? "video" : "visualizer";
+    const stored = localStorage.getItem("stem-karaoke-bg");
+    if (stored === "video" && hasVideo) return "video";
+    if (stored === "visualizer") return "visualizer";
+    return hasVideo ? "video" : "visualizer";
+  });
+  function toggleBg() {
+    const next: BgMode = bgMode === "video" ? "visualizer" : (hasVideo ? "video" : "visualizer");
+    setBgMode(next);
+    try { localStorage.setItem("stem-karaoke-bg", next); } catch {}
+  }
 
   // Sync video time to our global currentTime, and play/pause state
   useEffect(() => {
@@ -121,41 +142,77 @@ export function KaraokeOverlay({ manifest, aligned, currentTime, playing, vocalM
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
-      <video
-        ref={videoRef}
-        src={videoUrl(manifest.id)}
-        className="absolute inset-0 w-full h-full object-cover"
-        playsInline
-        muted
-        onError={(e) => {
-          (e.target as HTMLVideoElement).style.display = 'none';
-        }}
-      />
+      {bgMode === "video" && hasVideo ? (
+        <video
+          ref={videoRef}
+          src={videoUrl(manifest.id)}
+          className="absolute inset-0 w-full h-full object-cover"
+          playsInline
+          muted
+          onError={(e) => {
+            (e.target as HTMLVideoElement).style.display = "none";
+          }}
+        />
+      ) : (
+        <KaraokeVisualizer
+          engine={engine ?? null}
+          leadingControl={hasVideo ? (
+            <button
+              type="button"
+              onClick={toggleBg}
+              className="px-3 h-8 rounded-full text-white/80 hover:text-white hover:bg-white/12 flex items-center gap-1.5 font-mono text-[10px] tracking-[0.08em] transition-colors active:scale-95"
+              title="Switch to video"
+            >
+              <IconVideo size={14} stroke={2} />
+              <span>VIDEO</span>
+            </button>
+          ) : undefined}
+        />
+      )}
       {/* Light gradient for text readability — no heavy darkening */}
       <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/70 pointer-events-none" />
 
       {/* Clickable background for play/pause */}
       <div className="absolute inset-0 z-0" onClick={toggle} />
 
-      {/* Top bar */}
-      <div className="relative z-10 flex items-center justify-between px-6 py-4">
-        <div>
-          <div className="text-white text-[20px] font-serif italic leading-none">
+      {/* Top bar — title left, BACK right (where user's hand expects it on phone) */}
+      <div className="relative z-10 flex items-center justify-between px-4 md:px-6 py-3 md:py-4 gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="text-white text-[18px] md:text-[20px] font-serif italic leading-tight truncate">
             {manifest.title}
           </div>
-          <div className="font-mono text-[10px] text-white/60 mt-1 tracking-[0.06em]">
+          <div className="font-mono text-[10px] md:text-[11px] text-white/60 mt-1 tracking-[0.06em] truncate">
             {manifest.artist}
           </div>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="text-white/80 hover:text-white p-2"
-          title="Esc"
+          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/35 hover:bg-black/55 border border-white/15 hover:border-white/30 text-white/85 hover:text-white font-mono text-[11px] tracking-[0.08em] backdrop-blur-md transition-colors"
+          title="Back to track (Esc)"
+          aria-label="Back to track"
         >
-          <IconX size={22} />
+          <IconArrowLeft size={16} stroke={2} />
+          <span className="hidden sm:inline">BACK</span>
         </button>
       </div>
+
+      {/* When in video mode, expose a small standalone VIZ-switch pill
+          (visualizer's own preset pill isn't rendered, so we need a place
+          for the bg toggle). */}
+      {hasVideo && bgMode === "video" && (
+        <div className="absolute bottom-10 md:bottom-14 right-4 md:right-12 z-20 pointer-events-auto">
+          <button
+            type="button"
+            onClick={toggleBg}
+            className="px-3 h-8 rounded-full bg-black/45 backdrop-blur-lg border border-white/15 hover:border-white/30 text-white/85 hover:text-white flex items-center gap-1.5 font-mono text-[10px] tracking-[0.08em] transition-colors shadow-xl active:scale-95"
+            title="Switch to visualizer"
+          >
+            <IconSparkles size={14} stroke={2} />
+            <span>VIZ</span>
+          </button>
+        </div>
+      )}
 
       <div className="flex-1" />
 
