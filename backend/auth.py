@@ -231,26 +231,29 @@ def anon_actor_id(anon_id: str) -> str:
     return f"anon_{anon_id}"
 
 
-def get_or_create_anon(request: Request, response: Response) -> str:
-    anon = request.cookies.get(ANON_COOKIE)
-    if not anon or len(anon) < 16:
-        anon = secrets.token_urlsafe(16)
-        response.set_cookie(
-            ANON_COOKIE,
-            anon,
-            max_age=ANON_TTL_SECONDS,
-            httponly=True,
-            samesite="lax",
-            path="/",
-        )
-    return anon
+def set_anon_cookie(response: Response, anon: str) -> None:
+    response.set_cookie(
+        ANON_COOKIE,
+        anon,
+        max_age=ANON_TTL_SECONDS,
+        httponly=True,
+        samesite="lax",
+        path="/",
+    )
 
 
-def get_actor(request: Request, response: Response) -> dict[str, Any]:
+def get_actor(request: Request) -> dict[str, Any]:
+    """Resolve current actor (user or anon). Does NOT write to response.
+    If a fresh anon cookie was generated, returns it as `new_anon_cookie`;
+    the caller is responsible for setting it on its response."""
     user = get_user_by_session(request.cookies.get(SESSION_COOKIE))
     if user:
-        return {**user, "anon": False}
-    anon = get_or_create_anon(request, response)
+        return {**user, "anon": False, "new_anon_cookie": None}
+    anon = request.cookies.get(ANON_COOKIE)
+    new_cookie: str | None = None
+    if not anon or len(anon) < 16:
+        anon = secrets.token_urlsafe(16)
+        new_cookie = anon
     return {
         "id": anon_actor_id(anon),
         "email": None,
@@ -258,7 +261,17 @@ def get_actor(request: Request, response: Response) -> dict[str, Any]:
         "created_at": None,
         "anon": True,
         "anon_id": anon,
+        "new_anon_cookie": new_cookie,
     }
+
+
+def get_actor_with_cookie(request: Request, response: Response) -> dict[str, Any]:
+    """Variant for GET endpoints that returns plain dict-like responses —
+    sets the anon cookie on the injected response object."""
+    actor = get_actor(request)
+    if actor.get("new_anon_cookie"):
+        set_anon_cookie(response, actor["new_anon_cookie"])
+    return actor
 
 
 def client_ip(request: Request) -> str:

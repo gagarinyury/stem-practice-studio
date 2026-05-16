@@ -226,14 +226,16 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
       )}
       <div className="flex-1 overflow-y-auto thin-scroll">
         {isAnon && (
-          <div className="px-5 py-4 font-mono text-[10px] text-[var(--color-ink-muted)] leading-relaxed border-b border-[var(--color-border-soft)]">
-            {tr("sidebar.historyForRegistered")}{" "}
+          <div className="px-5 py-4 border-b border-[var(--color-border-soft)]">
+            <div className="font-mono text-[10px] text-[var(--color-ink-muted)] leading-relaxed mb-2">
+              {tr("sidebar.historyForRegistered")}
+            </div>
             <button
               type="button"
               onClick={onSignInRequest}
-              className="text-[var(--color-accent-vocal)] hover:underline"
+              className="font-mono text-[10px] tracking-[0.04em] text-[var(--color-accent-vocal)] hover:underline"
             >
-              {tr("sidebar.signInToKeep")}
+              → {tr("sidebar.signInToKeep")}
             </button>
           </div>
         )}

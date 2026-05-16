@@ -11,7 +11,7 @@ from typing import Any, Optional
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from nanoid import generate as nanoid_generate
 from pydantic import BaseModel
 from slugify import slugify
@@ -529,7 +529,7 @@ async def submit_track(
     asr_engine: str = Form("parakeet"),
     artist: Optional[str] = Form(None),
     title: Optional[str] = Form(None),
-):
+) -> JSONResponse:
     if not file and not url:
         raise HTTPException(400, "either file or url is required")
     if file and url:
@@ -579,7 +579,10 @@ async def submit_track(
         title=title,
     )
     tasks[track_id] = asyncio.create_task(start_job(track_id, opts, actor["id"]))
-    return {"id": track_id, "status": "queued"}
+    resp = JSONResponse({"id": track_id, "status": "queued"}, status_code=202)
+    if actor.get("new_anon_cookie"):
+        auth.set_anon_cookie(resp, actor["new_anon_cookie"])
+    return resp
 
 
 @app.get("/tracks")
@@ -588,7 +591,7 @@ def tracks(user: dict = Depends(auth.require_user)) -> list[dict]:
 
 
 @app.get("/tracks/{track_id}")
-def track(track_id: str, actor: dict = Depends(auth.get_actor)) -> dict:
+def track(track_id: str, actor: dict = Depends(auth.get_actor_with_cookie)) -> dict:
     require_track_access(track_id, actor)
     return status_for(track_id)
 
@@ -597,7 +600,7 @@ def track(track_id: str, actor: dict = Depends(auth.get_actor)) -> dict:
 async def accept_lyrics_candidate(
     track_id: str,
     candidate_id: int = Form(...),
-    actor: dict = Depends(auth.get_actor),
+    actor: dict = Depends(auth.get_actor_with_cookie),
 ) -> dict:
     require_track_access(track_id, actor)
     return await asyncio.to_thread(write_confirmed_lrc, track_id, candidate_id)
@@ -608,14 +611,14 @@ async def search_lyrics_manually(
     track_id: str,
     title: str = Form(...),
     artist: Optional[str] = Form(None),
-    actor: dict = Depends(auth.get_actor),
+    actor: dict = Depends(auth.get_actor_with_cookie),
 ) -> dict:
     require_track_access(track_id, actor)
     return await asyncio.to_thread(write_manual_lrc_search, track_id, title, artist)
 
 
 @app.delete("/tracks/{track_id}", status_code=204)
-async def delete_track(track_id: str, actor: dict = Depends(auth.get_actor)) -> Response:
+async def delete_track(track_id: str, actor: dict = Depends(auth.get_actor_with_cookie)) -> Response:
     d = require_track_access(track_id, actor)
     task = tasks.pop(track_id, None)
     if task and not task.done():
@@ -649,7 +652,7 @@ async def event_stream(request: Request, track_id: str, user: dict):
 
 
 @app.get("/tracks/{track_id}/events")
-async def track_events(track_id: str, request: Request, actor: dict = Depends(auth.get_actor)):
+async def track_events(track_id: str, request: Request, actor: dict = Depends(auth.get_actor_with_cookie)):
     return StreamingResponse(
         event_stream(request, track_id, actor),
         media_type="text/event-stream",
@@ -658,7 +661,7 @@ async def track_events(track_id: str, request: Request, actor: dict = Depends(au
 
 
 @app.api_route("/runs/{track_id}/{rel_path:path}", methods=["GET", "HEAD"])
-def run_file(track_id: str, rel_path: str, actor: dict = Depends(auth.get_actor)) -> FileResponse:
+def run_file(track_id: str, rel_path: str, actor: dict = Depends(auth.get_actor_with_cookie)) -> FileResponse:
     d = require_track_access(track_id, actor)
     path = (d / rel_path).resolve()
     if d.resolve() not in path.parents or not path.is_file():
