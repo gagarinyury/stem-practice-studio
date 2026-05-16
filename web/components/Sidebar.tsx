@@ -113,21 +113,33 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="text-[22px] font-serif italic leading-none">stem studio</div>
-            <div className="font-mono text-[9px] text-[var(--color-ink-muted)] tracking-[0.14em] mt-1.5 whitespace-nowrap">
+            <div className="font-mono text-[10px] text-[var(--color-ink-muted)] tracking-[0.14em] mt-1.5 whitespace-nowrap">
               STEMS · LOOPS · KARAOKE
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="shrink-0 p-1.5 rounded-md text-[var(--color-ink-muted)] hover:text-ink hover:bg-[var(--color-surface-muted)] transition-colors"
-            title={tr("sidebar.hideSidebar")}
-          >
-            <IconChevronLeft size={18} />
-          </button>
+          <div className="flex items-center gap-0.5 shrink-0">
+            <LocaleSwitch compact />
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="p-1.5 rounded-md text-[var(--color-ink-muted)] hover:text-ink hover:bg-[var(--color-surface-muted)] transition-colors"
+              title={dark ? tr("sidebar.lightTheme") : tr("sidebar.darkTheme")}
+              aria-label={dark ? tr("sidebar.lightTheme") : tr("sidebar.darkTheme")}
+            >
+              {dark ? <IconSun size={16} /> : <IconMoon size={16} />}
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-md text-[var(--color-ink-muted)] hover:text-ink hover:bg-[var(--color-surface-muted)] transition-colors"
+              title={tr("sidebar.hideSidebar")}
+            >
+              <IconChevronLeft size={18} />
+            </button>
+          </div>
         </div>
         {user ? (
           <div className="mt-3 flex items-center justify-between gap-2">
-            <div className="font-mono text-[10px] text-[var(--color-ink-muted)] truncate" title={user.email}>
+            <div className="font-mono text-[11px] text-[var(--color-ink-muted)] truncate" title={user.email}>
               {user.email}
             </div>
             <button
@@ -142,7 +154,7 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
           <button
             type="button"
             onClick={onSignInRequest}
-            className="mt-3 w-full font-mono text-[10px] tracking-[0.04em] text-[var(--color-accent-vocal)] hover:text-ink hover:bg-[var(--color-surface-muted)] transition-colors rounded-md py-1.5 border border-[var(--color-accent-vocal)]/40 hover:border-[var(--color-accent-vocal)]"
+            className="mt-3 w-full font-mono text-[11px] tracking-[0.04em] text-[var(--color-accent-vocal)] hover:text-ink hover:bg-[var(--color-surface-muted)] transition-colors rounded-md py-2 border border-[var(--color-accent-vocal)]/40 hover:border-[var(--color-accent-vocal)]"
           >
             {tr("sidebar.signInCta")}
           </button>
@@ -198,11 +210,11 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
           </button>
         </div>
         {isAnon ? (
-          <div className="font-mono text-[10px] text-[var(--color-ink-faint)] leading-relaxed">
+          <div className="font-mono text-[11px] text-[var(--color-ink-faint)] leading-relaxed">
             {tr("sidebar.anonHint")}
           </div>
         ) : !unlimited ? (
-          <div className="font-mono text-[10px] text-[var(--color-ink-faint)]">
+          <div className="font-mono text-[11px] text-[var(--color-ink-faint)]">
             {tr("sidebar.testLimitPrefix")} {tracks.length}/{STUDENT_TRACK_LIMIT}
           </div>
         ) : null}
@@ -211,7 +223,7 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
       {/* List */}
       {!isAnon && (
         <div className="flex items-center justify-between px-5 py-2 border-b border-[var(--color-border-soft)]">
-          <div className="font-mono text-[10px] tracking-[0.08em] text-[var(--color-ink-muted)]">
+          <div className="font-mono text-[11px] tracking-[0.08em] text-[var(--color-ink-muted)]">
             {tr("sidebar.tracksPrefix")} · {unlimited ? tracks.length : `${tracks.length}/${STUDENT_TRACK_LIMIT}`}
           </div>
           <button
@@ -227,13 +239,13 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
       <div className="flex-1 overflow-y-auto thin-scroll">
         {isAnon && (
           <div className="px-5 py-4 border-b border-[var(--color-border-soft)]">
-            <div className="font-mono text-[10px] text-[var(--color-ink-muted)] leading-relaxed mb-2">
+            <div className="font-mono text-[11px] text-[var(--color-ink-muted)] leading-relaxed mb-2">
               {tr("sidebar.historyForRegistered")}
             </div>
             <button
               type="button"
               onClick={onSignInRequest}
-              className="font-mono text-[10px] tracking-[0.04em] text-[var(--color-accent-vocal)] hover:underline"
+              className="font-mono text-[11px] tracking-[0.04em] text-[var(--color-accent-vocal)] hover:underline"
             >
               → {tr("sidebar.signInToKeep")}
             </button>
@@ -263,7 +275,7 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
                 <div className="text-[14px] font-serif italic leading-tight truncate">
                   {t.title || "—"}
                 </div>
-                <div className="font-mono text-[10px] text-[var(--color-ink-muted)] min-w-0 flex items-center gap-1.5">
+                <div className="font-mono text-[11px] text-[var(--color-ink-muted)] min-w-0 flex items-center gap-1.5">
                   <MediaBadge hasVideo={hasVideo} />
                   <span className="truncate">
                     {t.artist || "unknown"} · {t.language}
@@ -272,7 +284,7 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
                 </div>
                 {t.status !== "done" && (
                   <div
-                    className={`font-mono text-[10px] mt-0.5 ${
+                    className={`font-mono text-[11px] mt-0.5 ${
                       t.status === "failed"
                         ? "text-[var(--color-accent-warn)]"
                         : "text-[var(--color-accent-vocal)]"
@@ -294,18 +306,6 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
             </div>
           );
         })}
-      </div>
-      <div className="px-4 py-2.5 border-t border-[var(--color-border-soft)] flex items-center justify-between gap-2">
-        <LocaleSwitch />
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className="p-1.5 rounded-md text-[var(--color-ink-muted)] hover:text-ink hover:bg-[var(--color-surface-muted)] transition-colors"
-          title={dark ? tr("sidebar.lightTheme") : tr("sidebar.darkTheme")}
-          aria-label={dark ? tr("sidebar.lightTheme") : tr("sidebar.darkTheme")}
-        >
-          {dark ? <IconSun size={15} /> : <IconMoon size={15} />}
-        </button>
       </div>
     </aside>
   );

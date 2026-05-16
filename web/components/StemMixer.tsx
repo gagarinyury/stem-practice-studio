@@ -230,7 +230,7 @@ export function StemMixer({ engineRef, stems, ready, vocalsMuted, onToggleVocals
           className="shrink-0 w-2 h-2 rounded-full"
           style={{ background: isMuted ? "transparent" : color, border: `1.5px solid ${color}` }}
         />
-        <div className="w-12 font-mono text-[9px] font-bold tracking-[0.12em] uppercase text-ink truncate" title={label}>
+        <div className="w-14 font-mono text-[10px] font-bold tracking-[0.12em] uppercase text-ink truncate" title={label}>
           {label}
         </div>
         <button
@@ -284,7 +284,7 @@ export function StemMixer({ engineRef, stems, ready, vocalsMuted, onToggleVocals
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between mb-1">
-        <span className="font-mono text-[9px] text-[var(--color-ink-faint)] tracking-widest uppercase">
+        <span className="font-mono text-[10px] text-[var(--color-ink-faint)] tracking-widest uppercase">
           {t("stems.tracks")}
         </span>
         <button
@@ -293,7 +293,7 @@ export function StemMixer({ engineRef, stems, ready, vocalsMuted, onToggleVocals
             else setLocalExpanded(!localExpanded);
           }}
           disabled={isExpanding}
-          className="font-mono text-[9px] text-[var(--color-accent-vocal)] hover:underline disabled:opacity-50 flex items-center gap-1"
+          className="font-mono text-[10px] text-[var(--color-accent-vocal)] hover:underline disabled:opacity-50 flex items-center gap-1"
         >
           {isExpanding && <IconLoader2 size={10} className="animate-spin" />}
           {isExpanding ? t("stems.loading") : expanded ? t("stems.collapse") : t("stems.allTracks")}

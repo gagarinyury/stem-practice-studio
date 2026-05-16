@@ -61,7 +61,7 @@ function ToastPill({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
     <button
       type="button"
       onClick={onDismiss}
-      className={`pointer-events-auto max-w-[360px] w-full md:w-auto rounded-lg border ${color} bg-[var(--color-surface)] shadow-lg px-4 py-3 font-mono text-[12px] text-left transition-all duration-200 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"}`}
+      className={`pointer-events-auto max-w-[360px] w-full md:w-auto rounded-lg border ${color} bg-[var(--color-surface)] shadow-lg px-4 py-3 font-mono text-[13px] text-left transition-all duration-200 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"}`}
     >
       {toast.message}
     </button>

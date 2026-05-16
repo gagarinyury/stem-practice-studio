@@ -448,13 +448,13 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
       <div className="flex-1 flex flex-col min-w-0">
         {showSignupNudge && (
           <div className="px-4 md:px-8 py-2.5 bg-gradient-to-r from-[var(--color-accent-vocal-50)] to-transparent border-b border-[var(--color-border-soft)] flex items-center justify-between gap-3">
-            <div className="font-mono text-[11px] text-ink leading-snug min-w-0">
+            <div className="font-mono text-[12px] text-ink leading-snug min-w-0">
               <span className="text-[var(--color-accent-vocal)]">●</span> {t("signup.nudge")}
             </div>
             <button
               type="button"
               onClick={onSignInRequest}
-              className="shrink-0 rounded-md bg-[var(--color-accent-vocal)] px-3 py-1.5 font-mono text-[11px] font-bold text-white hover:opacity-90 transition-opacity"
+              className="shrink-0 rounded-md bg-[var(--color-accent-vocal)] px-3 py-1.5 font-mono text-[12px] font-bold text-white hover:opacity-90 transition-opacity"
             >
               {t("signup.save")}
             </button>
@@ -485,7 +485,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
                 </span>
               )}
             </div>
-            <div className="font-mono text-[10px] md:text-[11px] text-[var(--color-ink-muted)] mt-0.5 md:mt-1 truncate">
+            <div className="font-mono text-[11px] md:text-[12px] text-[var(--color-ink-muted)] mt-0.5 md:mt-1 truncate">
               {manifest.artist || t("track.unknownArtist")}
               {manifest.duration ? ` · ${fmtDur(manifest.duration)}` : ""}
               {manifest.language ? ` · ${manifest.language.toUpperCase()}` : ""}
@@ -493,7 +493,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
           </div>
           <div className="ml-auto flex items-center gap-2 shrink-0">
             {!ready && !loadError && (
-              <div className="hidden md:flex px-3 py-1.5 font-mono text-[10px] bg-[var(--color-surface-muted)] text-[var(--color-ink-muted)] rounded-md items-center gap-1.5 border border-[var(--color-border-soft)]">
+              <div className="hidden md:flex px-3 py-1.5 font-mono text-[11px] bg-[var(--color-surface-muted)] text-[var(--color-ink-muted)] rounded-md items-center gap-1.5 border border-[var(--color-border-soft)]">
                 <IconLoader2 size={12} className="animate-spin" />
                 {isProcessing ? t("track.loadingOriginal") : t("track.downloadingAudio")}
               </div>
@@ -529,7 +529,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
                 <button
                   type="button"
                   onClick={() => setLyricsToolsOpen(true)}
-                  className="absolute top-3 right-3 md:top-4 md:right-4 z-20 font-mono text-[10px] tracking-[0.04em] px-2.5 py-1.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-surface)]/90 text-[var(--color-ink-muted)] hover:text-ink hover:border-[var(--color-accent-vocal)] hover:bg-[var(--color-surface)] backdrop-blur-sm transition-colors flex items-center gap-1.5 shadow-sm"
+                  className="absolute top-3 right-3 md:top-4 md:right-4 z-20 font-mono text-[11px] tracking-[0.04em] px-2.5 py-1.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-surface)]/90 text-[var(--color-ink-muted)] hover:text-ink hover:border-[var(--color-accent-vocal)] hover:bg-[var(--color-surface)] backdrop-blur-sm transition-colors flex items-center gap-1.5 shadow-sm"
                   title={t("track.wrongVariant")}
                 >
                   <IconSearch size={12} />

@@ -324,8 +324,8 @@ function AuthOverlay({ onAuth, onClose }: { onAuth: (u: import("@/lib/api").User
           ×
         </button>
         <div className="px-6 pt-6 pb-2">
-          <div className="font-serif italic text-[26px] leading-tight">{t("signup.modalTitle")}</div>
-          <div className="font-mono text-[11px] text-[var(--color-ink-muted)] mt-1.5">
+          <div className="font-serif italic text-[28px] leading-tight">{t("signup.modalTitle")}</div>
+          <div className="font-mono text-[12px] text-[var(--color-ink-muted)] mt-1.5">
             {t("signup.modalSubtitle")}
           </div>
         </div>
@@ -345,22 +345,22 @@ function DailyLimitModal({ onSignIn, onClose }: { onSignIn: () => void; onClose:
         className="max-w-[420px] w-full rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-surface)] p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="font-serif italic text-[24px] mb-2 leading-tight">{t("limit.title")}</div>
-        <div className="font-mono text-[12px] text-[var(--color-ink-muted)] leading-relaxed mb-5">
+        <div className="font-serif italic text-[26px] mb-2 leading-tight">{t("limit.title")}</div>
+        <div className="font-mono text-[13px] text-[var(--color-ink-muted)] leading-relaxed mb-5">
           {t("limit.body")}
         </div>
         <div className="flex flex-col-reverse sm:flex-row gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="sm:flex-none rounded-md border border-[var(--color-border-soft)] px-4 py-2.5 font-mono text-[12px] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-muted)] transition-colors"
+            className="sm:flex-none rounded-md border border-[var(--color-border-soft)] px-4 py-2.5 font-mono text-[13px] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-muted)] transition-colors"
           >
             {t("limit.later")}
           </button>
           <button
             type="button"
             onClick={onSignIn}
-            className="flex-1 rounded-md bg-[var(--color-accent-vocal)] px-4 py-2.5 font-mono text-[12px] font-bold text-white hover:opacity-90 transition-opacity"
+            className="flex-1 rounded-md bg-[var(--color-accent-vocal)] px-4 py-2.5 font-mono text-[13px] font-bold text-white hover:opacity-90 transition-opacity"
           >
             {t("limit.signUp")}
           </button>
@@ -390,14 +390,14 @@ function EmptyState({ onFile, onUrl, onDemo }: { onFile: (f: File) => void; onUr
     >
       <div className="text-center max-w-[460px] w-full">
         <div className="text-[36px] sm:text-[48px] leading-[1.05] font-serif italic mb-3">stem studio</div>
-        <div className="text-[12px] sm:text-[13px] text-[var(--color-ink-muted)] font-mono mb-3 px-2">
+        <div className="text-[13px] sm:text-[14px] text-[var(--color-ink-muted)] font-mono mb-3 px-2">
           {t("empty.subtitle")}
         </div>
         <div className="flex flex-wrap items-center justify-center gap-1.5 mb-7">
           {stemLabels.map((label) => (
             <span
               key={label}
-              className="font-mono text-[9px] tracking-[0.08em] uppercase px-1.5 py-0.5 rounded border border-[var(--color-border-soft)] text-[var(--color-ink-muted)]"
+              className="font-mono text-[10px] tracking-[0.08em] uppercase px-2 py-0.5 rounded border border-[var(--color-border-soft)] text-[var(--color-ink-muted)]"
             >
               {label}
             </span>
@@ -407,12 +407,12 @@ function EmptyState({ onFile, onUrl, onDemo }: { onFile: (f: File) => void; onUr
         <label className="block cursor-pointer">
           <div className={`rounded-xl border-2 border-dashed px-6 py-8 transition-all ${dragOver ? "border-[var(--color-accent-vocal)] bg-[var(--color-accent-vocal-50)] scale-[1.01]" : "border-[var(--color-border-soft)] hover:border-[var(--color-accent-vocal)] hover:bg-[var(--color-surface-muted)]/30"}`}>
             <div className="flex justify-center mb-3">
-              <div className="w-12 h-12 rounded-full bg-[var(--color-accent-vocal-50)] flex items-center justify-center text-[var(--color-accent-vocal)]">
-                <IconUpload size={22} />
+              <div className="w-14 h-14 rounded-full bg-[var(--color-accent-vocal-50)] flex items-center justify-center text-[var(--color-accent-vocal)]">
+                <IconUpload size={26} />
               </div>
             </div>
-            <div className="font-mono text-[13px] text-ink mb-1">{t("empty.dropAudio")}</div>
-            <div className="font-mono text-[11px] text-[var(--color-ink-muted)]">{t("empty.dropHint")}</div>
+            <div className="font-mono text-[14px] text-ink mb-1">{t("empty.dropAudio")}</div>
+            <div className="font-mono text-[12px] text-[var(--color-ink-muted)]">{t("empty.dropHint")}</div>
           </div>
           <input
             type="file"
@@ -428,7 +428,7 @@ function EmptyState({ onFile, onUrl, onDemo }: { onFile: (f: File) => void; onUr
 
         <div className="mt-5 flex items-center gap-3">
           <div className="flex-1 h-px bg-[var(--color-border-soft)]" />
-          <div className="font-mono text-[10px] tracking-[0.08em] text-[var(--color-ink-faint)]">{t("empty.or")}</div>
+          <div className="font-mono text-[11px] tracking-[0.08em] text-[var(--color-ink-faint)]">{t("empty.or")}</div>
           <div className="flex-1 h-px bg-[var(--color-border-soft)]" />
         </div>
 
@@ -447,12 +447,12 @@ function EmptyState({ onFile, onUrl, onDemo }: { onFile: (f: File) => void; onUr
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder={t("empty.urlPlaceholder")}
-            className="flex-1 min-w-0 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-paper)] px-3 py-2.5 font-mono text-[12px] outline-none focus:border-[var(--color-accent-vocal)] transition-colors"
+            className="flex-1 min-w-0 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-paper)] px-3 py-2.5 font-mono text-[13px] outline-none focus:border-[var(--color-accent-vocal)] transition-colors"
           />
           <button
             type="submit"
             disabled={!url.trim()}
-            className="rounded-md bg-[var(--color-accent-vocal)] px-4 py-2.5 font-mono text-[11px] font-bold text-white disabled:opacity-40 hover:opacity-90 transition-opacity"
+            className="rounded-md bg-[var(--color-accent-vocal)] px-4 py-2.5 font-mono text-[12px] font-bold text-white disabled:opacity-40 hover:opacity-90 transition-opacity"
           >
             {t("empty.split")}
           </button>
@@ -462,7 +462,7 @@ function EmptyState({ onFile, onUrl, onDemo }: { onFile: (f: File) => void; onUr
           <button
             type="button"
             onClick={onDemo}
-            className="mt-6 font-mono text-[11px] text-[var(--color-accent-vocal)] hover:underline"
+            className="mt-6 font-mono text-[12px] text-[var(--color-accent-vocal)] hover:underline"
           >
             {t("empty.tryDemo")}
           </button>
