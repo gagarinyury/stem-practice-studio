@@ -85,10 +85,12 @@ def transcribe_audio(req: TranscribeRequest):
 
     audio_path = Path(req.audio)
     out_path = Path(req.out)
-    
+    track_id = audio_path.parent.name
+
     if not audio_path.exists():
         raise HTTPException(404, f"audio not found: {req.audio}")
 
+    print(f"[STEM-ASR] track={track_id} event=start audio={audio_path.name}", flush=True)
     try:
         audio, sr = sf.read(str(audio_path), dtype="float32", always_2d=False)
         if audio.ndim == 2:
@@ -132,8 +134,10 @@ def transcribe_audio(req: TranscribeRequest):
 
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(json.dumps(out_data, ensure_ascii=False, indent=2))
+        print(f"[STEM-ASR] track={track_id} event=done elapsed={elapsed:.2f}s rtf={rtf:.3f} words={len(words)}", flush=True)
         return {"status": "ok", "words": len(words), "elapsed": elapsed}
-        
+
     except Exception as e:
+        print(f"[STEM-ASR] track={track_id} event=error error={type(e).__name__}: {e}", flush=True)
         traceback.print_exc()
         raise HTTPException(500, str(e))

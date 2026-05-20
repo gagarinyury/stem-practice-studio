@@ -412,6 +412,8 @@ def warmup_identify_llm() -> None:
 
 
 async def start_job(track_id: str, opts: RunOpts, user_id: str) -> None:
+    t0 = time.time()
+    print(f"[STEM-API] track={track_id} event=job_start user={user_id} url={opts.url}", flush=True)
     try:
         await asyncio.to_thread(run_pipeline, opts)
         d = track_dir(track_id)
@@ -421,7 +423,9 @@ async def start_job(track_id: str, opts: RunOpts, user_id: str) -> None:
             if data:
                 data["user_id"] = user_id
                 atomic_write_json(path, data)
+        print(f"[STEM-API] track={track_id} event=job_done elapsed={time.time()-t0:.2f}s", flush=True)
     except Exception as e:
+        print(f"[STEM-API] track={track_id} event=job_error elapsed={time.time()-t0:.2f}s error={type(e).__name__}: {e}", flush=True)
         atomic_write_json(track_dir(track_id) / "status.json", {
             "id": track_id,
             "user_id": user_id,

@@ -39,6 +39,9 @@ def _rel(run_dir: Path, path: Path | None) -> str | None:
 
 def _emit(state: RunState, cb: ProgressCb | None, stage: str, **extra):
     event = state.event(stage, **extra)
+    timings = state.timings
+    extras_str = " ".join(f"{k}={v}" for k, v in extra.items() if k not in ("source",))
+    print(f"[STEM] track={state.track_id} stage={stage} timings={timings} {extras_str}".rstrip(), flush=True)
     if cb:
         cb(event)
 
@@ -144,11 +147,13 @@ def run(opts: RunOpts, on_progress: ProgressCb | None = None) -> dict:
 
     def lyrics_branch() -> None:
         lyrics_path = out_dir / "lyrics.json"
+        print(f"[STEM] track={track_id} branch=lyrics step=asr_start", flush=True)
         t_asr = time.perf_counter()
         asr_data = clients.transcribe(audio_path, lyrics_path, language=opts.language, engine=opts.asr_engine)
         timings["asr"] = round(time.perf_counter() - t_asr, 2)
         _emit(state, on_progress, "asr_ready", words=len(asr_data.get("words") or []))
 
+        print(f"[STEM] track={track_id} branch=lyrics step=identify_start", flush=True)
         t_ident = time.perf_counter()
         candidates = identify_candidates(asr_data.get("words") or [], meta, opts.artist, opts.title)
         timings["identify"] = round(time.perf_counter() - t_ident, 2)
@@ -156,6 +161,7 @@ def run(opts: RunOpts, on_progress: ProgressCb | None = None) -> dict:
         _emit(state, on_progress, "identify_ready", candidates=len(candidates))
 
         duration = meta.get("duration") or asr_data.get("duration")
+        print(f"[STEM] track={track_id} branch=lyrics step=lrclib_start", flush=True)
         t_lrc = time.perf_counter()
         picked = choose_lyrics(candidates, asr_data.get("words") or [], duration)
         timings["lyrics"] = round(time.perf_counter() - t_lrc, 2)
@@ -225,6 +231,7 @@ def run(opts: RunOpts, on_progress: ProgressCb | None = None) -> dict:
         )
 
     def stems_branch() -> None:
+        print(f"[STEM] track={track_id} branch=stems step=separate_start", flush=True)
         t_sep = time.perf_counter()
         stems = clients.separate(audio_path, out_dir)
         timings["separate"] = round(time.perf_counter() - t_sep, 2)

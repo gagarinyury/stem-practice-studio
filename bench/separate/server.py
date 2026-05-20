@@ -101,14 +101,21 @@ def separate(req: SeparateRequest) -> dict[str, Any]:
         raise HTTPException(503, "separator is not ready")
     audio = Path(req.audio)
     out_dir = Path(req.output_dir)
+    track_id = out_dir.name
     if not audio.exists():
         raise HTTPException(404, f"audio not found: {audio}")
     stems_dir = out_dir / "stems"
-    elapsed = run_separator(audio, stems_dir)
+    print(f"[STEM-SEP] track={track_id} event=start audio={audio.name}", flush=True)
+    try:
+        elapsed = run_separator(audio, stems_dir)
+    except Exception as e:
+        print(f"[STEM-SEP] track={track_id} event=error error={type(e).__name__}: {e}", flush=True)
+        raise
     base = audio.stem
     stems = {}
     for name in STEMS:
         p = stems_dir / f"{base}_({name})_htdemucs_6s.flac"
         if p.exists():
             stems[name.lower()] = str(p)
+    print(f"[STEM-SEP] track={track_id} event=done elapsed={elapsed:.2f}s stems={len(stems)}", flush=True)
     return {"status": "ok", "elapsed": elapsed, "stems": stems}
