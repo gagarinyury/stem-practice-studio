@@ -1,0 +1,10 @@
+# Cron entries to install on evo with:  sudo crontab -e
+# (or place in /etc/cron.d/stem with a leading user field)
+#
+# Log file rotation suggested via logrotate (see /etc/logrotate.d).
+
+# Watchdog every 5 minutes — alerts on orphans, foreign GPU procs, amdgpu kernel dirt
+*/5 * * * * /srv/apps/stem-practice-studio/ops/watchdog.sh >> /var/log/stem-watchdog.log 2>&1
+
+# Daily watchdog log trim (keep last 5000 lines)
+0 4 * * *  tail -n 5000 /var/log/stem-watchdog.log > /var/log/stem-watchdog.log.tmp && mv /var/log/stem-watchdog.log.tmp /var/log/stem-watchdog.log

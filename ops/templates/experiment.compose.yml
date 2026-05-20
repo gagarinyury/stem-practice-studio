@@ -1,0 +1,51 @@
+# Template for a NEW GPU project on evo that must coexist with STEM.
+#
+# COOPERATIVE QUEUE MODEL:
+#   STEM workers take an exclusive flock on /var/lib/gpu-mutex/gpu.lock before
+#   touching the GPU. Your project does the same → both wait in a FIFO queue
+#   instead of fighting for compute. No blocking, no STEM downtime, just turns.
+#
+#   How to participate (pick one):
+#     a) wrap your entrypoint with ops/gpu-lock (works for any binary)
+#     b) in Python, use bench.gpu_mutex.gpu_lock context manager
+#     c) in shell, prefix with `flock /gpu-mutex/gpu.lock --`
+#
+# Why each setting:
+#   cgroup_parent: experiments.slice   — low CPU/IO weight relative to STEM
+#                                        (create slice once: see ops/systemd/experiments.slice)
+#   stop_grace_period: 30s             — gives hipDeviceReset time to run on SIGTERM
+#                                        (skip and you'll dirty the amdgpu kernel state)
+#   devices: /dev/kfd, /dev/dri        — minimum needed for ROCm; do NOT use --privileged
+#   mem_limit                          — hard cap; 24G leaves headroom for STEM stems_branch
+#   restart: "no"                      — experiment must not auto-restart at boot
+#                                        and steal GPU before STEM warms up
+#
+# Hard rules:
+#   1. ALWAYS participate in the GPU mutex (otherwise you starve STEM).
+#   2. To stop:  `docker compose down -t 30`. Never kill -9.
+#   3. Preflight is advisory now — running `ops/preflight.sh` will tell you
+#      if STEM is busy (you'll queue), not refuse to launch.
+
+services:
+  my-gpu-worker:
+    image: REPLACE_ME
+    cgroup_parent: experiments.slice
+    stop_grace_period: 30s
+    restart: "no"
+    mem_limit: 24g
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    volumes:
+      # Mount the shared mutex dir so flock targets the same inode as STEM
+      - /var/lib/gpu-mutex:/gpu-mutex
+      # Mount the gpu-lock wrapper read-only (or copy into image at build time)
+      - /srv/apps/stem-practice-studio/ops/gpu-lock:/usr/local/bin/gpu-lock:ro
+    environment:
+      HSA_OVERRIDE_GFX_VERSION: "11.0.1"
+      GPU_LOCK_PATH: "/gpu-mutex/gpu.lock"
+      GPU_LOCK_LABEL: "my-experiment"
+    # === Wrap your real entrypoint with gpu-lock ===
+    # If your image's CMD is `llama-server -m foo.gguf -ngl 999`, rewrite it as:
+    entrypoint: ["/usr/local/bin/gpu-lock"]
+    command: ["llama-server", "-m", "/models/foo.gguf", "-ngl", "999"]

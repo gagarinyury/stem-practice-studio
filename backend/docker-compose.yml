@@ -14,9 +14,11 @@ services:
     volumes:
       - /srv/apps/stem-practice-studio:/srv/apps/stem-practice-studio
       - /srv/models/stem-practice-asr:/asr-models
+      - /var/lib/gpu-mutex:/gpu-mutex
     working_dir: /srv/apps/stem-practice-studio
     environment:
       PARAKEET_WARMUP_SECONDS: "${PARAKEET_WARMUP_SECONDS:-8}"
+      GPU_LOCK_PATH: "${GPU_LOCK_PATH:-/gpu-mutex/gpu.lock}"
     ports:
       - "0.0.0.0:${ASR_PORT:-8091}:${ASR_PORT:-8091}"
     command: ["python", "-m", "uvicorn", "bench.asr.server:app", "--host", "0.0.0.0", "--port", "${ASR_PORT:-8091}"]
@@ -42,7 +44,11 @@ services:
     volumes:
       - /srv/apps/stem-practice-studio:/srv/apps/stem-practice-studio
       - /srv/models/stem-practice:/models:ro
+      - /var/lib/gpu-mutex:/gpu-mutex
     working_dir: /srv/apps/stem-practice-studio
+    environment:
+      SEPARATE_TIMEOUT: "${SEPARATE_TIMEOUT:-600}"
+      GPU_LOCK_PATH: "${GPU_LOCK_PATH:-/gpu-mutex/gpu.lock}"
     ports:
       - "0.0.0.0:${SEPARATOR_PORT:-8092}:${SEPARATOR_PORT:-8092}"
     command: ["python", "-m", "uvicorn", "bench.separate.server:app", "--host", "0.0.0.0", "--port", "${SEPARATOR_PORT:-8092}"]

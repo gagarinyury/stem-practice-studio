@@ -1,0 +1,7 @@
+[Unit]
+Description=cgroup slice with elevated priority for STEM production containers
+Before=slices.target
+
+[Slice]
+CPUWeight=200
+IOWeight=200

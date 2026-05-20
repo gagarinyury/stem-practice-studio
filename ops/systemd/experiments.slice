@@ -1,0 +1,8 @@
+[Unit]
+Description=cgroup slice for low-priority experimental GPU workloads
+Before=slices.target
+
+[Slice]
+CPUWeight=50
+IOWeight=50
+MemoryHigh=32G

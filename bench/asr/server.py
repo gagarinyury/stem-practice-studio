@@ -1,3 +1,4 @@
+import asyncio
 import os
 import time
 import json
@@ -11,12 +12,16 @@ import torchaudio.functional as taF
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from bench.gpu_mutex import GPU_LOCK_PATH, gpu_lock
+
 app = FastAPI()
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 READY = False
 WARMUP_ERROR: str | None = None
 WARMUP_ELAPSED: float | None = None
+
+_gpu_lock = asyncio.Lock()
 
 print(f"[server] loading nvidia/parakeet-tdt-0.6b-v3 on {device}...")
 from nemo.collections.asr.parts.submodules.transducer_decoding import tdt_label_looping, rnnt_label_looping
@@ -75,11 +80,58 @@ def health():
         "warmup_seconds": int(os.environ.get("PARAKEET_WARMUP_SECONDS", "8")),
         "warmup_elapsed": WARMUP_ELAPSED,
         "warmup_error": WARMUP_ERROR,
+        "busy": _gpu_lock.locked(),
+        "gpu_mutex_path": GPU_LOCK_PATH or None,
     }
 
 
+def _transcribe_sync(audio_path: Path, out_path: Path, engine: str, track_id: str) -> dict:
+    audio, sr = sf.read(str(audio_path), dtype="float32", always_2d=False)
+    if audio.ndim == 2:
+        audio = audio.mean(axis=1)
+    duration = len(audio) / sr
+
+    target_sr = 16000
+    if sr != target_sr:
+        audio = taF.resample(torch.from_numpy(audio).unsqueeze(0), orig_freq=sr, new_freq=target_sr).squeeze(0).numpy()
+        sr = target_sr
+
+    t0 = time.perf_counter()
+    with gpu_lock(label=f"asr:{audio_path.name}") as waited:
+        if waited > 0.5:
+            print(f"[STEM-ASR] gpu_mutex wait={waited:.2f}s file={audio_path.name}", flush=True)
+        output = parakeet_model.transcribe([audio], timestamps=True)
+        if device == "cuda":
+            torch.cuda.synchronize()
+    elapsed = time.perf_counter() - t0
+    rtf = elapsed / duration if duration else 0.0
+
+    hyp = output[0]
+    text = getattr(hyp, "text", "") or ""
+    timestamp = getattr(hyp, "timestamp", None) or {}
+    word_stamps = timestamp.get("word", []) if isinstance(timestamp, dict) else []
+    words = [{"word": w["word"], "start": float(w["start"]), "end": float(w["end"])} for w in word_stamps]
+
+    out_data = {
+        "model": "nvidia/parakeet-tdt-0.6b-v3",
+        "engine": engine,
+        "device": device,
+        "audio": audio_path.name,
+        "duration": duration,
+        "elapsed": elapsed,
+        "rtf": rtf,
+        "text": text,
+        "words": words,
+    }
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(out_data, ensure_ascii=False, indent=2))
+    print(f"[STEM-ASR] track={track_id} event=done elapsed={elapsed:.2f}s rtf={rtf:.3f} words={len(words)}", flush=True)
+    return {"status": "ok", "words": len(words), "elapsed": elapsed}
+
+
 @app.post("/transcribe")
-def transcribe_audio(req: TranscribeRequest):
+async def transcribe_audio(req: TranscribeRequest):
     if not READY:
         raise HTTPException(503, f"ASR is not ready: {WARMUP_ERROR or 'warming'}")
 
@@ -90,54 +142,19 @@ def transcribe_audio(req: TranscribeRequest):
     if not audio_path.exists():
         raise HTTPException(404, f"audio not found: {req.audio}")
 
-    print(f"[STEM-ASR] track={track_id} event=start audio={audio_path.name}", flush=True)
-    try:
-        audio, sr = sf.read(str(audio_path), dtype="float32", always_2d=False)
-        if audio.ndim == 2:
-            audio = audio.mean(axis=1)
-        duration = len(audio) / sr
-        
-        target_sr = 16000
-        if sr != target_sr:
-            audio = taF.resample(torch.from_numpy(audio).unsqueeze(0), orig_freq=sr, new_freq=target_sr).squeeze(0).numpy()
-            sr = target_sr
+    engine = (req.engine or "").lower().strip() or "parakeet"
+    if engine != "parakeet":
+        engine = "parakeet"
 
-        t0 = time.perf_counter()
-        
-        engine = (req.engine or "").lower().strip()
-        if engine != "parakeet":
-            engine = "parakeet"
-
-        output = parakeet_model.transcribe([audio], timestamps=True)
-        if device == "cuda":
-            torch.cuda.synchronize()
-        elapsed = time.perf_counter() - t0
-        rtf = elapsed / duration if duration else 0.0
-        
-        hyp = output[0]
-        text = getattr(hyp, "text", "") or ""
-        timestamp = getattr(hyp, "timestamp", None) or {}
-        word_stamps = timestamp.get("word", []) if isinstance(timestamp, dict) else []
-        words = [{"word": w["word"], "start": float(w["start"]), "end": float(w["end"])} for w in word_stamps]
-
-        out_data = {
-            "model": "nvidia/parakeet-tdt-0.6b-v3",
-            "engine": engine,
-            "device": device,
-            "audio": audio_path.name,
-            "duration": duration,
-            "elapsed": elapsed,
-            "rtf": rtf,
-            "text": text,
-            "words": words,
-        }
-
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(json.dumps(out_data, ensure_ascii=False, indent=2))
-        print(f"[STEM-ASR] track={track_id} event=done elapsed={elapsed:.2f}s rtf={rtf:.3f} words={len(words)}", flush=True)
-        return {"status": "ok", "words": len(words), "elapsed": elapsed}
-
-    except Exception as e:
-        print(f"[STEM-ASR] track={track_id} event=error error={type(e).__name__}: {e}", flush=True)
-        traceback.print_exc()
-        raise HTTPException(500, str(e))
+    print(f"[STEM-ASR] track={track_id} event=start audio={audio_path.name} lock_held={_gpu_lock.locked()}", flush=True)
+    t_wait = time.perf_counter()
+    async with _gpu_lock:
+        wait_elapsed = time.perf_counter() - t_wait
+        if wait_elapsed > 0.5:
+            print(f"[STEM-ASR] track={track_id} event=lock_acquired wait={wait_elapsed:.2f}s", flush=True)
+        try:
+            return await asyncio.to_thread(_transcribe_sync, audio_path, out_path, engine, track_id)
+        except Exception as e:
+            print(f"[STEM-ASR] track={track_id} event=error error={type(e).__name__}: {e}", flush=True)
+            traceback.print_exc()
+            raise HTTPException(500, str(e))

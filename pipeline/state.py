@@ -9,9 +9,19 @@ from typing import Any
 
 def atomic_write_json(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(tmp, path)
+    # Per-call unique tmp name — two threads writing the same status.json
+    # (e.g. lyrics_branch and stems_branch in pipeline/process.py) must NOT
+    # collide on a shared `.status.json.tmp`.
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp")
+    try:
+        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
+        raise
 
 
 def read_json(path: Path, default: dict[str, Any] | None = None) -> dict[str, Any]:

@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Cooperative GPU mutex wrapper for non-Python projects.
+#
+# Usage:
+#   gpu-lock <command> [args...]
+#
+# Wraps <command> with an exclusive flock on $GPU_LOCK_PATH
+# (default /var/lib/gpu-mutex/gpu.lock, or /gpu-mutex/gpu.lock inside containers).
+#
+# Any participant — STEM workers, your llama-server, vllm, anything ROCm —
+# that uses this wrapper will queue cooperatively. Non-participants will still
+# steal the GPU, so wrap them all.
+#
+# Examples:
+#   gpu-lock llama-server -m model.gguf -ngl 999
+#   gpu-lock python my_inference.py
+#   gpu-lock bash -c "stress-test && evaluate"
+#
+# Inside a docker compose template:
+#   command: ["/opt/gpu-lock", "your-real-entrypoint", "--flag"]
+# (mount this script and /var/lib/gpu-mutex into the container)
+
+set -euo pipefail
+
+LOCK_PATH="${GPU_LOCK_PATH:-/var/lib/gpu-mutex/gpu.lock}"
+LOCK_DIR=$(dirname "$LOCK_PATH")
+mkdir -p "$LOCK_DIR"
+
+if [ $# -eq 0 ]; then
+  echo "usage: gpu-lock <command> [args...]" >&2
+  exit 2
+fi
+
+LABEL="${GPU_LOCK_LABEL:-$(basename "$1")}"
+T0=$(date +%s)
+exec 9>>"$LOCK_PATH"
+
+# Acquire blocking exclusive lock on fd 9
+flock 9
+WAITED=$(( $(date +%s) - T0 ))
+if [ "$WAITED" -gt 1 ]; then
+  echo "[gpu-lock] waited=${WAITED}s label=${LABEL}" >&2
+fi
+
+# Record holder
+printf 'pid=%s host=%s label=%s since=%s\n' "$$" "$(hostname)" "$LABEL" "$(date +%s)" >&9 || true
+
+# Run the command. Lock auto-released when process exits (fd 9 closes).
+exec "$@"

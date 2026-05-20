@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 import subprocess
 import tempfile
 import time
@@ -12,14 +14,19 @@ import soundfile as sf
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from bench.gpu_mutex import GPU_LOCK_PATH, gpu_lock
+
 app = FastAPI(title="Stem Separator Service")
 
 MODEL = "htdemucs_6s.yaml"
 MODEL_DIR = "/models"
 STEMS = ["Vocals", "Drums", "Bass", "Guitar", "Piano", "Other"]
+SEPARATE_TIMEOUT = int(os.environ.get("SEPARATE_TIMEOUT", "600"))
 READY = False
 WARMUP_ERROR: str | None = None
 WARMUP_ELAPSED: float | None = None
+
+_gpu_lock = asyncio.Lock()
 
 
 class SeparateRequest(BaseModel):
@@ -27,7 +34,28 @@ class SeparateRequest(BaseModel):
     output_dir: str
 
 
-def run_separator(audio: Path, stems_dir: Path) -> float:
+def _run_subprocess_with_timeout(cmd: list[str], timeout: int) -> None:
+    """Run cmd; if it exceeds timeout, kill it and raise TimeoutExpired.
+
+    Raises CalledProcessError on non-zero exit. The kill path waits up to 10s
+    for the killed process to actually go away — that prevents zombie
+    audio-separator subprocesses (the root cause of the production cascade).
+    """
+    proc = subprocess.Popen(cmd)
+    try:
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            pass
+        raise
+    if proc.returncode != 0:
+        raise subprocess.CalledProcessError(proc.returncode, cmd)
+
+
+def run_separator(audio: Path, stems_dir: Path, *, timeout: int = SEPARATE_TIMEOUT) -> float:
     stems_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
         "audio-separator",
@@ -46,7 +74,10 @@ def run_separator(audio: Path, stems_dir: Path) -> float:
         "0.1",
     ]
     t0 = time.perf_counter()
-    subprocess.run(cmd, check=True)
+    with gpu_lock(label=f"separator:{audio.name}") as waited:
+        if waited > 0.5:
+            print(f"[STEM-SEP] gpu_mutex wait={waited:.2f}s file={audio.name}", flush=True)
+        _run_subprocess_with_timeout(cmd, timeout)
     return time.perf_counter() - t0
 
 
@@ -65,7 +96,7 @@ def warmup() -> None:
             mono = (tone * envelope).astype(np.float32)
             audio = np.column_stack([mono, mono])
             sf.write(str(wav), audio, sr)
-            run_separator(wav, td_path / "stems")
+            run_separator(wav, td_path / "stems", timeout=300)
             vocals = td_path / "stems" / f"{wav.stem}_(Vocals)_{MODEL.removesuffix('.yaml')}.flac"
             if not vocals.exists():
                 raise RuntimeError(f"separator warmup produced no vocals stem: {vocals}")
@@ -92,11 +123,14 @@ def health() -> dict[str, Any]:
         "warmup_seconds": 20,
         "warmup_elapsed": WARMUP_ELAPSED,
         "warmup_error": WARMUP_ERROR,
+        "separate_timeout": SEPARATE_TIMEOUT,
+        "busy": _gpu_lock.locked(),
+        "gpu_mutex_path": GPU_LOCK_PATH or None,
     }
 
 
 @app.post("/separate")
-def separate(req: SeparateRequest) -> dict[str, Any]:
+async def separate(req: SeparateRequest) -> dict[str, Any]:
     if not READY:
         raise HTTPException(503, "separator is not ready")
     audio = Path(req.audio)
@@ -105,12 +139,20 @@ def separate(req: SeparateRequest) -> dict[str, Any]:
     if not audio.exists():
         raise HTTPException(404, f"audio not found: {audio}")
     stems_dir = out_dir / "stems"
-    print(f"[STEM-SEP] track={track_id} event=start audio={audio.name}", flush=True)
-    try:
-        elapsed = run_separator(audio, stems_dir)
-    except Exception as e:
-        print(f"[STEM-SEP] track={track_id} event=error error={type(e).__name__}: {e}", flush=True)
-        raise
+    print(f"[STEM-SEP] track={track_id} event=start audio={audio.name} lock_held={_gpu_lock.locked()}", flush=True)
+    t_wait = time.perf_counter()
+    async with _gpu_lock:
+        wait_elapsed = time.perf_counter() - t_wait
+        if wait_elapsed > 0.5:
+            print(f"[STEM-SEP] track={track_id} event=lock_acquired wait={wait_elapsed:.2f}s", flush=True)
+        try:
+            elapsed = await asyncio.to_thread(run_separator, audio, stems_dir)
+        except subprocess.TimeoutExpired:
+            print(f"[STEM-SEP] track={track_id} event=timeout limit={SEPARATE_TIMEOUT}s", flush=True)
+            raise HTTPException(504, f"separator timeout after {SEPARATE_TIMEOUT}s")
+        except Exception as e:
+            print(f"[STEM-SEP] track={track_id} event=error error={type(e).__name__}: {e}", flush=True)
+            raise
     base = audio.stem
     stems = {}
     for name in STEMS:

@@ -65,7 +65,24 @@ def now() -> float:
 
 
 def make_track_id(title: str | None) -> str:
-    base = slugify(title or "track", max_length=40, word_boundary=True, save_order=True) or "track"
+    raw = (title or "").strip()
+    # If display_title is a URL (user submitted a YouTube link without a title),
+    # extract the video id instead of letting "https://www.youtube.com/watch?v=X"
+    # leak into the slug as "https-www-youtube-com-watch-v-X".
+    if raw.lower().startswith(("http://", "https://")):
+        try:
+            from urllib.parse import urlparse, parse_qs
+            u = urlparse(raw)
+            host = (u.hostname or "").lower()
+            vid = parse_qs(u.query).get("v", [None])[0]
+            if not vid and host.endswith("youtu.be"):
+                vid = u.path.lstrip("/")
+            if not vid and "/shorts/" in u.path:
+                vid = u.path.rsplit("/shorts/", 1)[-1].split("/")[0]
+            raw = f"yt-{vid}" if vid else "track"
+        except Exception:
+            raw = "track"
+    base = slugify(raw or "track", max_length=40, word_boundary=True, save_order=True) or "track"
     return f"{base}-{nanoid_generate(size=6)}"
 
 
