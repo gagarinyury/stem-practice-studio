@@ -1,16 +1,19 @@
 # Stem Practice Studio — test entrypoints
-.PHONY: test test-unit test-integration test-smoke test-all predeploy postdeploy install-deps
+.PHONY: test test-unit test-integration test-web test-smoke test-all predeploy postdeploy install-deps
 
 PYTHON ?= python3
 
 # Default: fast suite that catches regressions on a laptop with no evo access.
-test: test-unit test-integration
+test: test-unit test-integration test-web
 
 test-unit:
 	$(PYTHON) -m pytest tests/unit -q
 
 test-integration:
 	$(PYTHON) -m pytest tests/integration -q
+
+test-web:
+	cd web && npm test --silent
 
 # Live smoke against evo (uses STEM_*_URL env if set, otherwise evox2 defaults).
 # Skipped = endpoint unreachable; FAILED = real regression on prod.

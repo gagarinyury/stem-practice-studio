@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start -p 4324",
     "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "postinstall": "cp -f node_modules/@echogarden/rubberband-wasm/rubberband.wasm public/rubberband.wasm && cp -f node_modules/@echogarden/rubberband-wasm/rubberband.js public/rubberband.js"
   },
   "dependencies": {
@@ -23,9 +25,12 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^4.1.7",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.7"
   }
 }

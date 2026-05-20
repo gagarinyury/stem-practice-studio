@@ -23,3 +23,19 @@ jobs:
         run: python -m pytest tests/unit -v
       - name: Run integration tests
         run: python -m pytest tests/integration -v
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install web deps
+        working-directory: web
+        run: npm ci
+      - name: Run web tests
+        working-directory: web
+        run: npm test

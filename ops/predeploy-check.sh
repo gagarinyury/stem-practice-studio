@@ -24,14 +24,25 @@ if ! python3 -m pytest tests/unit -q; then
     exit 1
 fi
 
-section "2/3 integration tests (must be green)"
+section "2/4 integration tests (must be green)"
 if ! python3 -m pytest tests/integration -q; then
     echo
     echo "FAIL: integration tests broken. DO NOT deploy."
     exit 1
 fi
 
-section "3/3 live smoke against CURRENT prod (informational)"
+section "3/4 web tests (must be green)"
+if [ -d web/node_modules ]; then
+    if ! (cd web && npm test --silent); then
+        echo
+        echo "FAIL: web tests broken. DO NOT deploy."
+        exit 1
+    fi
+else
+    echo "SKIP: web/node_modules not installed — run 'cd web && npm install' first."
+fi
+
+section "4/4 live smoke against CURRENT prod (informational)"
 echo "Hitting evox2:8091/8092/8093 to compare deploy state with local code..."
 if python3 -m pytest tests/smoke -q; then
     echo
