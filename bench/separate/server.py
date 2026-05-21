@@ -15,6 +15,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from bench.gpu_mutex import GPU_LOCK_PATH, gpu_lock
+from bench._subprocess_timeout import run_subprocess_with_timeout as _run_subprocess_with_timeout
 
 app = FastAPI(title="Stem Separator Service")
 
@@ -32,27 +33,6 @@ _gpu_lock = asyncio.Lock()
 class SeparateRequest(BaseModel):
     audio: str
     output_dir: str
-
-
-def _run_subprocess_with_timeout(cmd: list[str], timeout: int) -> None:
-    """Run cmd; if it exceeds timeout, kill it and raise TimeoutExpired.
-
-    Raises CalledProcessError on non-zero exit. The kill path waits up to 10s
-    for the killed process to actually go away — that prevents zombie
-    audio-separator subprocesses (the root cause of the production cascade).
-    """
-    proc = subprocess.Popen(cmd)
-    try:
-        proc.wait(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        try:
-            proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            pass
-        raise
-    if proc.returncode != 0:
-        raise subprocess.CalledProcessError(proc.returncode, cmd)
 
 
 def run_separator(audio: Path, stems_dir: Path, *, timeout: int = SEPARATE_TIMEOUT) -> float:

@@ -14,7 +14,7 @@ import time
 import psutil
 import pytest
 
-from bench.separate.server import _run_subprocess_with_timeout
+from bench._subprocess_timeout import run_subprocess_with_timeout as _run_subprocess_with_timeout
 
 
 def test_normal_exit_returns_cleanly():
