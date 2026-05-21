@@ -15,6 +15,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - name: Install ffmpeg (needed by pipeline/process.py resolve_input)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
