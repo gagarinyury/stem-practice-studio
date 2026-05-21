@@ -32,4 +32,4 @@ postdeploy:
 	bash ops/postdeploy-check.sh
 
 install-deps:
-	$(PYTHON) -m pip install pytest httpx psutil fastapi pydantic python-multipart python-slugify nanoid
+	$(PYTHON) -m pip install -r requirements-test.txt

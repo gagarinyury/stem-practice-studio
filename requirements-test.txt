@@ -1,0 +1,18 @@
+# Python deps required to run tests/ — used by:
+#   - CI: .github/workflows/test.yml
+#   - Local: `make install-deps`
+#
+# Versions intentionally loose: backend itself doesn't pin these, we want to
+# catch breakage from upstream the same way prod would.
+
+pytest>=8
+httpx>=0.28
+psutil>=5
+
+# These are also runtime deps of backend/, but tests import them directly via
+# TestClient / module reloads, so we keep them here for CI standalone runs.
+fastapi>=0.115
+pydantic>=2.9
+python-multipart>=0.0.12
+python-slugify>=8
+nanoid>=2
