@@ -104,6 +104,13 @@ export class StemEngine {
       })
     );
 
+    // The component may unmount mid-load (user picks another track, navigates
+    // away). dispose() closes ctx → any GainNode/connect call below would
+    // emit "...not useful when context is closed" warnings into the console.
+    if (ctx.state === "closed" || this.ctx !== ctx) {
+      return;
+    }
+
     let finalBuffers = fetched;
     if (mergeStems) {
       const keepSet = new Set(mergeStems.keep);
@@ -154,10 +161,13 @@ export class StemEngine {
       const res = await fetch(spec.url);
       const arr = await res.arrayBuffer();
       const buffer = await ctx.decodeAudioData(arr);
+      // Engine may have been disposed mid-expand — bail before touching nodes
+      if (ctx.state === "closed" || this.ctx !== ctx) return this.stemKeys;
       decoded.push({ key: spec.key, buffer });
     }
 
     if (decoded.length === 0) return this.stemKeys;
+    if (ctx.state === "closed" || this.ctx !== ctx) return this.stemKeys;
 
     // Snapshot playback state before the swap
     const wasPlaying = this.state === "playing";
@@ -638,6 +648,10 @@ export class StemEngine {
     }
     this.ctx?.close();
     this.ctx = null;
+    this.mix = null;
+    this.analyser = null;
+    this.fftL = null;
+    this.fftR = null;
     this.setState("idle");
   }
 
