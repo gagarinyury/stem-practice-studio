@@ -49,6 +49,16 @@ curl -s http://127.0.0.1:8092/health | grep gpu_mutex_path
 # Должно быть: "gpu_mutex_path":"/gpu-mutex/gpu.lock"
 ```
 
+## 5a. Симлинк .env для compose v2
+
+Compose v2 ищет `.env` рядом с compose-файлом (`backend/.env`), а не в
+корне репо. Чтобы один общий `.env` в корне работал:
+```bash
+ln -sfn ../.env /srv/apps/stem-practice-studio/backend/.env
+```
+Без этого env-vars без хардкод-дефолтов (например `DEMO_TRACK_ID`) подставятся
+пустыми. См. [demo-track.md](demo-track.md).
+
 ## 6. Установить watchdog в cron
 ```bash
 sudo touch /var/log/stem-watchdog.log

@@ -86,6 +86,7 @@ flock /var/lib/gpu-mutex/gpu.lock -- python my_inference.py
 |---|---|---|
 | `bench/gpu_mutex.py` | Python context manager для кооперативной очереди | импортируется STEM-воркерами |
 | `ops/gpu-lock` | shell-обёртка `flock + exec` | монтируется в чужие контейнеры |
+| `ops/demo-track.md` | как настроить/заменить landing-демо-трек | при смене публичного примера |
 | `ops/preflight.sh` | advisory-проверка (PASS/QUEUE/FAIL) | перед запуском нового проекта |
 | `ops/watchdog.sh` | алерты на сирот / kernel-дырки / упавшие контейнеры | cron каждые 5 мин |
 | `ops/gpu-status.sh` | полная картина GPU + контейнеры + dmesg | вручную, когда странно |

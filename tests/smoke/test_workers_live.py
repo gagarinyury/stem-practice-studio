@@ -135,3 +135,47 @@ class TestRunsDirectoryServed:
             pytest.skip(f"api unreachable: {type(e).__name__}")
         # 404 = healthy; 500 = bug in static handler
         assert r.status_code == 404, f"got {r.status_code}: {r.text[:200]}"
+
+
+class TestDemoTrack:
+    """The landing-page demo track must be publicly accessible (no auth) and
+    fully processed. If it 404s, every anon visitor sees a broken UI on first
+    load. If it's missing stems, the demo player breaks.
+
+    Skipped (not failed) if no DEMO_TRACK_ID is configured — that's a valid
+    deploy state for environments without a public demo.
+    """
+
+    def _demo_id(self) -> str | None:
+        r = _get(f"{API}/healthz")
+        # healthz doesn't expose DEMO_TRACK_ID; we rely on a known prod id by env
+        # override, or skip if unset
+        import os
+        return os.environ.get("STEM_DEMO_TRACK_ID")
+
+    def test_demo_track_publicly_accessible(self):
+        demo = self._demo_id()
+        if not demo:
+            pytest.skip("STEM_DEMO_TRACK_ID not set — demo check optional")
+        # Unauthenticated GET must succeed
+        try:
+            r = httpx.get(f"{API}/tracks/{demo}", timeout=5.0)
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as e:
+            pytest.skip(f"api unreachable: {type(e).__name__}")
+        assert r.status_code == 200, (
+            f"demo track {demo} not accessible: {r.status_code}. "
+            "Check DEMO_TRACK_ID env, backend/.env symlink, and chattr +i on the dir."
+        )
+        body = r.json()
+        assert body.get("stems"), "demo track has no stems"
+        assert "vocals" in body["stems"], "demo missing vocals stem"
+
+    def test_demo_source_wav_streamable(self):
+        demo = self._demo_id()
+        if not demo:
+            pytest.skip("STEM_DEMO_TRACK_ID not set")
+        try:
+            r = httpx.head(f"{API}/runs/{demo}/source.wav", timeout=5.0)
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as e:
+            pytest.skip(f"api unreachable: {type(e).__name__}")
+        assert r.status_code == 200, f"demo source.wav not streamable: {r.status_code}"

@@ -17,8 +17,9 @@ test-web:
 
 # Live smoke against evo (uses STEM_*_URL env if set, otherwise evox2 defaults).
 # Skipped = endpoint unreachable; FAILED = real regression on prod.
+# STEM_DEMO_TRACK_ID enables demo-track checks (the public landing example).
 test-smoke:
-	$(PYTHON) -m pytest tests/smoke -v
+	STEM_DEMO_TRACK_ID=$${STEM_DEMO_TRACK_ID:-pull-it-apart-4SaUBA} $(PYTHON) -m pytest tests/smoke -v
 
 test-all:
 	$(PYTHON) -m pytest tests/ -v

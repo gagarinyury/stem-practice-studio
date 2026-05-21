@@ -43,6 +43,7 @@ else
 fi
 
 section "4/4 live smoke against CURRENT prod (informational)"
+export STEM_DEMO_TRACK_ID="${STEM_DEMO_TRACK_ID:-pull-it-apart-4SaUBA}"
 echo "Hitting evox2:8091/8092/8093 to compare deploy state with local code..."
 if python3 -m pytest tests/smoke -q; then
     echo

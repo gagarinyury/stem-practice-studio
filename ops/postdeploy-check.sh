@@ -13,6 +13,7 @@ echo "Waiting 30s for containers to finish warmup..."
 sleep 30
 
 echo "Running full live smoke against deployed prod..."
+export STEM_DEMO_TRACK_ID="${STEM_DEMO_TRACK_ID:-pull-it-apart-4SaUBA}"
 if python3 -m pytest tests/smoke -v; then
     echo
     echo "DEPLOY VERIFIED: all smoke tests green. New code is live."
