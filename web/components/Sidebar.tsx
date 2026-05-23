@@ -176,7 +176,7 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
           <span>{busy ? tr("sidebar.uploading") : tr("sidebar.uploadAudio")}</span>
           <input
             type="file"
-            accept="audio/*,video/*"
+            accept="audio/*,video/*,.mp3,.m4a,.wav,.flac,.aac,.ogg,.mp4,.mov,.webm"
             className="hidden"
             disabled={busy}
             onChange={(e) => {

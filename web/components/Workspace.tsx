@@ -416,7 +416,7 @@ function EmptyState({ onFile, onUrl, onDemo }: { onFile: (f: File) => void; onUr
           </div>
           <input
             type="file"
-            accept="audio/*,video/*"
+            accept="audio/*,video/*,.mp3,.m4a,.wav,.flac,.aac,.ogg,.mp4,.mov,.webm"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
