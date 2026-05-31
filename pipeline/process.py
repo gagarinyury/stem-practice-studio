@@ -12,6 +12,7 @@ from typing import Callable, Optional
 from . import clients
 from . import yt as yt_mod
 from .identify import best_metadata_candidate, identify_candidates
+from .align import align as align_words
 from .lyrics import choose as choose_lyrics, public_candidates
 from .state import RunState, atomic_write_json
 
@@ -93,6 +94,85 @@ def resolve_input(opts: RunOpts, out_dir: Path) -> tuple[Path, dict]:
         "duration": None,
         "url": opts.url,
     }
+
+
+def _try_slow_asr_pass(
+    out_dir: Path,
+    opts: RunOpts,
+    state: "RunState",
+    shared: dict,
+    timings: dict,
+    track_id: str,
+    meta: dict,
+    on_progress: "ProgressCb | None",
+) -> None:
+    """Re-run ASR on vocals slowed to 75% when initial match_rate is low.
+
+    Only for English tracks — experiment showed no benefit for Russian.
+    Skipped when vocals stem is missing or match_rate already >= 0.85.
+    """
+    if opts.language != "en":
+        return
+
+    aligned_path = out_dir / "lyrics_aligned.json"
+    if not aligned_path.exists():
+        return
+
+    aligned_data = json.loads(aligned_path.read_text(encoding="utf-8"))
+    match_rate = (aligned_data.get("alignment") or {}).get("match_rate") or 0.0
+    if match_rate >= 0.85:
+        return  # Already good enough
+
+    vocals_path = out_dir / "stems" / "source_(Vocals)_htdemucs_6s.flac"
+    if not vocals_path.exists():
+        return
+
+    print(f"[STEM] track={track_id} slow_asr=start match_rate={match_rate:.2f}", flush=True)
+    t = time.perf_counter()
+
+    slowed_path = out_dir / "_vocals_slow75.flac"
+    slow_asr_path = out_dir / "_lyrics_slow75.json"
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", str(vocals_path), "-filter:a", "atempo=0.75", str(slowed_path)],
+            check=True, capture_output=True,
+        )
+        asr_slow = clients.transcribe(slowed_path, slow_asr_path, language=opts.language, engine=opts.asr_engine)
+        # Map timestamps back to original speed
+        for w in asr_slow.get("words") or []:
+            w["start"] = round(w["start"] * 0.75, 3)
+            w["end"]   = round(w["end"]   * 0.75, 3)
+
+        # Merge: combine original + slow ASR words, re-align
+        orig_asr_words = json.loads((out_dir / "lyrics.json").read_text(encoding="utf-8")).get("words") or []
+        merged_words = sorted(orig_asr_words + (asr_slow.get("words") or []), key=lambda w: w["start"])
+
+        lrc_words = [{"word": w["word"], "line": w["line"]} for w in aligned_data["words"]]
+        duration = aligned_data.get("duration") or meta.get("duration") or 0.0
+        new_aligned, new_stats = align_words(merged_words, lrc_words, duration)
+
+        new_match_rate = new_stats.get("match_rate", 0.0)
+        print(f"[STEM] track={track_id} slow_asr=done match_before={match_rate:.2f} match_after={new_match_rate:.2f} elapsed={round(time.perf_counter()-t,2)}s", flush=True)
+
+        if new_match_rate <= match_rate:
+            return  # No improvement — discard
+
+        # Overwrite aligned words in lyrics_aligned.json
+        aligned_data["words"] = new_aligned
+        aligned_data["alignment"] = {**(aligned_data.get("alignment") or {}), **new_stats}
+        aligned_data["slow_asr"] = True
+        atomic_write_json(aligned_path, aligned_data)
+
+        # Update manifest
+        manifest = dict(shared["manifest"])
+        if manifest.get("aligned"):
+            manifest["aligned"] = {**manifest["aligned"], "match_rate": new_match_rate, "slow_asr": True}
+            shared["manifest"] = state.manifest(manifest)
+    except Exception as e:
+        print(f"[STEM] track={track_id} slow_asr=error {e}", flush=True)
+    finally:
+        slowed_path.unlink(missing_ok=True)
+        slow_asr_path.unlink(missing_ok=True)
 
 
 def run(opts: RunOpts, on_progress: ProgressCb | None = None) -> dict:
@@ -252,6 +332,10 @@ def run(opts: RunOpts, on_progress: ProgressCb | None = None) -> dict:
         f_stems = pool.submit(stems_branch)
         f_lyrics.result()
         f_stems.result()
+
+    # Second-pass ASR: re-run on slowed vocals (75%) when match_rate is low.
+    # Experiment showed +6% match for EN tracks; skip for RU where it doesn't help.
+    _try_slow_asr_pass(out_dir, opts, state, shared, timings, track_id, meta, on_progress)
 
     timings["total"] = round(time.perf_counter() - t0, 2)
     final_manifest = state.manifest(dict(shared["manifest"]))
