@@ -62,6 +62,7 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
   const [vocalsMuted, setVocalsMuted] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [expanding, setExpanding] = useState(false);
+  const [loadProgress, setLoadProgress] = useState<{ loaded: number; total: number; key: string } | null>(null);
 
   // Live manifest/aligned that update when processing completes
   const [manifest, setManifest] = useState(initialManifest);
@@ -166,8 +167,8 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
         url: stemUrl(manifest.id, manifest.stems[k]),
       }));
       engine
-        .load(specs)
-        .then(() => { if (!cancelled) setReady(true); })
+        .load(specs, undefined, (loaded, total, key) => { if (!cancelled) setLoadProgress({ loaded, total, key }); })
+        .then(() => { if (!cancelled) { setLoadProgress(null); setReady(true); } })
         .catch((e) => { if (!cancelled) setLoadError((e as Error).message); });
     }
 
@@ -495,7 +496,9 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
             {!ready && !loadError && (
               <div className="hidden md:flex px-3 py-1.5 font-mono text-[11px] bg-[var(--color-surface-muted)] text-[var(--color-ink-muted)] rounded-md items-center gap-1.5 border border-[var(--color-border-soft)]">
                 <IconLoader2 size={12} className="animate-spin" />
-                {isProcessing ? t("track.loadingOriginal") : t("track.downloadingAudio")}
+                {loadProgress
+                  ? `${loadProgress.key} ${loadProgress.loaded}/${loadProgress.total}`
+                  : isProcessing ? t("track.loadingOriginal") : t("track.downloadingAudio")}
               </div>
             )}
             {aligned && (

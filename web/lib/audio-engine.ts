@@ -69,6 +69,7 @@ export class StemEngine {
   async load(
     specs: StemSpec[],
     mergeStems?: { keep: string[]; mergedKey: string },
+    onProgress?: (loaded: number, total: number, key: string) => void,
   ): Promise<void> {
     this.setState("loading");
     if (!this.ctx) this.ctx = new AudioContext();
@@ -96,13 +97,20 @@ export class StemEngine {
     this.mix.connect(ctx.destination);
 
     const fetched: { key: string; buffer: AudioBuffer }[] = [];
-    for (const s of specs) {
+    for (let i = 0; i < specs.length; i++) {
+      const s = specs[i];
+      onProgress?.(i, specs.length, s.key);
+      const t0 = performance.now();
       const res = await fetch(s.url);
       const arr = await res.arrayBuffer();
+      console.log(`[audio] fetch ${s.key} ${(arr.byteLength / 1024 / 1024).toFixed(1)}MB in ${((performance.now() - t0) / 1000).toFixed(1)}s`);
       if (ctx.state === "closed" || this.ctx !== ctx) return;
+      const t1 = performance.now();
       const buffer = await ctx.decodeAudioData(arr);
+      console.log(`[audio] decode ${s.key} in ${((performance.now() - t1) / 1000).toFixed(1)}s`);
       if (this.ctx !== ctx) return;
       fetched.push({ key: s.key, buffer });
+      onProgress?.(i + 1, specs.length, s.key);
     }
 
     let finalBuffers = fetched;
