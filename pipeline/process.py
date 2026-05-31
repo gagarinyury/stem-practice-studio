@@ -250,12 +250,11 @@ def run(opts: RunOpts, on_progress: ProgressCb | None = None) -> dict:
         t_asr = time.perf_counter()
         asr_data = clients.transcribe(audio_path, lyrics_path, language=opts.language, engine=opts.asr_engine)
 
-        # Auto-detect language from ASR output and re-run if mismatch.
+        # Auto-detect language from ASR output (Parakeet ignores language param,
+        # but we use detected language for downstream steps like lrclib search).
         detected = _detect_language(asr_data.get("words") or [])
-        if detected and detected != opts.language:
-            print(f"[STEM] track={track_id} lang_mismatch={opts.language}->{detected} re-running ASR", flush=True)
+        if detected:
             opts.language = detected
-            asr_data = clients.transcribe(audio_path, lyrics_path, language=detected, engine=opts.asr_engine)
 
         timings["asr"] = round(time.perf_counter() - t_asr, 2)
         _emit(state, on_progress, "asr_ready", words=len(asr_data.get("words") or []))
