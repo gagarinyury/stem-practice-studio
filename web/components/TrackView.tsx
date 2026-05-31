@@ -131,25 +131,28 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
     setExpanding(false);
 
     if (!hasStemFiles) {
-      // Processing mode: wait for source.wav to appear, then load it
-      const sourceRel = manifest.source?.stream || manifest.source?.audio || "source.wav";
-      const sourceUrl = `${API_BASE}/runs/${manifest.id}/${sourceRel}`;
+      // Processing mode: wait for source audio to appear, then load it.
+      // Prefer source.opus (~4MB) over source.wav (~46MB) to avoid freezing the browser.
+      const opusUrl = `${API_BASE}/runs/${manifest.id}/source.opus`;
+      const wavUrl = `${API_BASE}/runs/${manifest.id}/source.wav`;
       let retryTimer: ReturnType<typeof setTimeout>;
       const waitForSource = async () => {
         try {
-          const head = await fetch(sourceUrl, { method: "HEAD" });
-          if (head.ok) {
-            // File exists! Now load it into the engine
-            try {
-              await engine.load([{ key: "source", url: sourceUrl }]);
-              if (!cancelled) {
-                setEngineDuration(engine.totalDuration);
-                setReady(true);
+          // Try opus first (small), fall back to wav
+          for (const url of [opusUrl, wavUrl]) {
+            const head = await fetch(url, { method: "HEAD" });
+            if (head.ok) {
+              try {
+                await engine.load([{ key: "source", url }]);
+                if (!cancelled) {
+                  setEngineDuration(engine.totalDuration);
+                  setReady(true);
+                }
+              } catch {
+                if (!cancelled) setLoadError(t("track.loadAudioError"));
               }
-            } catch {
-              if (!cancelled) setLoadError(t("track.loadAudioError"));
+              return;
             }
-            return;
           }
         } catch { /* network error, retry */ }
         // Not ready yet — retry in 2s
