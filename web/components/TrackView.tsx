@@ -131,28 +131,29 @@ export function TrackView({ manifest: initialManifest, aligned: initialAligned, 
     setExpanding(false);
 
     if (!hasStemFiles) {
-      // Processing mode: wait for source audio to appear, then load it.
-      // Prefer source.opus (~4MB) over source.wav (~46MB) to avoid freezing the browser.
-      const opusUrl = `${API_BASE}/runs/${manifest.id}/source.opus`;
-      const wavUrl = `${API_BASE}/runs/${manifest.id}/source.wav`;
+      // Processing mode: wait for source.opus to appear (created after resolve_input
+      // completes), then load it. We intentionally skip source.wav — it's ~46MB
+      // uncompressed and may still be mid-write when it first appears.
+      // The SSE applyProgressPatch also updates manifest.source, which re-triggers
+      // this effect with the correct URL once the backend emits input_ready.
+      const streamUrl = manifest.source?.stream
+        ? `${API_BASE}/runs/${manifest.id}/${manifest.source.stream}`
+        : `${API_BASE}/runs/${manifest.id}/source.opus`;
       let retryTimer: ReturnType<typeof setTimeout>;
       const waitForSource = async () => {
         try {
-          // Try opus first (small), fall back to wav
-          for (const url of [opusUrl, wavUrl]) {
-            const head = await fetch(url, { method: "HEAD" });
-            if (head.ok) {
-              try {
-                await engine.load([{ key: "source", url }]);
-                if (!cancelled) {
-                  setEngineDuration(engine.totalDuration);
-                  setReady(true);
-                }
-              } catch {
-                if (!cancelled) setLoadError(t("track.loadAudioError"));
+          const head = await fetch(streamUrl, { method: "HEAD" });
+          if (head.ok) {
+            try {
+              await engine.load([{ key: "source", url: streamUrl }]);
+              if (!cancelled) {
+                setEngineDuration(engine.totalDuration);
+                setReady(true);
               }
-              return;
+            } catch {
+              if (!cancelled) setLoadError(t("track.loadAudioError"));
             }
+            return;
           }
         } catch { /* network error, retry */ }
         // Not ready yet — retry in 2s
