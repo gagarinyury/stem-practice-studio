@@ -13,7 +13,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 from pipeline.align import align
 
 RUNS = pathlib.Path("/srv/apps/stem-practice-studio/runs")
-TMP   = pathlib.Path("/tmp/asr_exp")
+TMP   = pathlib.Path("/srv/apps/stem-practice-studio/runs/_asr_exp")
 TMP.mkdir(exist_ok=True)
 
 ASR_URL = os.environ.get("ASR_URL", "http://127.0.0.1:8091")
