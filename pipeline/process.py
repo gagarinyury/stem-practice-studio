@@ -111,9 +111,6 @@ def _try_slow_asr_pass(
     Only for English tracks — experiment showed no benefit for Russian.
     Skipped when vocals stem is missing or match_rate already >= 0.85.
     """
-    if opts.language != "en":
-        return
-
     aligned_path = out_dir / "lyrics_aligned.json"
     if not aligned_path.exists():
         return
