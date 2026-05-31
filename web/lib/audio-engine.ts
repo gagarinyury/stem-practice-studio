@@ -101,7 +101,7 @@ export class StemEngine {
       const arr = await res.arrayBuffer();
       if (ctx.state === "closed" || this.ctx !== ctx) return;
       const buffer = await ctx.decodeAudioData(arr);
-      if (ctx.state === "closed" || this.ctx !== ctx) return;
+      if (this.ctx !== ctx) return;
       fetched.push({ key: s.key, buffer });
     }
 
