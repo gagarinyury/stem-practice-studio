@@ -95,20 +95,14 @@ export class StemEngine {
 
     this.mix.connect(ctx.destination);
 
-    const fetched = await Promise.all(
-      specs.map(async (s) => {
-        const res = await fetch(s.url);
-        const arr = await res.arrayBuffer();
-        const buffer = await ctx.decodeAudioData(arr);
-        return { key: s.key, buffer };
-      })
-    );
-
-    // The component may unmount mid-load (user picks another track, navigates
-    // away). dispose() closes ctx → any GainNode/connect call below would
-    // emit "...not useful when context is closed" warnings into the console.
-    if (ctx.state === "closed" || this.ctx !== ctx) {
-      return;
+    const fetched: { key: string; buffer: AudioBuffer }[] = [];
+    for (const s of specs) {
+      const res = await fetch(s.url);
+      const arr = await res.arrayBuffer();
+      if (ctx.state === "closed" || this.ctx !== ctx) return;
+      const buffer = await ctx.decodeAudioData(arr);
+      if (ctx.state === "closed" || this.ctx !== ctx) return;
+      fetched.push({ key: s.key, buffer });
     }
 
     let finalBuffers = fetched;
@@ -169,11 +163,14 @@ export class StemEngine {
     if (decoded.length === 0) return this.stemKeys;
     if (ctx.state === "closed" || this.ctx !== ctx) return this.stemKeys;
 
-    // Snapshot playback state before the swap
+    // Snapshot playback state before the swap, then stop ALL sources so
+    // play() will re-start everything in sync (otherwise this.state stays
+    // "playing", play() bails out, and only the untouched vocals keeps going).
     const wasPlaying = this.state === "playing";
     const resumeAt = this.currentTime;
+    if (wasPlaying) this.pause();
 
-    // Stop the "music" source if playing
+    // Drop the merged "music" stem entirely
     const musicIdx = this.stems.findIndex((s) => s.key === "music");
     if (musicIdx >= 0) {
       const music = this.stems[musicIdx];
