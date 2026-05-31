@@ -96,6 +96,28 @@ def resolve_input(opts: RunOpts, out_dir: Path) -> tuple[Path, dict]:
     }
 
 
+def _detect_language(words: list[dict]) -> str | None:
+    """Detect language from ASR words by character script analysis.
+
+    Returns 'en' if mostly Latin, 'ru' if mostly Cyrillic, None if unclear.
+    """
+    latin = cyrillic = 0
+    for w in words:
+        for ch in w.get("word", ""):
+            if "a" <= ch.lower() <= "z":
+                latin += 1
+            elif "Ѐ" <= ch <= "ӿ":
+                cyrillic += 1
+    total = latin + cyrillic
+    if total < 10:
+        return None
+    if latin / total >= 0.75:
+        return "en"
+    if cyrillic / total >= 0.75:
+        return "ru"
+    return None
+
+
 def _try_slow_asr_pass(
     out_dir: Path,
     opts: RunOpts,
@@ -227,6 +249,14 @@ def run(opts: RunOpts, on_progress: ProgressCb | None = None) -> dict:
         print(f"[STEM] track={track_id} branch=lyrics step=asr_start", flush=True)
         t_asr = time.perf_counter()
         asr_data = clients.transcribe(audio_path, lyrics_path, language=opts.language, engine=opts.asr_engine)
+
+        # Auto-detect language from ASR output and re-run if mismatch.
+        detected = _detect_language(asr_data.get("words") or [])
+        if detected and detected != opts.language:
+            print(f"[STEM] track={track_id} lang_mismatch={opts.language}->{detected} re-running ASR", flush=True)
+            opts.language = detected
+            asr_data = clients.transcribe(audio_path, lyrics_path, language=detected, engine=opts.asr_engine)
+
         timings["asr"] = round(time.perf_counter() - t_asr, 2)
         _emit(state, on_progress, "asr_ready", words=len(asr_data.get("words") or []))
 
