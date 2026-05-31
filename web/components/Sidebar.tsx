@@ -278,8 +278,7 @@ export function Sidebar({ user, tracks, selectedId, onSelect, onRefresh, onClose
                 <div className="font-mono text-[11px] text-[var(--color-ink-muted)] min-w-0 flex items-center gap-1.5">
                   <MediaBadge hasVideo={hasVideo} />
                   <span className="truncate">
-                    {t.artist || "unknown"} · {t.language}
-                    {t.duration ? ` · ${fmtDur(t.duration)}` : ""}
+                    {[t.artist, t.language?.toUpperCase(), t.duration ? fmtDur(t.duration) : null].filter(Boolean).join(" · ")}
                   </span>
                 </div>
                 {t.status !== "done" && (
